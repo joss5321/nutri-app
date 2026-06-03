@@ -1,0 +1,17 @@
+export const COLORS = {
+  primary: '#2EBD8C',
+  primaryDark: '#1A6B45',
+  background: '#EAF8F0',
+  white: '#FFFFFF',
+  inputBg: '#E8E8EF',
+  text: '#111827',
+  muted: '#6B7280',
+  border: '#C5E8D8',
+  tabBar: '#1A6845',
+  error: '#EF4444',
+  cardBg: '#F5FBF8',
+  completed: '#D1FAE5',
+  completedText: '#065F46',
+  pending: '#FEF3C7',
+  pendingText: '#92400E',
+}
