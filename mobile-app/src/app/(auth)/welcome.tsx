@@ -82,12 +82,8 @@ const styles = StyleSheet.create({
   },
   buttonBlock: { paddingBottom: 16, gap: 20 },
   button: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 50,
-    paddingVertical: 16,
+    paddingVertical: 2,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.5)',
   },
   buttonText: {
     color: COLORS.primary,
