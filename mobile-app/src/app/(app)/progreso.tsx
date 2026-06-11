@@ -71,7 +71,7 @@ export default function ProgresoScreen() {
               <FormField label="Circunferencia de cintura" required />
               <FormField label="Circunferencia de cadera" required />
             </View>
-            <View style={s.row2}>
+            <View style={[s.row2,{ alignItems: 'flex-end' }]}>
               <FormField label="Porcentaje de Masa Muscular" />
               <FormField label="Altura" required />
             </View>
