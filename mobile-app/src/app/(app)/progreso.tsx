@@ -79,7 +79,7 @@ export default function ProgresoScreen() {
               <FormField label="Porcentaje de Grasa" />
               <FormField label="Circunferencia de Brazo" />
             </View>
-            <View style={s.row}>
+            <View style={s.row2}>
               <FormField label="Circunferencia de Pantorrilla" />
               <View style={{ flex: 2 }} />
             </View>
