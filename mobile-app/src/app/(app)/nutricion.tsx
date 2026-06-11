@@ -6,15 +6,15 @@ import { COLORS } from '@/constants/colors'
 
 // ─── EQUIVALENTES ────────────────────────────────────────────────────────────
 const FOOD_GROUPS = [
-  { icon: '🥣', label: 'Cereales\nsin grasa' },
-  { icon: '🍎', label: 'Frutas' },
-  { icon: '🥦', label: 'Verduras' },
-  { icon: '🥛', label: 'Leche\ndescremada' },
-  { icon: '🍗', label: 'POA muy bajo\naporte' },
-  { icon: '🐟', label: 'POA bajo\naporte' },
-  { icon: '🥩', label: 'POA medio\naporte' },
-  { icon: '🫒', label: 'Aceites y\ngrasas' },
-  { icon: '🫘', label: 'AC y C\nc/Proteina' },
+  { icon: '🥣', label: 'Cereales\nsin grasa', num: 8 },
+  { icon: '🍎', label: 'Frutas', num: 2 },
+  { icon: '🥦', label: 'Verduras', num: 3 },
+  { icon: '🥛', label: 'Leche\ndescremada', num: 1 },
+  { icon: '🍗', label: 'POA muy bajo\naporte', num: 9 },
+  { icon: '🐟', label: 'POA bajo\naporte', num: 4 },
+  { icon: '🥩', label: 'POA medio\naporte', num: 2 },
+  { icon: '🫒', label: 'Aceites y\ngrasas', num: 3 },
+  { icon: '🫘', label: 'AC y C\nc/Proteina', num: 2 },
 ]
 
 function EquivalentesTab() {
@@ -46,7 +46,9 @@ function EquivalentesTab() {
             >
               <Text style={{ fontSize: 36 }}>{g.icon}</Text>
               <Text style={s.gridLabel}>{g.label}</Text>
-              <Ionicons name="chevron-forward" size={14} color={COLORS.primary} />
+              <View style={{ backgroundColor: COLORS.primary, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 2 }}>
+                <Text style={{ color: COLORS.white, fontSize: 12, fontWeight: '700' }}>{g.num}</Text>
+              </View>
             </TouchableOpacity>
           ))}
         </View>
