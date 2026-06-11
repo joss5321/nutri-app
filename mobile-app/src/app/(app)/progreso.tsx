@@ -42,7 +42,7 @@ function SimpleChart() {
             width: 8, height: (v / max) * 60,
             backgroundColor: COLORS.primary, borderRadius: 4,
           }} />
-          <Text style={{ fontSize: 10, color: COLORS.muted, marginTop: 4 }}>Mes {i + 4}</Text>
+          <Text style={{ fontSize: 10, color: COLORS.muted, marginTop: 4 }}>Mes {i + 1}</Text>
         </View>
       ))}
     </View>
@@ -97,7 +97,7 @@ export default function ProgresoScreen() {
     <View style={s.container}>
       <AppHeader title="Mi Progreso" />
       <ScrollView showsVerticalScrollIndicator={false}>
-        <Text style={s.tableNote}>Aquí puedes ver el resumen de tus datos mes a mes del{'\n'}monitoreo de tu progreso.</Text>
+        <Text style={s.tableNote}>Aquí puedes ver el resumen de tus datos mes a mes del monitoreo de tu progreso.</Text>
 
         {/* Filtro */}
         <View style={{ paddingHorizontal: 16 }}>

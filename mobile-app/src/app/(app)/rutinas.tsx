@@ -205,7 +205,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16,
   },
   headerTitle: { fontSize: 22, fontWeight: '800', color: COLORS.white },
-  tabs: { flexDirection: 'row', backgroundColor: COLORS.white, marginHorizontal: 16, borderRadius: 8, padding: 3, marginBottom: 0 },
+  tabs: { flexDirection: 'row', backgroundColor: COLORS.white, width: '100%', borderRadius: 0, padding: 3, marginBottom: 0 },
   tab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 6 },
   tabActive: { borderBottomWidth: 2, borderBottomColor: COLORS.primary },
   tabText: { fontSize: 14, color: COLORS.muted, fontWeight: '600' },
