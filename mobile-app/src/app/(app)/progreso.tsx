@@ -59,15 +59,15 @@ export default function ProgresoScreen() {
         <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
           <View style={s.card}>
             <Text style={s.cardNote}>
-              Antes de comenzar es necesario que proporciones los{'\n'}siguientes datos para poder monitorear mejor tu progreso.
+              Antes de comenzar es necesario que proporciones los siguientes datos para poder monitorear mejor tu progreso.
             </Text>
 
-            <View style={s.row}>
+            <View style={[s.row,{ alignItems: 'flex-end' }]}>
               <FormField label="Sexo" required />
               <FormField label="Edad" required />
               <FormField label="Peso" required />
             </View>
-            <View style={s.row2}>
+            <View style={[s.row2,{ alignItems: 'flex-end' }]}>
               <FormField label="Circunferencia de cintura" required />
               <FormField label="Circunferencia de cadera" required />
             </View>
@@ -75,13 +75,13 @@ export default function ProgresoScreen() {
               <FormField label="Porcentaje de Masa Muscular" />
               <FormField label="Altura" required />
             </View>
-            <View style={s.row2}>
+            <View style={[s.row2,{ alignItems: 'flex-end' }]}>
               <FormField label="Porcentaje de Grasa" />
               <FormField label="Circunferencia de Brazo" />
             </View>
-            <View style={s.row2}>
+            <View style={[s.row2,{ alignItems: 'flex-end' }]}>
               <FormField label="Circunferencia de Pantorrilla" />
-              <View style={{ flex: 2 }} />
+              <View style={{ flex: 1 }} />
             </View>
 
             <TouchableOpacity style={s.sendBtn} onPress={() => setHasData(true)} activeOpacity={0.85}>
