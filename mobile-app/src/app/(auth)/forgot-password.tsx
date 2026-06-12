@@ -12,6 +12,7 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
+import { Image } from 'expo-image'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '@/lib/supabase'
 import { COLORS } from '@/constants/colors'
@@ -91,6 +92,7 @@ export default function ForgotPasswordScreen() {
 
             {/* Encabezado */}
             <View style={styles.header}>
+              <Image source={require('@/assets/images/icon.png')} style={styles.logo} />
               <Text style={styles.title}>¿Olvidaste tu{'\n'}contraseña?</Text>
               <Text style={styles.subtitle}>
                 Ingresa tu correo y te enviaremos un enlace para restablecerla.
@@ -160,6 +162,7 @@ const styles = StyleSheet.create({
   },
 
   header: { gap: 10 },
+  logo: { width: 64, height: 64, borderRadius: 16, marginBottom: 4 },
   title: { fontSize: 28, fontWeight: '800', color: COLORS.primary, lineHeight: 36 },
   subtitle: { fontSize: 14, color: COLORS.muted, lineHeight: 20 },
 

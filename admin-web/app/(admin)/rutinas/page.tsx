@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import CrearRutinaModal from "@/app/_components/rutinas/CrearRutinaModal";
+import RutinaBuilderModal from "@/app/_components/rutinas/RutinaBuilderModal";
 
 const USERS = [
   { id: 1, name: "Valeria Hernández", email: "valeria.hdez@gmail.com",   phone: "55 1234 5678", plan: "Premium", objetivo: "Bajar peso",          lastAccess: "Hoy, 10:30 AM",  status: "Activo" },
@@ -28,7 +28,7 @@ function PlanBadge({ plan }: { plan: string }) {
 
 export default function RutinasPage() {
   const [search, setSearch] = useState("");
-  const [showModal, setShowModal] = useState(false);
+  const [selected, setSelected] = useState<typeof USERS[number] | null>(null);
 
   const filtered = USERS.filter(
     (u) =>
@@ -42,14 +42,8 @@ export default function RutinasPage() {
       <div className="flex items-start justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Rutinas</h1>
-          <p className="text-gray-500 text-sm mt-1">Crea y asigna rutinas de entrenamiento a tus usuarios.</p>
+          <p className="text-gray-500 text-sm mt-1">Selecciona un usuario para ver y armar su rutina semanal.</p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 h-10 px-4 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary-dark transition-colors"
-        >
-          + Crear nueva rutina
-        </button>
       </div>
 
       {/* Search */}
@@ -96,11 +90,11 @@ export default function RutinasPage() {
                 </td>
                 <td className="px-4 py-3.5">
                   <button
-                    onClick={() => setShowModal(true)}
-                    className="w-9 h-9 rounded-xl border border-gray-200 hover:border-primary hover:bg-primary/5 flex items-center justify-center transition-colors"
-                    title="Ver perfil"
+                    onClick={() => setSelected(u)}
+                    className="flex items-center gap-2 h-9 px-3 rounded-xl border border-gray-200 hover:border-primary hover:bg-primary/5 hover:text-primary text-gray-600 text-xs font-semibold transition-colors"
+                    title="Ver y armar rutina"
                   >
-                    👁
+                    🏋️ Ver rutina
                   </button>
                 </td>
               </tr>
@@ -123,7 +117,7 @@ export default function RutinasPage() {
         </div>
       </div>
 
-      {showModal && <CrearRutinaModal onClose={() => setShowModal(false)} />}
+      {selected && <RutinaBuilderModal patient={selected} onClose={() => setSelected(null)} />}
     </div>
   );
 }

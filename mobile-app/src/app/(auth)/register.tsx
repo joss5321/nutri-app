@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Link, useRouter } from 'expo-router'
+import { Image } from 'expo-image'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '@/lib/supabase'
 import { useOAuthSignIn } from '@/hooks/useOAuthSignIn'
@@ -49,6 +50,7 @@ export default function RegisterScreen() {
           <View style={styles.inner}>
 
             <View style={styles.header}>
+              <Image source={require('@/assets/images/icon.png')} style={styles.logo} />
               <Text style={styles.title}>Crear Cuenta</Text>
             </View>
 
@@ -119,6 +121,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   inner: { flex: 1, paddingHorizontal: 24, paddingTop: 36, paddingBottom: 24, gap: 20 },
   header: { gap: 8 },
+  logo: { width: 64, height: 64, borderRadius: 16, marginBottom: 4 },
   title: { fontSize: 28, fontWeight: '800', color: COLORS.primary },
   subtitle: { fontSize: 14, color: COLORS.primary, lineHeight: 20 },
   form: { gap: 12 },

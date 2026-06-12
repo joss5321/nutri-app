@@ -45,6 +45,7 @@ create table ejercicios (
   nombre             text        not null,
   emoji              text        not null default '💪',
   grupo_muscular     text,
+  grupos_secundarios text[]      not null default '{}',
   descripcion        text,
   instrucciones      text,
   -- Para videos de YouTube o Vimeo pega el link directo
@@ -234,10 +235,16 @@ alter table perfiles enable row level security;
 create policy "perfil: usuario gestiona el suyo"
   on perfiles for all using (auth.uid() = id);
 
--- ejercicios (catálogo global, solo lectura para usuarios)
+-- ejercicios (catálogo global: lectura para usuarios, gestión desde admin-web)
 alter table ejercicios enable row level security;
 create policy "ejercicios: lectura para autenticados"
   on ejercicios for select using (auth.role() = 'authenticated');
+create policy "ejercicios: gestion para autenticados"
+  on ejercicios for insert with check (auth.role() = 'authenticated');
+create policy "ejercicios: actualizacion para autenticados"
+  on ejercicios for update using (auth.role() = 'authenticated');
+create policy "ejercicios: eliminacion para autenticados"
+  on ejercicios for delete using (auth.role() = 'authenticated');
 
 -- rutinas
 alter table rutinas enable row level security;
@@ -349,3 +356,37 @@ create index on rutina_ejercicios  (dia_id, orden);
 create index on plan_equivalentes  (plan_id);
 create index on receta_ingredientes(receta_id, orden);
 create index on receta_pasos       (receta_id, numero);
+
+-- ============================================================
+-- 10. MIGRACIÓN — si la tabla "ejercicios" ya existe, correr esto
+-- (agrega grupos secundarios y permisos de gestión desde admin-web)
+-- ============================================================
+alter table ejercicios
+  add column if not exists grupos_secundarios text[] not null default '{}';
+
+drop policy if exists "ejercicios: gestion para autenticados" on ejercicios;
+create policy "ejercicios: gestion para autenticados"
+  on ejercicios for insert with check (auth.role() = 'authenticated');
+
+drop policy if exists "ejercicios: actualizacion para autenticados" on ejercicios;
+create policy "ejercicios: actualizacion para autenticados"
+  on ejercicios for update using (auth.role() = 'authenticated');
+
+drop policy if exists "ejercicios: eliminacion para autenticados" on ejercicios;
+create policy "ejercicios: eliminacion para autenticados"
+  on ejercicios for delete using (auth.role() = 'authenticated');
+
+-- Storage: bucket público para videos de ejercicios (subido desde admin-web)
+insert into storage.buckets (id, name, public)
+values ('videos-ejercicios', 'videos-ejercicios', true)
+on conflict (id) do nothing;
+
+drop policy if exists "videos-ejercicios: lectura publica" on storage.objects;
+create policy "videos-ejercicios: lectura publica"
+  on storage.objects for select using (bucket_id = 'videos-ejercicios');
+
+drop policy if exists "videos-ejercicios: gestion autenticados" on storage.objects;
+create policy "videos-ejercicios: gestion autenticados"
+  on storage.objects for all
+  using (bucket_id = 'videos-ejercicios' and auth.role() = 'authenticated')
+  with check (bucket_id = 'videos-ejercicios' and auth.role() = 'authenticated');
