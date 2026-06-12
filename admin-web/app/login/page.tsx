@@ -1,6 +1,8 @@
 "use client";
 import { useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -8,13 +10,27 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     setLoading(true);
-    // TODO: conectar con Supabase auth
-    await new Promise((r) => setTimeout(r, 800));
+    const { error: authError } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password,
+    });
+    setLoading(false);
+    if (authError) {
+      setError(
+        authError.message === "Invalid login credentials"
+          ? "Correo o contraseña incorrectos."
+          : authError.message
+      );
+      return;
+    }
     router.push("/dashboard");
+    router.refresh();
   };
 
   return (
@@ -38,9 +54,7 @@ export default function LoginPage() {
 
         {/* Logo */}
         <div className="relative z-10 flex items-center gap-3 p-8">
-          <div className="w-10 h-10 rounded-full bg-primary/20 border border-primary flex items-center justify-center">
-            <span className="text-primary font-bold text-lg">M</span>
-          </div>
+          <Image src="/logo-icon.png" alt="MyFitTrack" width={40} height={40} className="rounded-xl" />
           <span className="text-white font-semibold text-lg tracking-wide">MyFitTrack</span>
         </div>
 
@@ -74,7 +88,8 @@ export default function LoginPage() {
       {/* ── Panel derecho: formulario ── */}
       <div className="flex flex-1 flex-col items-center justify-center bg-white px-8 lg:px-16">
         <div className="w-full max-w-sm">
-          <div className="mb-8 text-center">
+          <div className="mb-8 text-center flex flex-col items-center">
+            <Image src="/logo-horizontal.png" alt="MyFitTrack" width={180} height={76} className="mb-4" />
             <h2 className="text-3xl font-extrabold text-primary">¡Bienvenido de nuevo!</h2>
             <p className="text-gray-500 mt-2 text-sm">Inicia sesión para continuar</p>
           </div>
@@ -108,6 +123,8 @@ export default function LoginPage() {
                 {showPass ? "🙈" : "👁"}
               </button>
             </div>
+
+            {error && <p className="text-red-500 text-sm text-center">{error}</p>}
 
             {/* Submit */}
             <button

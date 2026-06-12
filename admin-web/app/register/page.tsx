@@ -1,6 +1,8 @@
 "use client";
 import { useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -29,9 +31,19 @@ export default function RegisterPage() {
     e.preventDefault();
     if (!validate()) return;
     setLoading(true);
-    // TODO: conectar con Supabase auth (signUp)
-    await new Promise((r) => setTimeout(r, 800));
+    const { error } = await supabase.auth.signUp({
+      email: email.trim().toLowerCase(),
+      password,
+      options: { data: { full_name: name.trim() } },
+    });
     setLoading(false);
+    if (error) {
+      setErrors((er) => ({
+        ...er,
+        email: error.message === "User already registered" ? "Este correo ya está registrado" : error.message,
+      }));
+      return;
+    }
     setSuccess(true);
   };
 
@@ -56,9 +68,7 @@ export default function RegisterPage() {
 
         {/* Logo */}
         <div className="relative z-10 flex items-center gap-3 p-8">
-          <div className="w-10 h-10 rounded-full bg-primary/20 border border-primary flex items-center justify-center">
-            <span className="text-primary font-bold text-lg">M</span>
-          </div>
+          <Image src="/logo-icon.png" alt="MyFitTrack" width={40} height={40} className="rounded-xl" />
           <span className="text-white font-semibold text-lg tracking-wide">MyFitTrack</span>
         </div>
 
@@ -111,7 +121,8 @@ export default function RegisterPage() {
             </div>
           ) : (
             <>
-              <div className="mb-8 text-center">
+              <div className="mb-8 text-center flex flex-col items-center">
+                <Image src="/logo-horizontal.png" alt="MyFitTrack" width={180} height={76} className="mb-4" />
                 <h2 className="text-3xl font-extrabold text-primary">Crear cuenta</h2>
                 <p className="text-gray-500 mt-2 text-sm">Regístrate para administrar la plataforma</p>
               </div>
