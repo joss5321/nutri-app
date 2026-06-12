@@ -21,7 +21,7 @@ export default function WelcomeScreen() {
       <View style={styles.bottomArea}>
         <SafeAreaView edges={['bottom']} style={{ flex: 1, justifyContent: 'space-between' }}>
           <View style={styles.textBlock}>
-            <Text style={styles.title}>Welcome to App Name</Text>
+            <Text style={styles.title}>MyFitTrack</Text>
             <Text style={styles.subtitle}>
               Explora todos los beneficios y productos{'\n'}que te ofrece la App
             </Text>
@@ -35,7 +35,7 @@ export default function WelcomeScreen() {
             >
               <Text style={styles.buttonText}>Continuar</Text>
             </TouchableOpacity>
-            <Text style={styles.brandName}>Nombre App</Text>
+            <Text style={styles.brandName}>MyFitTrack</Text>
           </View>
         </SafeAreaView>
       </View>

@@ -72,8 +72,7 @@ export default function LoginScreen() {
           <View style={styles.inner}>
 
             <View style={styles.header}>
-              <Text style={styles.title}>Login</Text>
-              <Text style={styles.subtitle}>Lorem Ipsum is simply dummy text of the printing{'\n'}and typesetting industry.</Text>
+              <Text style={styles.title}>Iniciar Sesión</Text>
             </View>
 
             <View style={styles.form}>

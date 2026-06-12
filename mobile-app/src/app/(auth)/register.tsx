@@ -50,7 +50,6 @@ export default function RegisterScreen() {
 
             <View style={styles.header}>
               <Text style={styles.title}>Crear Cuenta</Text>
-              <Text style={styles.subtitle}>Lorem Ipsum is simply dummy text of the printing{'\n'}and typesetting industry.</Text>
             </View>
 
             <View style={styles.form}>

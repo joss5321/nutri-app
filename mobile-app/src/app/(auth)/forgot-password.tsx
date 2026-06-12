@@ -3,15 +3,18 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
+  StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
+import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '@/lib/supabase'
-import { Button } from '@/components/ui/Button'
-import { Input } from '@/components/ui/Input'
+import { COLORS } from '@/constants/colors'
 
 export default function ForgotPasswordScreen() {
   const [email, setEmail] = useState('')
@@ -35,103 +38,185 @@ export default function ForgotPasswordScreen() {
 
   const handleSendReset = async () => {
     if (!validate()) return
-
     setLoading(true)
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(
       email.trim().toLowerCase(),
       { redirectTo: 'mobileapp://reset-password' },
     )
     setLoading(false)
-
     if (resetError) {
       Alert.alert('Error', resetError.message)
       return
     }
-
     setSent(true)
   }
 
   if (sent) {
     return (
-      <SafeAreaView className="flex-1 bg-gray-50">
-        <View className="flex-1 px-6 items-center justify-center">
-          <View className="w-24 h-24 bg-blue-50 rounded-full items-center justify-center mb-6">
-            <Text className="text-5xl">✉️</Text>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.successWrapper}>
+          <View style={styles.envelopeCircle}>
+            <Text style={styles.envelopeIcon}>✉️</Text>
           </View>
-          <Text className="text-2xl font-bold text-gray-900 text-center mb-3">
-            ¡Correo enviado!
-          </Text>
-          <Text className="text-gray-500 text-center text-base mb-10 leading-6">
+          <Text style={styles.successTitle}>¡Correo enviado!</Text>
+          <Text style={styles.successSubtitle}>
             Revisa tu bandeja de entrada y sigue las instrucciones para restablecer tu contraseña.
           </Text>
-          <View className="w-full">
-            <Button
-              title="Volver al inicio de sesión"
-              onPress={() => router.replace('/(auth)/login')}
-            />
-          </View>
+          <TouchableOpacity
+            style={styles.primaryBtn}
+            onPress={() => router.replace('/(auth)/login')}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.primaryBtnText}>Volver al inicio de sesión</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     )
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        className="flex-1"
-      >
-        <View className="flex-1 px-6">
-          {/* Botón de regreso */}
-          <TouchableOpacity
-            onPress={() => router.back()}
-            className="mt-4 mb-8 w-10 h-10 rounded-full bg-white shadow-sm items-center justify-center border border-gray-100"
-          >
-            <Text className="text-gray-600 text-lg font-medium">←</Text>
-          </TouchableOpacity>
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1 }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.inner}>
 
-          {/* Encabezado */}
-          <View className="mb-8">
-            <Text className="text-3xl font-bold text-gray-900 mb-2">
-              ¿Olvidaste tu contraseña?
-            </Text>
-            <Text className="text-gray-500 text-base leading-6">
-              Ingresa tu correo y te enviaremos un enlace para restablecerla.
-            </Text>
-          </View>
-
-          {/* Formulario */}
-          <View className="bg-white rounded-3xl p-6 shadow-sm">
-            <Input
-              label="Correo electrónico"
-              value={email}
-              onChangeText={(t) => {
-                setEmail(t)
-                if (error) setError(undefined)
-              }}
-              placeholder="tu@email.com"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              error={error}
-              autoFocus
-            />
-
-            <Button
-              title="Enviar enlace de recuperación"
-              onPress={handleSendReset}
-              loading={loading}
-            />
-          </View>
-
-          {/* Link de regreso */}
-          <View className="flex-row justify-center mt-6">
-            <Text className="text-gray-500">¿La recuerdas? </Text>
-            <TouchableOpacity onPress={() => router.replace('/(auth)/login')}>
-              <Text className="text-blue-500 font-semibold">Inicia sesión</Text>
+            {/* Botón de regreso */}
+            <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
+              <Ionicons name="arrow-back" size={22} color={COLORS.primary} />
             </TouchableOpacity>
+
+            {/* Encabezado */}
+            <View style={styles.header}>
+              <Text style={styles.title}>¿Olvidaste tu{'\n'}contraseña?</Text>
+              <Text style={styles.subtitle}>
+                Ingresa tu correo y te enviaremos un enlace para restablecerla.
+              </Text>
+            </View>
+
+            {/* Formulario */}
+            <View style={styles.form}>
+              <View style={[styles.inputWrapper, error ? styles.inputError : null]}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Correo electrónico"
+                  placeholderTextColor="#9CA3AF"
+                  value={email}
+                  onChangeText={t => {
+                    setEmail(t)
+                    if (error) setError(undefined)
+                  }}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoFocus
+                />
+              </View>
+              {error && <Text style={styles.error}>{error}</Text>}
+
+              <TouchableOpacity
+                style={styles.primaryBtn}
+                onPress={handleSendReset}
+                disabled={loading}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.primaryBtnText}>
+                  {loading ? 'Enviando...' : 'Enviar enlace de recuperación'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Link de regreso */}
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>¿La recuerdas? </Text>
+              <TouchableOpacity onPress={() => router.replace('/(auth)/login')}>
+                <Text style={styles.link}>Inicia sesión</Text>
+              </TouchableOpacity>
+            </View>
+
           </View>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   )
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: COLORS.background },
+  inner: { flex: 1, paddingHorizontal: 24, paddingTop: 20, paddingBottom: 24, gap: 24 },
+
+  backBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  header: { gap: 10 },
+  title: { fontSize: 28, fontWeight: '800', color: COLORS.primary, lineHeight: 36 },
+  subtitle: { fontSize: 14, color: COLORS.muted, lineHeight: 20 },
+
+  form: { gap: 12 },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.inputBg,
+    borderRadius: 50,
+    paddingHorizontal: 20,
+    height: 54,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  inputError: { borderColor: COLORS.error },
+  input: { flex: 1, fontSize: 15, color: COLORS.text },
+  error: { color: COLORS.error, fontSize: 12, marginTop: -6, paddingLeft: 12 },
+
+  primaryBtn: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 50,
+    height: 54,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  primaryBtnText: { color: COLORS.white, fontWeight: '700', fontSize: 17 },
+
+  link: { color: COLORS.primary, fontWeight: '600', fontSize: 14 },
+  footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 8 },
+  footerText: { color: COLORS.muted, fontSize: 14 },
+
+  // Estado de éxito
+  successWrapper: {
+    flex: 1,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+  },
+  envelopeCircle: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: COLORS.completed,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  envelopeIcon: { fontSize: 48 },
+  successTitle: { fontSize: 26, fontWeight: '800', color: COLORS.primary, textAlign: 'center' },
+  successSubtitle: {
+    fontSize: 15,
+    color: COLORS.muted,
+    textAlign: 'center',
+    lineHeight: 22,
+    paddingHorizontal: 12,
+    marginBottom: 8,
+  },
+})
