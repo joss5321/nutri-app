@@ -1,10 +1,8 @@
 "use client";
 import { useState } from "react";
-
-type User = {
-  id: number; name: string; email: string; phone: string;
-  plan: string; objetivo: string; lastAccess: string; status: string;
-};
+import type { Perfil } from "@/app/_data/perfiles";
+import InformacionPersonalForm from "./InformacionPersonalForm";
+import CitasManager from "./CitasManager";
 
 // ── Círculo de progreso SVG ─────────────────────────────────
 function CircleProgress({ value, label, sub }: { value: number; label: string; sub: string }) {
@@ -57,89 +55,6 @@ function LineChart({ data }: { data: { label: string; value: number }[] }) {
         </g>
       ))}
     </svg>
-  );
-}
-
-// ── Tab: Historial Clínico ───────────────────────────────────
-function HistorialClinico({ user }: { user: User }) {
-  return (
-    <div className="space-y-4">
-      <div>
-        <p className="font-semibold text-gray-900">Historial Clínico</p>
-        <p className="text-sm text-gray-500">Registra y consulta la información clínica del usuario.</p>
-      </div>
-      <div className="grid grid-cols-4 gap-3">
-        {[
-          { label: "Fecha de registro", value: "23/11/2024", type: "text" },
-          { label: "Peso actual (kg)",  value: "78.5",       type: "number" },
-          { label: "Altura (cm)",       value: "175",        type: "number" },
-          { label: "Edad",              value: "32",         type: "number" },
-        ].map((f) => (
-          <div key={f.label}>
-            <label className="text-xs text-gray-500 font-medium block mb-1">{f.label}</label>
-            <input defaultValue={f.value} type={f.type}
-              className="w-full h-10 border border-gray-200 rounded-xl px-3 text-sm focus:outline-none focus:border-primary" />
-          </div>
-        ))}
-        {[
-          { label: "Circunferencia cintura (cm)", value: "88"   },
-          { label: "Circunferencia cadera (cm)",  value: "102"  },
-          { label: "% Grasa corporal",            value: "22.5" },
-          { label: "% Masa muscular",             value: "38.3" },
-        ].map((f) => (
-          <div key={f.label}>
-            <label className="text-xs text-gray-500 font-medium block mb-1">{f.label}</label>
-            <input defaultValue={f.value} type="number"
-              className="w-full h-10 border border-gray-200 rounded-xl px-3 text-sm focus:outline-none focus:border-primary" />
-          </div>
-        ))}
-        {[
-          { label: "Alergias",     value: "Ninguna"  },
-          { label: "Padecimientos", value: "Ninguno" },
-        ].map((f) => (
-          <div key={f.label} className="col-span-2">
-            <label className="text-xs text-gray-500 font-medium block mb-1">{f.label}</label>
-            <div className="flex items-center gap-2 h-10 border border-gray-200 rounded-xl px-3">
-              <span className="text-gray-400 text-sm">⚕</span>
-              <input defaultValue={f.value}
-                className="flex-1 text-sm focus:outline-none text-gray-700" />
-            </div>
-          </div>
-        ))}
-        <div className="col-span-2">
-          <label className="text-xs text-gray-500 font-medium block mb-1">Medicamentos</label>
-          <div className="flex items-center gap-2 h-10 border border-gray-200 rounded-xl px-3">
-            <span className="text-gray-400 text-sm">💊</span>
-            <input defaultValue="Ninguno"
-              className="flex-1 text-sm focus:outline-none text-gray-700" />
-          </div>
-        </div>
-        <div className="col-span-2">
-          <label className="text-xs text-gray-500 font-medium block mb-1">Observaciones</label>
-          <div className="flex items-start gap-2 border border-gray-200 rounded-xl px-3 py-2">
-            <span className="text-gray-400 text-sm mt-0.5">📋</span>
-            <textarea placeholder="Observaciones generales del usuario..."
-              className="flex-1 text-sm focus:outline-none text-gray-700 resize-none h-14" />
-          </div>
-        </div>
-      </div>
-      <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-        <button className="flex items-center gap-2 px-4 h-10 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50">
-          ✕ Cancelar
-        </button>
-        <div className="flex gap-2">
-          <button className="flex items-center gap-2 px-4 h-10 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-dark">
-            💾 Guardar
-          </button>
-          <button className="flex items-center gap-2 px-4 h-10 rounded-xl border border-primary text-primary text-sm font-semibold hover:bg-primary/5">
-            📄 Exportar PDF
-          </button>
-          <button className="flex items-center gap-2 px-4 h-10 rounded-xl border border-green-600 text-green-700 text-sm font-semibold hover:bg-green-50">
-            📊 Exportar Excel
-          </button>
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -274,122 +189,16 @@ function Progreso() {
   );
 }
 
-// ── Tab: Próximas Citas ──────────────────────────────────────
-function ProximasCitas() {
-  const days = Array.from({ length: 31 }, (_, i) => i + 1);
-  const upcomingAppointments = [
-    { date: "MAY 15", time: "10:30 AM", type: "Nutrición",     pro: "Lic. Ana Torres",  modal: "Presencial", status: "Confirmada" },
-    { date: "MAY 22", time: "04:00 PM", type: "Entrenamiento", pro: "Lic. Carlos Vega", modal: "Presencial", status: "Confirmada" },
-    { date: "MAY 30", time: "05:00 PM", type: "Seguimiento",   pro: "Lic. Ana Torres",  modal: "En línea",   status: "Pendiente"  },
-  ];
-
-  return (
-    <div className="grid grid-cols-3 gap-4">
-      {/* Calendario */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
-        <div className="flex items-center justify-between mb-3">
-          <button className="text-gray-400 hover:text-gray-600">‹</button>
-          <p className="font-bold text-gray-900 text-sm">Mayo 2024</p>
-          <button className="text-gray-400 hover:text-gray-600">›</button>
-        </div>
-        <div className="grid grid-cols-7 gap-1 text-center">
-          {["Lu", "Ma", "Mi", "Ju", "Vi", "Sá", "Do"].map((d) => (
-            <span key={d} className="text-xs text-gray-400 font-medium py-1">{d}</span>
-          ))}
-          {days.map((d) => (
-            <button key={d} className={`text-xs h-7 w-7 mx-auto rounded-full flex items-center justify-center transition-colors ${
-              d === 15 ? "bg-primary text-white font-bold" :
-              d === 22 || d === 30 ? "bg-primary/10 text-primary font-semibold" :
-              "text-gray-700 hover:bg-gray-100"
-            }`}>{d}</button>
-          ))}
-        </div>
-        <div className="mt-3 p-2.5 bg-primary/5 rounded-xl border border-primary/20">
-          <p className="text-xs font-semibold text-primary">📅 Miércoles 15 de mayo</p>
-          <p className="text-xs text-gray-500 mt-0.5">• 1 cita programada</p>
-        </div>
-      </div>
-
-      {/* Formulario nueva cita */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
-        <p className="font-bold text-gray-900 text-sm mb-3">📋 Registrar nueva cita</p>
-        <div className="flex flex-col gap-3">
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-xs text-gray-500 block mb-1">Fecha</label>
-              <input type="date" defaultValue="2024-05-15"
-                className="w-full h-9 border border-gray-200 rounded-xl px-3 text-xs focus:outline-none focus:border-primary" />
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 block mb-1">Hora</label>
-              <input type="time" defaultValue="10:30"
-                className="w-full h-9 border border-gray-200 rounded-xl px-3 text-xs focus:outline-none focus:border-primary" />
-            </div>
-          </div>
-          {[
-            { label: "Tipo de cita",  options: ["Nutrición", "Entrenamiento", "Seguimiento"] },
-            { label: "Profesional",   options: ["Lic. Ana Torres", "Lic. Carlos Vega"] },
-            { label: "Modalidad",     options: ["Presencial", "En línea"] },
-          ].map((f) => (
-            <div key={f.label}>
-              <label className="text-xs text-gray-500 block mb-1">{f.label}</label>
-              <select className="w-full h-9 border border-gray-200 rounded-xl px-3 text-xs focus:outline-none focus:border-primary">
-                {f.options.map((o) => <option key={o}>{o}</option>)}
-              </select>
-            </div>
-          ))}
-          <div>
-            <label className="text-xs text-gray-500 block mb-1">Notas (opcional)</label>
-            <textarea placeholder="Escribe alguna nota adicional..."
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-primary resize-none h-16" />
-          </div>
-          <button className="w-full h-10 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary-dark">
-            📅 Guardar cita
-          </button>
-        </div>
-      </div>
-
-      {/* Lista de próximas citas */}
-      <div className="flex flex-col gap-3">
-        <p className="font-bold text-gray-900 text-sm">Próximas citas</p>
-        {upcomingAppointments.map((a, i) => (
-          <div key={i} className="bg-white rounded-xl border border-gray-200 p-3 flex gap-3">
-            <div className="flex flex-col items-center bg-primary text-white rounded-xl px-3 py-2 text-center shrink-0">
-              <span className="text-xs font-bold opacity-80">{a.date.split(" ")[0]}</span>
-              <span className="text-lg font-extrabold">{a.date.split(" ")[1]}</span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex justify-between items-start">
-                <p className="font-semibold text-gray-900 text-xs">{a.time}</p>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                  a.status === "Confirmada" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"
-                }`}>{a.status}</span>
-              </div>
-              <p className="font-bold text-gray-800 text-sm mt-0.5">{a.type}</p>
-              <p className="text-xs text-gray-500">{a.pro}</p>
-              <p className="text-xs text-gray-400">📍 {a.modal}</p>
-            </div>
-          </div>
-        ))}
-        <div className="mt-1 p-3 bg-yellow-50 rounded-xl border border-yellow-200">
-          <p className="text-xs font-bold text-yellow-800 mb-1">💡 Recomendaciones</p>
-          {[
-            "Llega 10 minutos antes de tu cita.",
-            "Si no puedes asistir, cancela con anticipación.",
-            "Mantén tus datos de salud actualizados.",
-          ].map((r, i) => (
-            <p key={i} className="text-xs text-yellow-700">• {r}</p>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
+function formatFecha(fecha: string | null): string {
+  if (!fecha) return "—";
+  const [y, m, d] = fecha.split("-");
+  return `${d}/${m}/${y}`;
 }
 
 // ── Modal principal ──────────────────────────────────────────
 type Tab = "historial" | "progreso" | "citas";
 
-export default function UserModal({ user, onClose }: { user: User; onClose: () => void }) {
+export default function UserModal({ perfil, onClose }: { perfil: Perfil; onClose: () => void }) {
   const [tab, setTab] = useState<Tab>("historial");
 
   const TABS: { key: Tab; label: string; icon: string }[] = [
@@ -398,7 +207,9 @@ export default function UserModal({ user, onClose }: { user: User; onClose: () =
     { key: "citas",     label: "Próximas Citas",    icon: "📅" },
   ];
 
-  const initials = user.name.split(" ").map((n) => n[0]).join("").slice(0, 2);
+  const nombre = perfil.nombre_completo || "Usuario sin nombre";
+  const initials = nombre.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
+  const isPremium = perfil.plan_membresia === "premium";
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
@@ -414,29 +225,26 @@ export default function UserModal({ user, onClose }: { user: User; onClose: () =
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="font-bold text-gray-900 text-xl">{user.name}</h2>
-                <span className="flex items-center gap-1 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-500" /> Activo
+                <h2 className="font-bold text-gray-900 text-xl">{nombre}</h2>
+                <span className={`text-xs px-3 py-1 rounded-full font-semibold inline-flex items-center gap-1 ${
+                  isPremium ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"
+                }`}>
+                  {isPremium ? "👑 Premium" : "🔒 Básico"}
                 </span>
               </div>
               <div className="flex items-center gap-3 text-sm text-gray-500 mt-0.5">
-                <span>✉ {user.email}</span>
+                <span className="capitalize">{perfil.sexo || "—"}</span>
                 <span>|</span>
-                <span>📱 {user.phone}</span>
+                <span>🎂 {formatFecha(perfil.fecha_nacimiento)}</span>
               </div>
             </div>
           </div>
           <div className="flex items-start gap-6">
             <div className="text-right">
-              <p className="text-xs text-gray-500">Plan actual</p>
-              <span className={`text-sm font-bold px-3 py-1 rounded-full inline-block mt-1 ${
-                user.plan === "Premium" ? "bg-green-100 text-green-700" :
-                user.plan === "Pro"     ? "bg-teal-100 text-teal-700"   :
-                                          "bg-gray-100 text-gray-600"
-              }`}>
-                {user.plan === "Premium" ? "👑 " : "🔒 "}{user.plan}
-              </span>
-              <p className="text-xs text-gray-400 mt-1">📅 Renovación: 23/12/2024</p>
+              <p className="text-xs text-gray-500">Registrado</p>
+              <p className="text-sm font-semibold text-gray-700 mt-1">
+                {perfil.created_at ? new Date(perfil.created_at).toLocaleDateString("es-MX") : "—"}
+              </p>
             </div>
             <button onClick={onClose} className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 text-xl">
               ×
@@ -463,9 +271,9 @@ export default function UserModal({ user, onClose }: { user: User; onClose: () =
 
         {/* Content */}
         <div className="p-6">
-          {tab === "historial" && <HistorialClinico user={user} />}
+          {tab === "historial" && <InformacionPersonalForm userId={perfil.id} />}
           {tab === "progreso"  && <Progreso />}
-          {tab === "citas"     && <ProximasCitas />}
+          {tab === "citas"     && <CitasManager userId={perfil.id} />}
         </div>
       </div>
     </div>
