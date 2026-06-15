@@ -2,8 +2,13 @@
 import { useEffect, useState } from "react";
 import { MUSCLE_GROUPS, type Exercise } from "@/app/_data/exercises";
 import { fetchEjercicios } from "@/app/_data/ejercicios";
-
-const DAYS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
+import {
+  DAYS,
+  deleteRutina,
+  fetchRutinaActiva,
+  saveRutina,
+  type RutinaInput,
+} from "@/app/_data/rutinas";
 
 type Assigned = { uid: string; exerciseId: string; series: string; reps: string; peso: string };
 
@@ -14,7 +19,7 @@ export default function RutinaBuilderModal({
   patient,
   onClose,
 }: {
-  patient: { id: number; name: string };
+  patient: { id: string; name: string };
   onClose: () => void;
 }) {
   const [exercises, setExercises] = useState<Exercise[]>([]);
@@ -25,12 +30,54 @@ export default function RutinaBuilderModal({
   const [grupo, setGrupo] = useState("Todos");
   const [dragOver, setDragOver] = useState(false);
 
+  const [rutinaId, setRutinaId] = useState<string | null>(null);
+  const [nombre, setNombre] = useState(`Rutina de ${patient.name}`);
+  const [loadingRutina, setLoadingRutina] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
   useEffect(() => {
     fetchEjercicios()
       .then(setExercises)
       .catch(() => {})
       .finally(() => setLoadingExercises(false));
   }, []);
+
+  const loadRutina = () => {
+    fetchRutinaActiva(patient.id)
+      .then((rutina) => {
+        if (!rutina) return;
+        setRutinaId(rutina.id);
+        setNombre(rutina.nombre);
+        const next = buildInitialAssigned();
+        for (const dia of rutina.rutina_dias) {
+          const dayName = DAYS[dia.numero_dia - 1];
+          if (!dayName) continue;
+          next[dayName] = dia.rutina_ejercicios.map((ej) => ({
+            uid: ej.id,
+            exerciseId: ej.ejercicio_id,
+            series: ej.series != null ? String(ej.series) : "",
+            reps: ej.repeticiones ?? "",
+            peso: ej.peso_sugerido_kg != null ? String(ej.peso_sugerido_kg) : "",
+          }));
+        }
+        setAssigned(next);
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "No se pudo cargar la rutina."))
+      .finally(() => setLoadingRutina(false));
+  };
+
+  useEffect(() => {
+    loadRutina();
+  }, []);
+
+  const retryLoadRutina = () => {
+    setLoadingRutina(true);
+    setError(null);
+    loadRutina();
+  };
 
   const exerciseById = (id: string) => exercises.find((e) => e.id === id);
 
@@ -60,6 +107,55 @@ export default function RutinaBuilderModal({
 
   const totalAsignados = Object.values(assigned).reduce((acc, day) => acc + day.length, 0);
 
+  const handleSave = async () => {
+    setSaving(true);
+    setFeedback(null);
+    try {
+      const input: RutinaInput = {
+        nombre: nombre.trim() || `Rutina de ${patient.name}`,
+        dias: DAYS.map((d, i) => ({
+          numero_dia: i + 1,
+          nombre_dia: d,
+          es_descanso: assigned[d].length === 0,
+          ejercicios: assigned[d].map((a, idx) => ({
+            ejercicio_id: a.exerciseId,
+            orden: idx,
+            series: a.series.trim() ? Number(a.series) : null,
+            repeticiones: a.reps.trim() || null,
+            peso_sugerido_kg: a.peso.trim() ? Number(a.peso) : null,
+            descanso_seg: null,
+            rir: null,
+          })),
+        })),
+      };
+      const saved = await saveRutina(patient.id, input, rutinaId ?? undefined);
+      setRutinaId(saved.id);
+      setFeedback({ type: "success", text: "Rutina guardada correctamente." });
+    } catch (err) {
+      setFeedback({ type: "error", text: err instanceof Error ? err.message : "No se pudo guardar la rutina." });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!rutinaId) return;
+    if (!confirm("¿Eliminar esta rutina? Esta acción no se puede deshacer.")) return;
+    setDeleting(true);
+    setFeedback(null);
+    try {
+      await deleteRutina(rutinaId);
+      setRutinaId(null);
+      setNombre(`Rutina de ${patient.name}`);
+      setAssigned(buildInitialAssigned());
+      setFeedback({ type: "success", text: "Rutina eliminada." });
+    } catch (err) {
+      setFeedback({ type: "error", text: err instanceof Error ? err.message : "No se pudo eliminar la rutina." });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div
@@ -74,12 +170,25 @@ export default function RutinaBuilderModal({
             </div>
             <div>
               <h2 className="font-bold text-gray-900 text-xl">Rutina de {patient.name}</h2>
-              <p className="text-gray-500 text-sm">Arrastra ejercicios del catálogo hacia el día seleccionado.</p>
+              <input
+                value={nombre}
+                onChange={(e) => setNombre(e.target.value)}
+                placeholder="Nombre de la rutina"
+                className="text-gray-500 text-sm bg-transparent border-b border-dashed border-gray-300 focus:outline-none focus:border-primary mt-0.5"
+              />
             </div>
           </div>
           <button onClick={onClose} className="w-9 h-9 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 text-xl">×</button>
         </div>
 
+        {loadingRutina ? (
+          <div className="flex-1 flex items-center justify-center p-10 text-gray-400 text-sm">Cargando rutina...</div>
+        ) : error ? (
+          <div className="flex-1 flex flex-col items-center justify-center gap-3 p-10">
+            <p className="text-sm text-red-600">{error}</p>
+            <button onClick={retryLoadRutina} className="text-sm font-semibold text-primary hover:underline">Reintentar</button>
+          </div>
+        ) : (
         <div className="grid grid-cols-3 gap-6 p-6 flex-1">
           {/* ── Catálogo de ejercicios ── */}
           <div className="col-span-1 flex flex-col gap-3">
@@ -190,7 +299,7 @@ export default function RutinaBuilderModal({
                           <input
                             value={a[f.key]}
                             onChange={(e) => updateField(a.uid, f.key, e.target.value)}
-                            type="number"
+                            type={f.key === "reps" ? "text" : "number"}
                             className="w-14 h-8 text-center border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-primary"
                           />
                         </div>
@@ -203,15 +312,38 @@ export default function RutinaBuilderModal({
             </div>
           </div>
         </div>
+        )}
 
         {/* Footer */}
         <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100">
-          <button onClick={onClose} className="px-5 h-10 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50">
-            Cancelar
-          </button>
-          <button onClick={onClose} className="flex items-center gap-2 px-5 h-10 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-dark">
-            ✓ Guardar rutina
-          </button>
+          <div className="flex items-center gap-3">
+            <button onClick={onClose} className="px-5 h-10 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50">
+              Cancelar
+            </button>
+            {rutinaId && (
+              <button
+                onClick={handleDelete}
+                disabled={deleting || saving}
+                className="px-5 h-10 rounded-xl border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50 disabled:opacity-50"
+              >
+                {deleting ? "Eliminando..." : "🗑️ Eliminar rutina"}
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            {feedback && (
+              <span className={`text-xs font-medium ${feedback.type === "success" ? "text-green-600" : "text-red-600"}`}>
+                {feedback.text}
+              </span>
+            )}
+            <button
+              onClick={handleSave}
+              disabled={saving || deleting || loadingRutina}
+              className="flex items-center gap-2 px-5 h-10 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-dark disabled:opacity-50"
+            >
+              {saving ? "Guardando..." : "✓ Guardar rutina"}
+            </button>
+          </div>
         </div>
       </div>
     </div>

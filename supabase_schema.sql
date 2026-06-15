@@ -158,15 +158,22 @@ create table plan_equivalentes (
 -- 6. RECETAS
 -- ============================================================
 create table recetas (
-  id         uuid        default uuid_generate_v4() primary key,
-  nombre     text        not null,
-  emoji      text,
-  tags       text,
-  tiempo_min int,
-  nivel      text        check (nivel in ('Fácil', 'Medio', 'Difícil')),
-  calorias   int,
-  porciones  text,
-  created_at timestamptz not null default now()
+  id                   uuid        default uuid_generate_v4() primary key,
+  nombre               text        not null,
+  emoji                text,
+  tipo                 text        check (tipo in ('Desayuno', 'Almuerzo', 'Cena', 'Snack')),
+  categoria_nutricional text,
+  tags                 text,
+  tiempo_prep_min      int,
+  tiempo_coccion_min   int,
+  tiempo_min           int,
+  nivel                text        check (nivel in ('Fácil', 'Medio', 'Difícil')),
+  calorias             int,
+  porciones            text,
+  proteinas_g          numeric(5,1),
+  carbohidratos_g      numeric(5,1),
+  grasas_g             numeric(5,1),
+  created_at           timestamptz not null default now()
 );
 
 create table receta_ingredientes (
@@ -234,6 +241,8 @@ create table recordatorios_agua (
 alter table perfiles enable row level security;
 create policy "perfil: usuario gestiona el suyo"
   on perfiles for all using (auth.uid() = id);
+create policy "perfiles: lectura para autenticados"
+  on perfiles for select using (auth.role() = 'authenticated');
 
 -- ejercicios (catálogo global: lectura para usuarios, gestión desde admin-web)
 alter table ejercicios enable row level security;
@@ -250,6 +259,8 @@ create policy "ejercicios: eliminacion para autenticados"
 alter table rutinas enable row level security;
 create policy "rutinas: usuario gestiona las suyas"
   on rutinas for all using (auth.uid() = user_id);
+create policy "rutinas: gestion para autenticados"
+  on rutinas for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
 
 -- rutina_dias
 alter table rutina_dias enable row level security;
@@ -261,6 +272,8 @@ create policy "rutina_dias: acceso via rutina propia"
         and r.user_id = auth.uid()
     )
   );
+create policy "rutina_dias: gestion para autenticados"
+  on rutina_dias for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
 
 -- rutina_ejercicios
 alter table rutina_ejercicios enable row level security;
@@ -273,6 +286,8 @@ create policy "rutina_ejercicios: acceso via dia propio"
         and r.user_id = auth.uid()
     )
   );
+create policy "rutina_ejercicios: gestion para autenticados"
+  on rutina_ejercicios for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
 
 -- dias_completados
 alter table dias_completados enable row level security;
@@ -305,18 +320,28 @@ create policy "equivalentes: acceso via plan propio"
     )
   );
 
--- recetas (catálogo global, solo lectura)
+-- recetas (catálogo global: lectura para usuarios, gestión desde admin-web)
 alter table recetas enable row level security;
 create policy "recetas: lectura para autenticados"
   on recetas for select using (auth.role() = 'authenticated');
+create policy "recetas: gestion para autenticados"
+  on recetas for insert with check (auth.role() = 'authenticated');
+create policy "recetas: actualizacion para autenticados"
+  on recetas for update using (auth.role() = 'authenticated');
+create policy "recetas: eliminacion para autenticados"
+  on recetas for delete using (auth.role() = 'authenticated');
 
 alter table receta_ingredientes enable row level security;
 create policy "ingredientes: lectura para autenticados"
   on receta_ingredientes for select using (auth.role() = 'authenticated');
+create policy "ingredientes: gestion para autenticados"
+  on receta_ingredientes for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
 
 alter table receta_pasos enable row level security;
 create policy "pasos: lectura para autenticados"
   on receta_pasos for select using (auth.role() = 'authenticated');
+create policy "pasos: gestion para autenticados"
+  on receta_pasos for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
 
 -- recetas_guardadas
 alter table recetas_guardadas enable row level security;
@@ -390,3 +415,99 @@ create policy "videos-ejercicios: gestion autenticados"
   on storage.objects for all
   using (bucket_id = 'videos-ejercicios' and auth.role() = 'authenticated')
   with check (bucket_id = 'videos-ejercicios' and auth.role() = 'authenticated');
+
+-- ============================================================
+-- 11. MIGRACIÓN — si la tabla "recetas" ya existe, correr esto
+-- (agrega campos nutricionales/tiempos y permisos de gestión desde admin-web)
+-- ============================================================
+alter table recetas
+  add column if not exists tipo                  text check (tipo in ('Desayuno', 'Almuerzo', 'Cena', 'Snack')),
+  add column if not exists categoria_nutricional text,
+  add column if not exists tags                  text,
+  add column if not exists tiempo_prep_min       int,
+  add column if not exists tiempo_coccion_min    int,
+  add column if not exists tiempo_min            int,
+  add column if not exists nivel                 text check (nivel in ('Fácil', 'Medio', 'Difícil')),
+  add column if not exists porciones             text,
+  add column if not exists proteinas_g           numeric(5,1),
+  add column if not exists carbohidratos_g       numeric(5,1),
+  add column if not exists grasas_g              numeric(5,1);
+
+drop policy if exists "recetas: gestion para autenticados" on recetas;
+create policy "recetas: gestion para autenticados"
+  on recetas for insert with check (auth.role() = 'authenticated');
+
+drop policy if exists "recetas: actualizacion para autenticados" on recetas;
+create policy "recetas: actualizacion para autenticados"
+  on recetas for update using (auth.role() = 'authenticated');
+
+drop policy if exists "recetas: eliminacion para autenticados" on recetas;
+create policy "recetas: eliminacion para autenticados"
+  on recetas for delete using (auth.role() = 'authenticated');
+
+drop policy if exists "ingredientes: gestion para autenticados" on receta_ingredientes;
+create policy "ingredientes: gestion para autenticados"
+  on receta_ingredientes for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+
+drop policy if exists "pasos: gestion para autenticados" on receta_pasos;
+create policy "pasos: gestion para autenticados"
+  on receta_pasos for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+
+-- ============================================================
+-- 12. MIGRACIÓN — gestión de rutinas desde admin-web
+-- (permite a admin-web listar perfiles y administrar la rutina de cualquier usuario)
+-- ============================================================
+drop policy if exists "perfiles: lectura para autenticados" on perfiles;
+create policy "perfiles: lectura para autenticados"
+  on perfiles for select using (auth.role() = 'authenticated');
+
+drop policy if exists "rutinas: gestion para autenticados" on rutinas;
+create policy "rutinas: gestion para autenticados"
+  on rutinas for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+
+drop policy if exists "rutina_dias: gestion para autenticados" on rutina_dias;
+create policy "rutina_dias: gestion para autenticados"
+  on rutina_dias for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+
+drop policy if exists "rutina_ejercicios: gestion para autenticados" on rutina_ejercicios;
+create policy "rutina_ejercicios: gestion para autenticados"
+  on rutina_ejercicios for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+
+-- ============================================================
+-- 13. MIGRACIÓN — citas + gestión de medidas/nutrición desde admin-web
+-- (agrega la tabla de citas y permite a admin-web administrar
+-- medidas, planes nutricionales y equivalentes de cualquier usuario)
+-- ============================================================
+create table if not exists citas (
+  id          uuid        default uuid_generate_v4() primary key,
+  user_id     uuid        references auth.users(id) on delete cascade not null,
+  fecha       date        not null,
+  hora        time        not null,
+  tipo        text        not null check (tipo in ('Nutrición', 'Entrenamiento', 'Seguimiento')),
+  profesional text,
+  modalidad   text        check (modalidad in ('Presencial', 'En línea')),
+  notas       text,
+  estado      text        not null default 'pendiente' check (estado in ('pendiente', 'confirmada', 'cancelada')),
+  created_at  timestamptz not null default now()
+);
+create index if not exists citas_user_fecha_idx on citas (user_id, fecha);
+
+alter table citas enable row level security;
+drop policy if exists "citas: usuario gestiona las suyas" on citas;
+create policy "citas: usuario gestiona las suyas"
+  on citas for all using (auth.uid() = user_id);
+drop policy if exists "citas: gestion para autenticados" on citas;
+create policy "citas: gestion para autenticados"
+  on citas for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+
+drop policy if exists "medidas: gestion para autenticados" on medidas;
+create policy "medidas: gestion para autenticados"
+  on medidas for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+
+drop policy if exists "planes: gestion para autenticados" on planes_nutricionales;
+create policy "planes: gestion para autenticados"
+  on planes_nutricionales for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+
+drop policy if exists "equivalentes: gestion para autenticados" on plan_equivalentes;
+create policy "equivalentes: gestion para autenticados"
+  on plan_equivalentes for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
