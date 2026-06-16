@@ -3,6 +3,7 @@ import { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { Eye, EyeOff } from "lucide-react";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -170,7 +171,10 @@ export default function RegisterPage() {
                       className="flex-1 bg-transparent outline-none text-gray-700 text-sm"
                     />
                     <button type="button" onClick={() => setShowPass((v) => !v)} className="text-gray-400 hover:text-gray-600">
-                      {showPass ? "🙈" : "👁"}
+                      {showPass ? (
+                          <EyeOff size={18} className="text-gray-400 hover:text-gray-600 cursor-pointer" />) : 
+                          (<Eye size={18} className="text-gray-400 hover:text-gray-600 cursor-pointer" />)
+                      }
                     </button>
                   </div>
                   {errors.password && <p className="text-red-500 text-xs mt-1 ml-4">{errors.password}</p>}
@@ -188,7 +192,10 @@ export default function RegisterPage() {
                       className="flex-1 bg-transparent outline-none text-gray-700 text-sm"
                     />
                     <button type="button" onClick={() => setShowConfirm((v) => !v)} className="text-gray-400 hover:text-gray-600">
-                      {showConfirm ? "🙈" : "👁"}
+                      {showConfirm ? (
+                          <EyeOff size={18} className="text-gray-400 hover:text-gray-600 cursor-pointer" />) : 
+                          (<Eye size={18} className="text-gray-400 hover:text-gray-600 cursor-pointer" />)
+                      }
                     </button>
                   </div>
                   {errors.confirmPassword && <p className="text-red-500 text-xs mt-1 ml-4">{errors.confirmPassword}</p>}

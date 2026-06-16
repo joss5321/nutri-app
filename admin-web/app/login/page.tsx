@@ -3,6 +3,7 @@ import { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import PasswordInput from "./PasswordInput";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -109,20 +110,7 @@ export default function LoginPage() {
             </div>
 
             {/* Password */}
-            <div className="flex items-center gap-3 bg-gray-100 rounded-2xl px-4 h-14 border border-transparent focus-within:border-primary transition-colors">
-              <span className="text-gray-400 text-lg">🔒</span>
-              <input
-                type={showPass ? "text" : "password"}
-                placeholder="Contraseña"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="flex-1 bg-transparent outline-none text-gray-700 text-sm"
-              />
-              <button type="button" onClick={() => setShowPass((v) => !v)} className="text-gray-400 hover:text-gray-600">
-                {showPass ? "🙈" : "👁"}
-              </button>
-            </div>
+            <PasswordInput value={password} onChange={setPassword} />
 
             {error && <p className="text-red-500 text-sm text-center">{error}</p>}
 
