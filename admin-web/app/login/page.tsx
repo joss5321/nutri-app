@@ -109,7 +109,8 @@ export default function LoginPage() {
             </div>
 
             {/* Password */}
-            <div className="flex items-center gap-3 bg-gray-100 rounded-2xl px-4 h-14 border border-transparent focus-within:border-primary transition-colors">
+            <div className="flex items-center gap-3 bg-gray-100 rounded-2xl px-4 h-14 border border-transparent focus-within:border-primary transition-colors"
+              onMouseDown={() => console.log("🟢 click en el div contenedor")}>
               <span className="text-gray-400 text-lg">🔒</span>
               <input
                 type={showPass ? "text" : "password"}
@@ -119,9 +120,16 @@ export default function LoginPage() {
                 required
                 className="flex-1 bg-transparent outline-none text-gray-700 text-sm"
               />
-              <button type="button" onClick={() => setShowPass((v) => !v)} className="text-gray-400 hover:text-gray-600">
+              <span
+                onMouseDown={(e) => {
+                  console.log("👁 click ojo", showPass);
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setShowPass((v) => !v);
+                }}
+                className="text-gray-400 hover:text-gray-600 select-none cursor-pointer p-1">
                 {showPass ? "🙈" : "👁"}
-              </button>
+              </span>
             </div>
 
             {error && <p className="text-red-500 text-sm text-center">{error}</p>}
