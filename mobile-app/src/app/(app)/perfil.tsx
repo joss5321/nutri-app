@@ -64,11 +64,12 @@ export default function PerfilScreen() {
                 <Ionicons name="calendar-outline" size={13} color={COLORS.muted} />
                 <Text style={s.userEmail}>28 años  •  15 May 1996</Text>
               </View>
+
+              <TouchableOpacity style={s.editBtn}>
+                <Ionicons name="pencil-outline" size={14} color={COLORS.primary} />
+                <Text style={s.editBtnText}>Editar perfil</Text>
+              </TouchableOpacity>  
             </View>
-            <TouchableOpacity style={s.editBtn}>
-              <Ionicons name="pencil-outline" size={14} color={COLORS.primary} />
-              <Text style={s.editBtnText}>Editar perfil</Text>
-            </TouchableOpacity>
           </View>
 
           {/* Datos personales */}
@@ -165,10 +166,16 @@ const s = StyleSheet.create({
   userName: { fontSize: 16, fontWeight: '700', color: COLORS.text },
   userEmail: { fontSize: 12, color: COLORS.muted },
   editBtn: {
-    position: 'absolute', top: 12, right: 12,
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    borderWidth: 1, borderColor: COLORS.border, borderRadius: 20,
-    paddingHorizontal: 10, paddingVertical: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    alignSelf: 'flex-start', 
+    marginTop: 6,
   },
   editBtnText: { fontSize: 12, color: COLORS.primary },
   dataCard: { backgroundColor: COLORS.white, borderRadius: 14, borderWidth: 1, borderColor: COLORS.border, overflow: 'hidden' },
