@@ -511,3 +511,12 @@ create policy "planes: gestion para autenticados"
 drop policy if exists "equivalentes: gestion para autenticados" on plan_equivalentes;
 create policy "equivalentes: gestion para autenticados"
   on plan_equivalentes for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+
+-- ============================================================
+-- 14. MIGRACIÓN — recetas_guardadas accesible desde admin-web
+-- ============================================================
+drop policy if exists "guardadas: gestion para autenticados" on recetas_guardadas;
+create policy "guardadas: gestion para autenticados"
+  on recetas_guardadas for all
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');

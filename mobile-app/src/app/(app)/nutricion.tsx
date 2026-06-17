@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
+  ActivityIndicator,
   Modal,
   ScrollView,
   StyleSheet,
@@ -11,25 +12,77 @@ import {
 import { Ionicons } from '@expo/vector-icons'
 import { AppHeader } from '@/components/ui/AppHeader'
 import { COLORS } from '@/constants/colors'
+import { useAuthStore } from '@/store/auth'
+import { fetchMisEquivalentes, type Equivalente } from '@/lib/api/nutricion'
 
 // ─── EQUIVALENTES ─────────────────────────────────────────────────────────────
-const FOOD_GROUPS = [
-  { icon: '🥣', label: 'Cereales\nsin grasa',  meals: [2, 1, 3, 1, 2] },
-  { icon: '🍎', label: 'Frutas',               meals: [1, 1, 1, 1, 0] },
-  { icon: '🥦', label: 'Verduras',             meals: [0, 0, 2, 0, 2] },
-  { icon: '🥛', label: 'Leche\ndescremada',   meals: [1, 0, 0, 1, 0] },
-  { icon: '🍗', label: 'POA muy bajo\naporte', meals: [0, 1, 2, 1, 2] },
-  { icon: '🐟', label: 'POA bajo\naporte',     meals: [0, 0, 2, 0, 2] },
-  { icon: '🥩', label: 'POA medio\naporte',    meals: [0, 0, 1, 0, 1] },
-  { icon: '🫒', label: 'Aceites y\ngrasas',    meals: [1, 0, 2, 0, 1] },
-  { icon: '🫘', label: 'AC y C\nc/Proteína',   meals: [0, 0, 1, 0, 1] },
-]
 const MEAL_LABELS = ['Desayuno', 'Colación 1', 'Comida', 'Colación 2', 'Cena']
 
-function EquivalentesTab() {
-  const [expandedIdx, setExpandedIdx] = useState<number | null>(0)
+const LABEL_MAP: Record<string, string> = {
+  'Cereales sin grasa': 'Cereales\nsin grasa',
+  'Leche descremada': 'Leche\ndescremada',
+  'POA muy bajo aporte': 'POA muy bajo\naporte',
+  'POA bajo aporte': 'POA bajo\naporte',
+  'POA medio aporte': 'POA medio\naporte',
+  'Aceites y grasas': 'Aceites y\ngrasas',
+  'AC y C c/Proteína': 'AC y C\nc/Proteína',
+}
 
-  const toggle = (i: number) => setExpandedIdx(prev => prev === i ? null : i)
+type FoodGroupRow = { icon: string; label: string; meals: number[] }
+
+function mapEquivalentesToGroups(equivalentes: Equivalente[]): FoodGroupRow[] {
+  return equivalentes.map((eq) => ({
+    icon: eq.icono ?? '🍽',
+    label: LABEL_MAP[eq.grupo] ?? eq.grupo,
+    meals: [eq.desayuno, eq.colacion_1, eq.comida, eq.colacion_2, eq.cena],
+  }))
+}
+
+function EquivalentesTab() {
+  const { user } = useAuthStore()
+  const userId = user?.id ?? ''
+
+  const [loading, setLoading] = useState(true)
+  const [groups, setGroups] = useState<FoodGroupRow[]>([])
+  const [expandedIdx, setExpandedIdx] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (!userId) return
+    fetchMisEquivalentes(userId)
+      .then((result) => {
+        if (result && result.equivalentes.length > 0) {
+          const mapped = mapEquivalentesToGroups(result.equivalentes)
+          setGroups(mapped)
+          setExpandedIdx(0)
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [userId])
+
+  const toggle = (i: number) => setExpandedIdx((prev) => (prev === i ? null : i))
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 48 }}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+      </View>
+    )
+  }
+
+  if (groups.length === 0) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32, paddingVertical: 48 }}>
+        <Text style={{ fontSize: 48, marginBottom: 16 }}>🥗</Text>
+        <Text style={{ fontWeight: '700', fontSize: 16, color: COLORS.text, textAlign: 'center' }}>
+          Tu nutriólogo aún no ha asignado un plan de equivalentes
+        </Text>
+        <Text style={{ fontSize: 13, color: COLORS.muted, textAlign: 'center', marginTop: 8, lineHeight: 20 }}>
+          Cuando lo cree desde la plataforma, aparecerá aquí automáticamente.
+        </Text>
+      </View>
+    )
+  }
 
   return (
     <ScrollView showsVerticalScrollIndicator={false}>
@@ -40,9 +93,9 @@ function EquivalentesTab() {
           <View style={s.objetivoRow}>
             <View style={s.objetivoIcon}><Text style={{ fontSize: 22 }}>🎯</Text></View>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontWeight: '700', color: COLORS.text }}>Déficit calórico</Text>
+              <Text style={{ fontWeight: '700', color: COLORS.text }}>Plan de equivalentes</Text>
               <Text style={{ fontSize: 12, color: COLORS.muted, marginTop: 2 }}>
-                Consumir menos calorías de las que tu cuerpo gasta para favorecer la pérdida de grasa.
+                Tu nutriólogo ha asignado los equivalentes por tiempo de comida para tu plan.
               </Text>
             </View>
           </View>
@@ -50,7 +103,7 @@ function EquivalentesTab() {
 
         {/* Grid de grupos con total */}
         <View style={s.grid}>
-          {FOOD_GROUPS.map((g, i) => {
+          {groups.map((g, i) => {
             const total = g.meals.reduce((a, b) => a + b, 0)
             const isOpen = expandedIdx === i
             return (
@@ -73,8 +126,8 @@ function EquivalentesTab() {
         </View>
 
         {/* Tabla expandida del grupo seleccionado */}
-        {expandedIdx !== null && (() => {
-          const g = FOOD_GROUPS[expandedIdx]
+        {expandedIdx !== null && expandedIdx < groups.length && (() => {
+          const g = groups[expandedIdx]
           const total = g.meals.reduce((a, b) => a + b, 0)
           return (
             <View style={s.expandedCard}>
@@ -97,7 +150,7 @@ function EquivalentesTab() {
 
               <View style={{ marginTop: 12, borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: COLORS.border }}>
                 <View style={{ flexDirection: 'row', backgroundColor: '#F0FAF5', padding: 8 }}>
-                  {MEAL_LABELS.map(h => (
+                  {MEAL_LABELS.map((h) => (
                     <Text key={h} style={{ flex: 1, fontSize: 10, fontWeight: '700', textAlign: 'center', color: COLORS.primary }}>
                       {h}
                     </Text>
@@ -120,124 +173,34 @@ function EquivalentesTab() {
 }
 
 // ─── RECETAS ──────────────────────────────────────────────────────────────────
-const RECIPES = [
-  {
-    emoji: '🥣', name: 'Avena con frutas frescas',
-    tags: 'Cereales • Frutas', time: '15 min', level: 'Fácil',
-    calories: '320 kcal', servings: '1 porción',
-    ingredients: ['1 taza de avena', '200 ml de leche descremada', '1 plátano', '1 puñado de fresas', '1 cdta de miel'],
-    steps: [
-      'Calienta la leche en una olla a fuego medio.',
-      'Agrega la avena y mezcla constantemente durante 5-7 minutos hasta que espese.',
-      'Retira del fuego y sirve en un tazón.',
-      'Corta el plátano en rodajas y las fresas a la mitad.',
-      'Coloca las frutas sobre la avena y añade la miel al gusto.',
-    ],
-  },
-  {
-    emoji: '🥗', name: 'Ensalada de pollo con vegetales',
-    tags: 'POA medio • Verduras', time: '20 min', level: 'Fácil',
-    calories: '280 kcal', servings: '1 porción',
-    ingredients: ['150 g de pechuga de pollo', '2 tazas de lechuga', '1 tomate', '½ pepino', '1 cdta de aceite de oliva', 'Sal y pimienta'],
-    steps: [
-      'Sazona el pollo con sal y pimienta por ambos lados.',
-      'Cocina a la plancha a fuego medio-alto durante 8-10 minutos por lado.',
-      'Deja reposar 5 minutos y córtalo en tiras.',
-      'Lava y pica la lechuga, el tomate y el pepino.',
-      'Mezcla todos los vegetales en un tazón grande.',
-      'Agrega el pollo y aliña con aceite de oliva.',
-    ],
-  },
-  {
-    emoji: '🥤', name: 'Batido de frutas con leche',
-    tags: 'Frutas • Leche descremada', time: '10 min', level: 'Fácil',
-    calories: '210 kcal', servings: '1 vaso',
-    ingredients: ['1 taza de leche descremada', '1 plátano', '½ taza de fresas', '½ taza de mango', 'Hielo al gusto'],
-    steps: [
-      'Lava y corta todas las frutas en trozos medianos.',
-      'Coloca las frutas en la licuadora junto con la leche.',
-      'Agrega hielo al gusto.',
-      'Licúa durante 1 minuto hasta obtener una mezcla homogénea.',
-      'Sirve inmediatamente en un vaso alto.',
-    ],
-  },
-  {
-    emoji: '🫘', name: 'Bowl de lentejas con verduras',
-    tags: 'AC y C c/Proteína • Verduras', time: '30 min', level: 'Medio',
-    calories: '380 kcal', servings: '1 porción',
-    ingredients: ['½ taza de lentejas cocidas', '¼ cebolla', '2 jitomates', '1 zanahoria', 'Comino y ajo', '1 cdta de aceite'],
-    steps: [
-      'Sofríe la cebolla y el ajo en el aceite a fuego medio durante 2 minutos.',
-      'Agrega el jitomate picado y cocina 5 minutos más.',
-      'Incorpora la zanahoria en cubos y las lentejas cocidas.',
-      'Sazona con comino, sal y pimienta al gusto.',
-      'Cocina 10 minutos más hasta integrar todos los sabores.',
-      'Sirve caliente.',
-    ],
-  },
-  {
-    emoji: '🍳', name: 'Omelette de claras con espinacas',
-    tags: 'POA muy bajo aporte • Verduras', time: '12 min', level: 'Fácil',
-    calories: '190 kcal', servings: '1 porción',
-    ingredients: ['4 claras de huevo', '1 taza de espinacas', '¼ cebolla morada', '1 cdta de aceite', 'Sal y pimienta'],
-    steps: [
-      'Bate las claras con una pizca de sal hasta que estén espumosas.',
-      'Calienta el aceite en una sartén antiadherente a fuego medio.',
-      'Saltea la cebolla durante 2 minutos hasta que transparente.',
-      'Agrega las espinacas y cocina 1 minuto más.',
-      'Vierte las claras sobre las verduras y distribuye bien.',
-      'Dobla el omelette a la mitad cuando los bordes estén cocidos y sirve.',
-    ],
-  },
-  {
-    emoji: '🫐', name: 'Yogurt griego con berries',
-    tags: 'Leche descremada • Frutas', time: '5 min', level: 'Fácil',
-    calories: '175 kcal', servings: '1 porción',
-    ingredients: ['200 g de yogurt griego sin azúcar', '½ taza de moras azules', '¼ taza de frambuesas', '1 cdta de miel', '1 cda de granola'],
-    steps: [
-      'Coloca el yogurt en un tazón o vaso.',
-      'Agrega las moras y frambuesas por encima.',
-      'Añade la granola para dar textura crujiente.',
-      'Rocía la miel al gusto.',
-      'Sirve inmediatamente para que la granola no se ablande.',
-    ],
-  },
-  {
-    emoji: '🐟', name: 'Atún con aguacate y tostadas',
-    tags: 'POA bajo aporte • Cereales', time: '10 min', level: 'Fácil',
-    calories: '290 kcal', servings: '1 porción',
-    ingredients: ['1 lata de atún en agua', '½ aguacate', '2 tostadas integrales', '1 cdta de limón', 'Sal y cilantro'],
-    steps: [
-      'Escurre bien el atún y colócalo en un tazón.',
-      'Aplasta el aguacate con un tenedor hasta obtener una pasta.',
-      'Mezcla el aguacate con el atún, el limón, sal y cilantro.',
-      'Tuesta las tostadas o caliéntalas en el comal.',
-      'Sirve la mezcla de atún sobre las tostadas.',
-    ],
-  },
-  {
-    emoji: '🥑', name: 'Tostadas con huevo estrellado',
-    tags: 'Cereales sin grasa • POA muy bajo', time: '10 min', level: 'Fácil',
-    calories: '240 kcal', servings: '1 porción',
-    ingredients: ['2 rebanadas de pan integral', '2 huevos', '½ aguacate', '1 cdta de aceite', 'Chile en polvo y limón'],
-    steps: [
-      'Tuesta el pan en la tostadora o comal.',
-      'Calienta el aceite en una sartén a fuego medio.',
-      'Estrella los huevos con cuidado, sin romper las yemas.',
-      'Cocina 2-3 minutos hasta que la clara esté bien cocida.',
-      'Unta aguacate sobre el pan tostado.',
-      'Coloca un huevo en cada tostada y sazona con chile y limón.',
-    ],
-  },
-]
+import { fetchMisRecetas, type RecetaCompleta } from '@/lib/api/recetas'
 
-type Recipe = typeof RECIPES[number]
+type Recipe = {
+  id: string; emoji: string; name: string; tags: string
+  time: string; level: string; calories: string; servings: string
+  ingredients: string[]; steps: string[]
+}
+
+function mapReceta(r: RecetaCompleta): Recipe {
+  const tiempo = r.tiempo_min ?? r.tiempo_prep_min ?? null
+  return {
+    id: r.id,
+    emoji: r.emoji ?? '🍽',
+    name: r.nombre,
+    tags: r.tags ?? r.categoria_nutricional ?? '',
+    time: tiempo != null ? `${tiempo} min` : '—',
+    level: r.nivel ?? '—',
+    calories: r.calorias != null ? `${r.calorias} kcal` : '—',
+    servings: r.porciones ?? '1 porción',
+    ingredients: r.ingredientes.map((i) => i.descripcion),
+    steps: r.pasos.map((p) => p.descripcion),
+  }
+}
 
 function RecipeDetailModal({ recipe, onClose }: { recipe: Recipe; onClose: () => void }) {
   return (
     <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: COLORS.background }}>
-        {/* Header del modal */}
         <View style={rm.header}>
           <TouchableOpacity style={rm.closeBtn} onPress={onClose} activeOpacity={0.7}>
             <Ionicons name="chevron-down" size={22} color={COLORS.text} />
@@ -247,13 +210,11 @@ function RecipeDetailModal({ recipe, onClose }: { recipe: Recipe; onClose: () =>
         </View>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
-          {/* Imagen / emoji hero */}
           <View style={rm.hero}>
             <Text style={{ fontSize: 72 }}>{recipe.emoji}</Text>
           </View>
 
           <View style={{ padding: 20, gap: 16 }}>
-            {/* Info rápida */}
             <View style={rm.infoRow}>
               <View style={rm.infoChip}>
                 <Ionicons name="time-outline" size={14} color={COLORS.primary} />
@@ -273,16 +234,16 @@ function RecipeDetailModal({ recipe, onClose }: { recipe: Recipe; onClose: () =>
               </View>
             </View>
 
-            {/* Tags */}
-            <View style={rm.tagRow}>
-              {recipe.tags.split(' • ').map((t, i) => (
-                <View key={i} style={rm.tag}>
-                  <Text style={rm.tagText}>{t}</Text>
-                </View>
-              ))}
-            </View>
+            {recipe.tags ? (
+              <View style={rm.tagRow}>
+                {recipe.tags.split(' • ').map((t, i) => (
+                  <View key={i} style={rm.tag}>
+                    <Text style={rm.tagText}>{t}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
 
-            {/* Ingredientes */}
             <View style={rm.section}>
               <Text style={rm.sectionTitle}>🛒 Ingredientes</Text>
               <View style={rm.ingredientsList}>
@@ -295,7 +256,6 @@ function RecipeDetailModal({ recipe, onClose }: { recipe: Recipe; onClose: () =>
               </View>
             </View>
 
-            {/* Preparación */}
             <View style={rm.section}>
               <Text style={rm.sectionTitle}>👨‍🍳 Preparación</Text>
               <View style={{ gap: 12 }}>
@@ -317,17 +277,52 @@ function RecipeDetailModal({ recipe, onClose }: { recipe: Recipe; onClose: () =>
 }
 
 function RecetasTab() {
-  const [search, setSearch]               = useState('')
-  const [activeFilter, setActiveFilter]   = useState('Todos')
+  const { user } = useAuthStore()
+  const userId = user?.id ?? ''
+
+  const [loading, setLoading] = useState(true)
+  const [recipes, setRecipes] = useState<Recipe[]>([])
+  const [search, setSearch] = useState('')
+  const [activeFilter, setActiveFilter] = useState('Todos')
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null)
+
+  useEffect(() => {
+    if (!userId) return
+    fetchMisRecetas(userId)
+      .then((data) => setRecipes(data.map(mapReceta)))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [userId])
 
   const filters = ['Todos', 'Cereales', 'Frutas', 'Verduras', 'Leche', 'Proteína']
 
-  const filtered = RECIPES.filter(r => {
+  const filtered = recipes.filter((r) => {
     const matchFilter = activeFilter === 'Todos' || r.tags.toLowerCase().includes(activeFilter.toLowerCase())
     const matchSearch = search === '' || r.name.toLowerCase().includes(search.toLowerCase()) || r.tags.toLowerCase().includes(search.toLowerCase())
     return matchFilter && matchSearch
   })
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 48 }}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+      </View>
+    )
+  }
+
+  if (recipes.length === 0) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32, paddingVertical: 48 }}>
+        <Text style={{ fontSize: 48, marginBottom: 16 }}>🍽</Text>
+        <Text style={{ fontWeight: '700', fontSize: 16, color: COLORS.text, textAlign: 'center' }}>
+          Tu nutriólogo aún no ha asignado recetas
+        </Text>
+        <Text style={{ fontSize: 13, color: COLORS.muted, textAlign: 'center', marginTop: 8, lineHeight: 20 }}>
+          Cuando las asigne desde la plataforma, aparecerán aquí automáticamente.
+        </Text>
+      </View>
+    )
+  }
 
   return (
     <>

@@ -3,6 +3,7 @@ import { useState } from "react";
 import type { Perfil } from "@/app/_data/perfiles";
 import InformacionPersonalForm from "./InformacionPersonalForm";
 import NutricionEquivalentesForm from "./NutricionEquivalentesForm";
+import RecetasAsignadasForm from "./RecetasAsignadasForm";
 import CitasManager from "./CitasManager";
 
 type Tab = "personal" | "nutricion" | "cita";
@@ -66,7 +67,12 @@ export default function CompletarPerfilModal({ perfiles, onClose }: { perfiles: 
           ) : (
             <>
               {tab === "personal"  && <InformacionPersonalForm key={selectedUserId} userId={selectedUserId} />}
-              {tab === "nutricion" && <NutricionEquivalentesForm key={selectedUserId} userId={selectedUserId} />}
+              {tab === "nutricion" && (
+                <div className="space-y-8">
+                  <NutricionEquivalentesForm key={selectedUserId} userId={selectedUserId} />
+                  <RecetasAsignadasForm key={`r-${selectedUserId}`} userId={selectedUserId} />
+                </div>
+              )}
               {tab === "cita"      && <CitasManager key={selectedUserId} userId={selectedUserId} />}
             </>
           )}
