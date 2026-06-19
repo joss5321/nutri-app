@@ -9,8 +9,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) {
+        router.replace("/login");
+        return;
+      }
+      const { data: perfil } = await supabase
+        .from("perfiles")
+        .select("rol")
+        .eq("id", session.user.id)
+        .single();
+      if (!perfil || perfil.rol !== "admin") {
+        await supabase.auth.signOut();
         router.replace("/login");
         return;
       }

@@ -1,18 +1,95 @@
+"use client";
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
+
+type Stats = {
+  totalUsuarios: number;
+  totalPremium: number;
+  totalBasico: number;
+  totalRutinas: number;
+  totalRecetas: number;
+  totalCitas: number;
+};
+
+type RecentUser = {
+  id: string;
+  nombre_completo: string | null;
+  plan_membresia: string;
+  created_at: string;
+};
+
 export default function DashboardPage() {
-  const stats = [
-    { label: "Usuarios activos",    value: "320",  icon: "👥", delta: "+12 este mes",   color: "bg-blue-50 text-blue-600"    },
-    { label: "Rutinas asignadas",   value: "148",  icon: "🏋️", delta: "+8 esta semana", color: "bg-green-50 text-green-600"  },
-    { label: "Recetas disponibles", value: "64",   icon: "🥗", delta: "+3 nuevas",      color: "bg-orange-50 text-orange-600"},
-    { label: "Planes premium",      value: "97",   icon: "👑", delta: "30% del total",  color: "bg-purple-50 text-purple-600"},
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<Stats>({
+    totalUsuarios: 0, totalPremium: 0, totalBasico: 0,
+    totalRutinas: 0, totalRecetas: 0, totalCitas: 0,
+  });
+  const [recentUsers, setRecentUsers] = useState<RecentUser[]>([]);
+
+  useEffect(() => {
+    async function load() {
+      const [
+        { count: totalUsuarios },
+        { count: totalPremium },
+        { count: totalBasico },
+        { count: totalRutinas },
+        { count: totalRecetas },
+        { count: totalCitas },
+        { data: recents },
+      ] = await Promise.all([
+        supabase.from("perfiles").select("*", { count: "exact", head: true }).eq("rol", "usuario"),
+        supabase.from("perfiles").select("*", { count: "exact", head: true }).eq("plan_membresia", "premium").eq("rol", "usuario"),
+        supabase.from("perfiles").select("*", { count: "exact", head: true }).eq("plan_membresia", "basico").eq("rol", "usuario"),
+        supabase.from("rutinas").select("*", { count: "exact", head: true }).eq("activa", true),
+        supabase.from("recetas").select("*", { count: "exact", head: true }),
+        supabase.from("citas").select("*", { count: "exact", head: true }).eq("estado", "pendiente"),
+        supabase.from("perfiles").select("id, nombre_completo, plan_membresia, created_at")
+          .eq("rol", "usuario").order("created_at", { ascending: false }).limit(5),
+      ]);
+      setStats({
+        totalUsuarios: totalUsuarios ?? 0,
+        totalPremium: totalPremium ?? 0,
+        totalBasico: totalBasico ?? 0,
+        totalRutinas: totalRutinas ?? 0,
+        totalRecetas: totalRecetas ?? 0,
+        totalCitas: totalCitas ?? 0,
+      });
+      setRecentUsers((recents as RecentUser[]) ?? []);
+      setLoading(false);
+    }
+    load();
+  }, []);
+
+  const total = stats.totalUsuarios || 1;
+  const pctPremium = Math.round((stats.totalPremium / total) * 100);
+  const pctBasico = Math.round((stats.totalBasico / total) * 100);
+
+  const kpis = [
+    { label: "Usuarios registrados", value: String(stats.totalUsuarios), icon: "👥", sub: `${stats.totalPremium} premium, ${stats.totalBasico} básico`, color: "bg-blue-50 text-blue-600" },
+    { label: "Rutinas activas",      value: String(stats.totalRutinas),  icon: "🏋️", sub: "Asignadas a usuarios",     color: "bg-green-50 text-green-600" },
+    { label: "Recetas en catálogo",  value: String(stats.totalRecetas),  icon: "🥗", sub: "Disponibles para asignar", color: "bg-orange-50 text-orange-600" },
+    { label: "Citas pendientes",     value: String(stats.totalCitas),    icon: "📅", sub: "Por confirmar",             color: "bg-purple-50 text-purple-600" },
   ];
 
-  const recent = [
-    { name: "Valeria Hernández", action: "completó Día 3 — Piernas",    time: "Hace 5 min",  plan: "Premium" },
-    { name: "Diego Martínez",    action: "registró nuevas medidas",      time: "Hace 18 min", plan: "Básico"  },
-    { name: "Sofía Ramírez",     action: "guardó receta Avena con frutas", time: "Hace 32 min", plan: "Pro"  },
-    { name: "Carlos López",      action: "completó semana 4 de rutina",  time: "Hace 1h",     plan: "Premium" },
-    { name: "Fernanda Torres",   action: "inició sesión",                time: "Hace 1h 20min",plan: "Básico"},
-  ];
+  function timeAgo(dateStr: string) {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return "Ahora";
+    if (mins < 60) return `Hace ${mins} min`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `Hace ${hours}h`;
+    const days = Math.floor(hours / 24);
+    return `Hace ${days}d`;
+  }
+
+  if (loading) {
+    return (
+      <div className="p-8">
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">Dashboard</h1>
+        <p className="text-sm text-gray-400 text-center py-20">Cargando datos...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8">
@@ -23,7 +100,7 @@ export default function DashboardPage() {
 
       {/* KPI cards */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-5 mb-8">
-        {stats.map((s) => (
+        {kpis.map((s) => (
           <div key={s.label} className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
             <div className="flex items-start justify-between mb-3">
               <span className="text-sm text-gray-500 font-medium">{s.label}</span>
@@ -32,38 +109,44 @@ export default function DashboardPage() {
               </span>
             </div>
             <p className="text-3xl font-extrabold text-gray-900">{s.value}</p>
-            <p className="text-xs text-primary font-medium mt-1">{s.delta}</p>
+            <p className="text-xs text-primary font-medium mt-1">{s.sub}</p>
           </div>
         ))}
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        {/* Actividad reciente */}
+        {/* Usuarios recientes */}
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm">
           <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-            <h2 className="font-bold text-gray-900">Actividad reciente</h2>
-            <span className="text-xs text-primary font-semibold">Ver todo</span>
+            <h2 className="font-bold text-gray-900">Últimos usuarios registrados</h2>
           </div>
           <div className="divide-y divide-gray-50">
-            {recent.map((r, i) => (
-              <div key={i} className="flex items-start gap-3 px-6 py-4">
-                <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary shrink-0">
-                  {r.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
+            {recentUsers.map((u) => {
+              const nombre = u.nombre_completo || "Sin nombre";
+              const isPremium = u.plan_membresia === "premium";
+              return (
+                <div key={u.id} className="flex items-start gap-3 px-6 py-4">
+                  <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary shrink-0">
+                    {nombre.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-gray-900 truncate">{nombre}</p>
+                    <p className="text-xs text-gray-500">Se registró</p>
+                  </div>
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    <span className="text-xs text-gray-400">{timeAgo(u.created_at)}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                      isPremium ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"
+                    }`}>
+                      {isPremium ? "👑 Premium" : "🔒 Básico"}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-900 truncate">{r.name}</p>
-                  <p className="text-xs text-gray-500 truncate">{r.action}</p>
-                </div>
-                <div className="flex flex-col items-end gap-1 shrink-0">
-                  <span className="text-xs text-gray-400">{r.time}</span>
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                    r.plan === "Premium" ? "bg-green-100 text-green-700" :
-                    r.plan === "Pro"     ? "bg-teal-100 text-teal-700" :
-                                          "bg-gray-100 text-gray-600"
-                  }`}>{r.plan}</span>
-                </div>
-              </div>
-            ))}
+              );
+            })}
+            {recentUsers.length === 0 && (
+              <p className="text-sm text-gray-400 text-center py-8">No hay usuarios registrados aún.</p>
+            )}
           </div>
         </div>
 
@@ -74,9 +157,8 @@ export default function DashboardPage() {
           </div>
           <div className="p-6 flex flex-col gap-4">
             {[
-              { label: "Premium", value: 97,  pct: 30, color: "bg-primary"      },
-              { label: "Pro",     value: 126, pct: 39, color: "bg-teal-400"     },
-              { label: "Básico",  value: 97,  pct: 31, color: "bg-gray-300"     },
+              { label: "Premium", value: stats.totalPremium, pct: pctPremium, color: "bg-primary" },
+              { label: "Básico",  value: stats.totalBasico,  pct: pctBasico,  color: "bg-gray-300" },
             ].map((p) => (
               <div key={p.label}>
                 <div className="flex justify-between text-sm mb-1.5">
@@ -91,8 +173,7 @@ export default function DashboardPage() {
 
             <div className="mt-4 p-4 bg-primary/5 rounded-xl border border-primary/20">
               <p className="text-sm font-semibold text-gray-700">Total usuarios</p>
-              <p className="text-2xl font-extrabold text-primary mt-1">320</p>
-              <p className="text-xs text-gray-500 mt-0.5">Crecimiento mensual: +12 usuarios</p>
+              <p className="text-2xl font-extrabold text-primary mt-1">{stats.totalUsuarios}</p>
             </div>
           </div>
         </div>

@@ -11,6 +11,8 @@ const NAV = [
   { href: "/rutinas",   label: "Rutinas",    icon: "🏋️" },
   { href: "/ejercicios", label: "Ejercicios", icon: "💪" },
   { href: "/recetas",   label: "Recetas",    icon: "🥗" },
+  { href: "/administradores", label: "Admins", icon: "🛡️" },
+  { href: "/mi-perfil", label: "Mi Perfil",  icon: "⚙️" },
 ];
 
 export default function Sidebar() {
@@ -18,12 +20,22 @@ export default function Sidebar() {
   const router = useRouter();
   const [name, setName] = useState("Coach Admin");
   const [email, setEmail] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) return;
       setName(user.user_metadata?.full_name || user.email || "Coach Admin");
       setEmail(user.email ?? "");
+      const { data: perfil } = await supabase
+        .from("perfiles")
+        .select("avatar_url, nombre_completo")
+        .eq("id", user.id)
+        .single();
+      if (perfil) {
+        if (perfil.nombre_completo) setName(perfil.nombre_completo);
+        if (perfil.avatar_url) setAvatarUrl(perfil.avatar_url);
+      }
     });
   }, []);
 
@@ -42,9 +54,13 @@ export default function Sidebar() {
 
       {/* Coach avatar */}
       <div className="flex flex-col items-center py-6 border-b border-white/10 gap-2">
-        <div className="w-20 h-20 rounded-full bg-primary/30 border-2 border-primary flex items-center justify-center text-3xl">
-          👨‍💼
-        </div>
+        {avatarUrl ? (
+          <Image src={avatarUrl} alt="" width={80} height={80} className="w-20 h-20 rounded-full object-cover border-2 border-primary" />
+        ) : (
+          <div className="w-20 h-20 rounded-full bg-primary/30 border-2 border-primary flex items-center justify-center text-white font-bold text-2xl">
+            {name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
+          </div>
+        )}
         <span className="text-white font-semibold text-sm">{name}</span>
         {email && <span className="text-white/50 text-xs">{email}</span>}
       </div>

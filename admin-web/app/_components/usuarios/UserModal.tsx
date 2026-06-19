@@ -1,6 +1,9 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Perfil } from "@/app/_data/perfiles";
+import { fetchMedidasHistorial, type Medida } from "@/app/_data/medidas";
+import { fetchEquivalentes, FOOD_GROUPS, MEAL_KEYS, type Equivalente } from "@/app/_data/nutricion";
+import { fetchRutinaActiva, type Rutina } from "@/app/_data/rutinas";
 import InformacionPersonalForm from "./InformacionPersonalForm";
 import CitasManager from "./CitasManager";
 
@@ -59,131 +62,180 @@ function LineChart({ data }: { data: { label: string; value: number }[] }) {
 }
 
 // ── Tab: Progreso ────────────────────────────────────────────
-function Progreso() {
-  const weightData = [
-    { label: "Dic", value: 82.7 }, { label: "Ene", value: 81.4 },
-    { label: "Feb", value: 80.1 }, { label: "Mar", value: 78.9 },
-    { label: "Abr", value: 77.5 }, { label: "May", value: 78.5 },
-  ];
-  const days = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
-  const dayStatus = ["done", "done", "done", "in-progress", "pending", "pending", "pending"];
+const MONTH_SHORT = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+
+function Progreso({ userId }: { userId: string }) {
+  const [loading, setLoading] = useState(true);
+  const [medidas, setMedidas] = useState<Medida[]>([]);
+  const [equivalentes, setEquivalentes] = useState<Equivalente[]>([]);
+  const [rutina, setRutina] = useState<Rutina | null>(null);
+
+  useEffect(() => {
+    Promise.all([
+      fetchMedidasHistorial(userId),
+      fetchEquivalentes(userId).then((r) => r.equivalentes).catch(() => [] as Equivalente[]),
+      fetchRutinaActiva(userId),
+    ])
+      .then(([m, eq, r]) => { setMedidas(m); setEquivalentes(eq); setRutina(r); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [userId]);
+
+  if (loading) {
+    return <p className="text-sm text-gray-400 text-center py-10">Cargando progreso...</p>;
+  }
+
+  const weightData = medidas
+    .filter((m) => m.peso_kg != null)
+    .map((m) => {
+      const [, month] = m.fecha.split("-").map(Number);
+      return { label: MONTH_SHORT[month - 1], value: m.peso_kg! };
+    });
+
+  const latest = medidas.length > 0 ? medidas[medidas.length - 1] : null;
+  const first = medidas.length > 0 ? medidas[0] : null;
+  const pesoDelta = latest?.peso_kg != null && first?.peso_kg != null
+    ? (latest.peso_kg - first.peso_kg) : null;
+  const masaDelta = latest?.masa_muscular_pct != null && first?.masa_muscular_pct != null
+    ? (latest.masa_muscular_pct - first.masa_muscular_pct) : null;
+
+  const eqRows = FOOD_GROUPS.map((fg) => {
+    const row = equivalentes.find((e) => e.grupo === fg.grupo);
+    const total = row ? MEAL_KEYS.reduce((acc, k) => acc + row[k], 0) : 0;
+    return { grupo: fg.grupo, icono: fg.icono, total };
+  }).filter((r) => r.total > 0);
+
+  const rutinaDias = rutina?.rutina_dias ?? [];
+  const workoutDays = rutinaDias.filter((d) => !d.es_descanso);
+  const totalEjercicios = workoutDays.reduce((acc, d) => acc + d.rutina_ejercicios.length, 0);
 
   return (
     <div className="grid grid-cols-3 gap-4 text-sm">
       {/* Resumen general */}
       <div className="flex flex-col gap-3">
-        <p className="font-bold text-gray-900">Resumen general</p>
-        <div className="flex gap-3 justify-between">
-          <CircleProgress value={82} label="Dieta"        sub="Excelente"   />
-          <CircleProgress value={67} label="Entrenamiento" sub="Bueno"      />
-          <CircleProgress value={91} label="Hidratación"  sub="Excelente"   />
-        </div>
-        <div className="bg-primary/5 rounded-xl p-3 border border-primary/20">
-          <p className="text-xs text-gray-500">🔥 Racha actual</p>
-          <p className="font-extrabold text-xl text-gray-900">28 días seguidos</p>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          {[
-            { label: "Peso perdido",    value: "-4.2 kg"        },
-            { label: "Masa muscular",   value: "+2.1 %"         },
-            { label: "Adherencia",      value: "87 %"           },
-            { label: "Evaluación",      value: "Muy buen progreso" },
-          ].map((s) => (
-            <div key={s.label} className="bg-gray-50 rounded-xl p-2.5 border border-gray-100">
-              <p className="text-xs text-gray-500">{s.label}</p>
-              <p className="font-bold text-gray-900 text-xs mt-0.5">{s.value}</p>
+        <p className="font-bold text-gray-900">Resumen de medidas</p>
+        {medidas.length === 0 ? (
+          <p className="text-xs text-gray-400 text-center py-6">Sin registros de medidas aún.</p>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { label: "Peso actual", value: latest?.peso_kg != null ? `${latest.peso_kg} kg` : "—" },
+                { label: "IMC actual", value: latest?.imc != null ? latest.imc.toFixed(1) : "—" },
+                { label: "Cambio de peso", value: pesoDelta != null ? `${pesoDelta > 0 ? "+" : ""}${pesoDelta.toFixed(1)} kg` : "—" },
+                { label: "Cambio masa muscular", value: masaDelta != null ? `${masaDelta > 0 ? "+" : ""}${masaDelta.toFixed(1)} %` : "—" },
+                { label: "Cintura", value: latest?.cintura_cm != null ? `${latest.cintura_cm} cm` : "—" },
+                { label: "Cadera", value: latest?.cadera_cm != null ? `${latest.cadera_cm} cm` : "—" },
+              ].map((s) => (
+                <div key={s.label} className="bg-gray-50 rounded-xl p-2.5 border border-gray-100">
+                  <p className="text-xs text-gray-500">{s.label}</p>
+                  <p className="font-bold text-gray-900 text-xs mt-0.5">{s.value}</p>
+                </div>
+              ))}
             </div>
-          ))}
+            <div className="bg-primary/5 rounded-xl p-3 border border-primary/20">
+              <p className="text-xs text-gray-500">📊 Total de registros</p>
+              <p className="font-extrabold text-xl text-gray-900">{medidas.length} medidas</p>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Evolución de peso */}
+      <div className="flex flex-col gap-3">
+        <div className="bg-white rounded-xl border border-gray-200 p-3">
+          <p className="font-bold text-gray-900 text-xs mb-2">Evolución de peso</p>
+          {weightData.length >= 2 ? (
+            <>
+              <LineChart data={weightData} />
+              {pesoDelta != null && (
+                <p className={`text-xs font-medium mt-1 ${pesoDelta <= 0 ? "text-primary" : "text-red-500"}`}>
+                  {pesoDelta <= 0 ? "↓" : "↑"} {Math.abs(pesoDelta).toFixed(1)} kg en {medidas.length} registros
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="text-xs text-gray-400 text-center py-8">Se necesitan al menos 2 registros para la gráfica.</p>
+          )}
+        </div>
+
+        {/* Rutina actual */}
+        <div className="bg-white rounded-xl border border-gray-200 p-3">
+          <p className="font-bold text-gray-900 text-xs mb-2">Rutina asignada</p>
+          {rutina ? (
+            <>
+              <p className="text-xs text-primary font-semibold mb-2">{rutina.nombre}</p>
+              <div className="flex justify-between">
+                {rutinaDias.map((d) => (
+                  <div key={d.numero_dia} className="flex flex-col items-center gap-1.5">
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs ${
+                      d.es_descanso ? "bg-gray-100 text-gray-400" : "bg-primary text-white"
+                    }`}>
+                      {d.es_descanso ? "○" : d.rutina_ejercicios.length}
+                    </div>
+                    <span className="text-[9px] text-gray-500">{d.nombre_dia.slice(0, 3)}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3">
+                <div className="flex justify-between text-xs text-gray-500 mb-1">
+                  <span>{workoutDays.length} días de entrenamiento</span>
+                  <span>{totalEjercicios} ejercicios</span>
+                </div>
+                <div className="h-2 bg-gray-100 rounded-full">
+                  <div className="h-full bg-primary rounded-full" style={{ width: `${(workoutDays.length / 7) * 100}%` }} />
+                </div>
+              </div>
+            </>
+          ) : (
+            <p className="text-xs text-gray-400 text-center py-4">Sin rutina asignada.</p>
+          )}
         </div>
       </div>
 
-      {/* Evolución de peso + entrenamiento */}
+      {/* Progreso nutricional */}
       <div className="flex flex-col gap-3">
         <div className="bg-white rounded-xl border border-gray-200 p-3">
-          <div className="flex justify-between items-center mb-2">
-            <p className="font-bold text-gray-900 text-xs">Evolución de peso</p>
-            <select className="text-xs border border-gray-200 rounded-lg px-2 py-1">
-              <option>6 meses</option>
-            </select>
-          </div>
-          <LineChart data={weightData} />
-          <p className="text-xs text-primary font-medium mt-1">↓ 4.2 kg perdidos en 6 meses</p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-3">
-          <div className="flex justify-between items-center mb-3">
-            <p className="font-bold text-gray-900 text-xs">Progreso de entrenamiento</p>
-            <select className="text-xs border border-gray-200 rounded-lg px-2 py-1">
-              <option>Esta semana</option>
-            </select>
-          </div>
-          <div className="flex justify-between">
-            {days.map((d, i) => (
-              <div key={d} className="flex flex-col items-center gap-1.5">
-                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs ${
-                  dayStatus[i] === "done"        ? "bg-primary text-white" :
-                  dayStatus[i] === "in-progress" ? "bg-yellow-400 text-white" :
-                                                   "bg-gray-100 text-gray-400"
-                }`}>
-                  {dayStatus[i] === "done" ? "✓" : dayStatus[i] === "in-progress" ? "●" : "○"}
+          <p className="font-bold text-gray-900 text-xs mb-2">Plan de equivalentes</p>
+          {eqRows.length > 0 ? (
+            <>
+              <p className="text-xs text-gray-500 mb-3">Equivalentes diarios asignados</p>
+              {eqRows.map((n) => (
+                <div key={n.grupo} className="mb-2">
+                  <div className="flex justify-between text-xs mb-0.5">
+                    <span className="text-gray-600">{n.icono} {n.grupo}</span>
+                    <span className="font-semibold text-gray-800">{n.total}</span>
+                  </div>
+                  <div className="h-1.5 bg-gray-100 rounded-full">
+                    <div className="h-full bg-primary rounded-full" style={{ width: `${Math.min(100, n.total * 10)}%` }} />
+                  </div>
                 </div>
-                <span className="text-[9px] text-gray-500">{d}</span>
+              ))}
+            </>
+          ) : (
+            <p className="text-xs text-gray-400 text-center py-4">Sin plan de equivalentes asignado.</p>
+          )}
+        </div>
+
+        {/* Resumen de rutina: ejercicios */}
+        {rutina && workoutDays.length > 0 && (
+          <div className="bg-white rounded-xl border border-gray-200 p-3">
+            <p className="font-bold text-gray-900 text-xs mb-2">Ejercicios principales</p>
+            {workoutDays.slice(0, 2).map((d) => (
+              <div key={d.id} className="mb-2">
+                <p className="text-xs text-primary font-semibold">{d.nombre_dia}</p>
+                {d.rutina_ejercicios.slice(0, 3).map((ej) => (
+                  <p key={ej.id} className="text-xs text-gray-500">
+                    • {ej.series != null ? `${ej.series}×` : ""}{ej.repeticiones ?? ""} {ej.peso_sugerido_kg != null ? `(${ej.peso_sugerido_kg} kg)` : ""}
+                  </p>
+                ))}
+                {d.rutina_ejercicios.length > 3 && (
+                  <p className="text-xs text-gray-400">+{d.rutina_ejercicios.length - 3} más</p>
+                )}
               </div>
             ))}
           </div>
-          <div className="mt-3">
-            <div className="flex justify-between text-xs text-gray-500 mb-1">
-              <span>3 de 7 entrenamientos completados</span>
-              <span>43%</span>
-            </div>
-            <div className="h-2 bg-gray-100 rounded-full">
-              <div className="h-full bg-primary rounded-full" style={{ width: "43%" }} />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Progreso nutricional + enfoque */}
-      <div className="flex flex-col gap-3">
-        <div className="bg-white rounded-xl border border-gray-200 p-3">
-          <p className="font-bold text-gray-900 text-xs mb-2">Progreso nutricional</p>
-          <p className="text-xs text-gray-500 mb-3">Equivalentes diarios promedio</p>
-          {[
-            { label: "Cereales sin grasa", actual: 2, total: 2 },
-            { label: "Frutas",             actual: 3, total: 3 },
-            { label: "Verduras",           actual: 5, total: 5 },
-            { label: "Leche descremada",   actual: 1, total: 1 },
-            { label: "POA bajo aporte",    actual: 2, total: 2 },
-          ].map((n) => (
-            <div key={n.label} className="mb-2">
-              <div className="flex justify-between text-xs mb-0.5">
-                <span className="text-gray-600">{n.label}</span>
-                <span className="font-semibold text-gray-800">{n.actual} / {n.total}</span>
-              </div>
-              <div className="h-1.5 bg-gray-100 rounded-full">
-                <div className="h-full bg-primary rounded-full" style={{ width: `${(n.actual / n.total) * 100}%` }} />
-              </div>
-            </div>
-          ))}
-          <div className="flex items-center gap-2 mt-2 text-xs text-primary font-medium">
-            ✅ Excelente cumplimiento nutricional
-          </div>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-3">
-          <div className="flex justify-between items-center mb-2">
-            <p className="font-bold text-gray-900 text-xs">Enfoque actual</p>
-            <span className="text-xs text-primary">Semana 4 de 8</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="text-3xl">🏋️</div>
-            <div>
-              <p className="font-bold text-gray-900 text-sm">Espalda y Bíceps</p>
-              {["Dominadas", "Remo con barra", "Curl de bíceps", "Face pull"].map((e) => (
-                <p key={e} className="text-xs text-gray-500">• {e}</p>
-              ))}
-            </div>
-          </div>
-          <button className="mt-2 text-xs text-primary font-semibold hover:underline">🏋️ Ver rutina completa</button>
-        </div>
+        )}
       </div>
     </div>
   );
@@ -272,7 +324,7 @@ export default function UserModal({ perfil, onClose }: { perfil: Perfil; onClose
         {/* Content */}
         <div className="p-6">
           {tab === "historial" && <InformacionPersonalForm userId={perfil.id} />}
-          {tab === "progreso"  && <Progreso />}
+          {tab === "progreso"  && <Progreso userId={perfil.id} />}
           {tab === "citas"     && <CitasManager userId={perfil.id} />}
         </div>
       </div>

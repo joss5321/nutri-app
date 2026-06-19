@@ -8,13 +8,25 @@ export type Perfil = {
   altura_cm: number | null;
   avatar_url: string | null;
   plan_membresia: string;
+  rol: string;
   created_at?: string;
 };
+
+export async function fetchAdmins(): Promise<Perfil[]> {
+  const { data, error } = await supabase
+    .from("perfiles")
+    .select("*")
+    .eq("rol", "admin")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data as Perfil[];
+}
 
 export async function fetchPerfiles(): Promise<Perfil[]> {
   const { data, error } = await supabase
     .from("perfiles")
     .select("*")
+    .eq("rol", "usuario")
     .order("created_at", { ascending: false });
   if (error) throw error;
   return data as Perfil[];

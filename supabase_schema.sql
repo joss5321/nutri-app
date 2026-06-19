@@ -520,3 +520,39 @@ create policy "guardadas: gestion para autenticados"
   on recetas_guardadas for all
   using (auth.role() = 'authenticated')
   with check (auth.role() = 'authenticated');
+
+-- ============================================================
+-- 15. MIGRACIÓN — columna rol en perfiles (usuario vs admin)
+-- Los usuarios registrados desde móvil obtienen 'usuario' (default).
+-- Solo los marcados manualmente como 'admin' pueden acceder a admin-web.
+-- ============================================================
+alter table perfiles add column if not exists rol text not null default 'usuario'
+  check (rol in ('usuario', 'admin'));
+
+-- ============================================================
+-- 16. MIGRACIÓN — bucket público para avatares de usuario
+-- ============================================================
+insert into storage.buckets (id, name, public)
+values ('avatars', 'avatars', true)
+on conflict (id) do nothing;
+
+drop policy if exists "avatars: lectura publica" on storage.objects;
+create policy "avatars: lectura publica"
+  on storage.objects for select using (bucket_id = 'avatars');
+
+drop policy if exists "avatars: gestion autenticados" on storage.objects;
+create policy "avatars: gestion autenticados"
+  on storage.objects for all
+  using (bucket_id = 'avatars' and auth.role() = 'authenticated')
+  with check (bucket_id = 'avatars' and auth.role() = 'authenticated');
+
+-- ============================================================
+-- 17. MIGRACIÓN — perfiles: escritura para autenticados
+-- admin-web necesita actualizar perfiles de cualquier usuario
+-- (información personal, rol, etc.)
+-- ============================================================
+drop policy if exists "perfiles: gestion para autenticados" on perfiles;
+create policy "perfiles: gestion para autenticados"
+  on perfiles for all
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');

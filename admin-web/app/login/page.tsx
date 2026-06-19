@@ -17,12 +17,12 @@ export default function LoginPage() {
     e.preventDefault();
     setError(null);
     setLoading(true);
-    const { error: authError } = await supabase.auth.signInWithPassword({
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email: email.trim().toLowerCase(),
       password,
     });
-    setLoading(false);
     if (authError) {
+      setLoading(false);
       setError(
         authError.message === "Invalid login credentials"
           ? "Correo o contraseña incorrectos."
@@ -30,6 +30,23 @@ export default function LoginPage() {
       );
       return;
     }
+
+    const userId = authData.user?.id;
+    if (userId) {
+      const { data: perfil } = await supabase
+        .from("perfiles")
+        .select("rol")
+        .eq("id", userId)
+        .single();
+      if (!perfil || perfil.rol !== "admin") {
+        await supabase.auth.signOut();
+        setLoading(false);
+        setError("No tienes permisos para acceder al panel de administración.");
+        return;
+      }
+    }
+
+    setLoading(false);
     router.push("/dashboard");
     router.refresh();
   };
