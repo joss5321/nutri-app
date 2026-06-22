@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabase";
 export type Perfil = {
   id: string;
   nombre_completo: string | null;
+  email: string | null;
   sexo: string | null;
   fecha_nacimiento: string | null;
   altura_cm: number | null;

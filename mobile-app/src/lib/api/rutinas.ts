@@ -5,6 +5,9 @@ export type EjercicioInfo = {
   nombre: string
   emoji: string | null
   grupo_muscular: string | null
+  grupos_secundarios: string[] | null
+  descripcion: string | null
+  video_url: string | null
 }
 
 export type RutinaEjercicio = {
@@ -38,7 +41,7 @@ export type RutinaCompleta = {
   rutina_dias: RutinaDia[]
 }
 
-const SELECT = '*, rutina_dias(*, rutina_ejercicios(*, ejercicios(id, nombre, emoji, grupo_muscular)))'
+const SELECT = '*, rutina_dias(*, rutina_ejercicios(*, ejercicios(id, nombre, emoji, grupo_muscular, grupos_secundarios, descripcion, video_url)))'
 
 export async function fetchMiRutina(userId: string): Promise<RutinaCompleta | null> {
   const { data, error } = await supabase

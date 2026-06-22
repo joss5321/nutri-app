@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import { fetchAdmins, updatePerfil, type Perfil } from "@/app/_data/perfiles";
+import ConfirmModal from "@/app/_components/ConfirmModal";
 
 export default function AdministradoresPage() {
   const [admins, setAdmins] = useState<Perfil[]>([]);
@@ -165,12 +166,10 @@ export default function AdministradoresPage() {
     }
   };
 
+  const [confirmRemove, setConfirmRemove] = useState<Perfil | null>(null);
+
   const handleRemoveAdmin = async (admin: Perfil) => {
-    if (admin.id === currentUserId) {
-      setFeedback({ type: "error", text: "No puedes eliminarte a ti mismo como administrador." });
-      return;
-    }
-    if (!confirm(`¿Quitar acceso de administrador a "${admin.nombre_completo || "Sin nombre"}"? Ya no podrá acceder al panel.`)) return;
+    setConfirmRemove(null);
     setFeedback(null);
     try {
       const { error } = await supabase
@@ -299,7 +298,7 @@ export default function AdministradoresPage() {
                           ✏️
                         </button>
                         {!isSelf && (
-                          <button onClick={() => handleRemoveAdmin(a)}
+                          <button onClick={() => a.id === currentUserId ? setFeedback({ type: "error", text: "No puedes eliminarte a ti mismo como administrador." }) : setConfirmRemove(a)}
                             className="w-9 h-9 rounded-xl border border-red-200 hover:border-red-400 hover:bg-red-50 flex items-center justify-center transition-colors" title="Quitar acceso">
                             🗑️
                           </button>
@@ -385,6 +384,16 @@ export default function AdministradoresPage() {
             </div>
           </div>
         </div>
+      )}
+      {confirmRemove && (
+        <ConfirmModal
+          title="Quitar acceso de administrador"
+          message={`¿Estás seguro de que deseas quitar el acceso de administrador a "${confirmRemove.nombre_completo || "Sin nombre"}"? Ya no podrá acceder al panel.`}
+          confirmLabel="Quitar acceso"
+          variant="warning"
+          onConfirm={() => handleRemoveAdmin(confirmRemove)}
+          onCancel={() => setConfirmRemove(null)}
+        />
       )}
     </div>
   );

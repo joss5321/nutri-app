@@ -21,7 +21,7 @@ function imcInfo(imc: number) {
   return { label: "Obesidad", color: "bg-red-50 text-red-600" };
 }
 
-export default function InformacionPersonalForm({ userId }: { userId: string }) {
+export default function InformacionPersonalForm({ userId, onPerfilUpdated }: { userId: string; onPerfilUpdated?: () => void }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -100,6 +100,7 @@ export default function InformacionPersonalForm({ userId }: { userId: string }) 
         imc: imc != null ? Number(imc.toFixed(2)) : null,
       });
       setFeedback({ type: "success", text: "Información guardada correctamente." });
+      onPerfilUpdated?.();
     } catch (err) {
       setFeedback({ type: "error", text: err instanceof Error ? err.message : "No se pudo guardar la información." });
     } finally {

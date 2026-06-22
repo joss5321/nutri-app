@@ -84,7 +84,7 @@ export default function UsuariosPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50/50">
-                {["Nombre", "Sexo", "Plan actual", "Registrado", "Acciones"].map((h) => (
+                {["Nombre", "Correo", "Sexo", "Plan actual", "Registrado", "Acciones"].map((h) => (
                   <th key={h} className="text-left px-4 py-3.5 text-xs font-semibold text-gray-500">{h}</th>
                 ))}
               </tr>
@@ -102,6 +102,7 @@ export default function UsuariosPage() {
                         <span className="font-medium text-gray-900">{nombre}</span>
                       </div>
                     </td>
+                    <td className="px-4 py-3.5 text-gray-500 text-xs">{u.email || "—"}</td>
                     <td className="px-4 py-3.5 text-gray-600 capitalize">{u.sexo || "—"}</td>
                     <td className="px-4 py-3.5"><PlanBadge plan={u.plan_membresia} /></td>
                     <td className="px-4 py-3.5 text-gray-500">
@@ -122,7 +123,7 @@ export default function UsuariosPage() {
 
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-10 text-center text-gray-400 text-sm">
+                  <td colSpan={6} className="px-4 py-10 text-center text-gray-400 text-sm">
                     No se encontraron usuarios.
                   </td>
                 </tr>

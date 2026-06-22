@@ -58,6 +58,25 @@ export default function CitasManager({ userId }: { userId: string }) {
 
   const handleAddCita = async () => {
     if (!fecha || !hora) return;
+
+    const now = new Date();
+    const hoy = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+
+    if (fecha < hoy) {
+      setFeedback({ type: "error", text: "No puedes agendar una cita en una fecha pasada." });
+      return;
+    }
+
+    if (fecha === hoy) {
+      const [h, m] = hora.split(":").map(Number);
+      const citaMin = h * 60 + m;
+      const minimoMin = (now.getHours() + 1) * 60 + now.getMinutes();
+      if (citaMin < minimoMin) {
+        setFeedback({ type: "error", text: "Para hoy, la cita debe ser al menos 1 hora después de la hora actual." });
+        return;
+      }
+    }
+
     setSaving(true);
     setFeedback(null);
     try {
@@ -157,6 +176,7 @@ export default function CitasManager({ userId }: { userId: string }) {
             <div>
               <label className="text-xs text-gray-500 block mb-1">Fecha</label>
               <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)}
+                min={`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`}
                 className="w-full h-9 border border-gray-200 rounded-xl px-3 text-xs focus:outline-none focus:border-primary" />
             </div>
             <div>

@@ -250,8 +250,15 @@ function formatFecha(fecha: string | null): string {
 // ── Modal principal ──────────────────────────────────────────
 type Tab = "historial" | "progreso" | "citas";
 
-export default function UserModal({ perfil, onClose }: { perfil: Perfil; onClose: () => void }) {
+export default function UserModal({ perfil: perfilInicial, onClose }: { perfil: Perfil; onClose: () => void }) {
   const [tab, setTab] = useState<Tab>("historial");
+  const [perfil, setPerfil] = useState<Perfil>(perfilInicial);
+
+  const refreshPerfil = () => {
+    import("@/app/_data/perfiles").then(({ fetchPerfil }) =>
+      fetchPerfil(perfil.id).then(setPerfil).catch(() => {})
+    );
+  };
 
   const TABS: { key: Tab; label: string; icon: string }[] = [
     { key: "historial", label: "Historial Clínico", icon: "🩺" },
@@ -323,7 +330,7 @@ export default function UserModal({ perfil, onClose }: { perfil: Perfil; onClose
 
         {/* Content */}
         <div className="p-6">
-          {tab === "historial" && <InformacionPersonalForm userId={perfil.id} />}
+          {tab === "historial" && <InformacionPersonalForm userId={perfil.id} onPerfilUpdated={refreshPerfil} />}
           {tab === "progreso"  && <Progreso userId={perfil.id} />}
           {tab === "citas"     && <CitasManager userId={perfil.id} />}
         </div>

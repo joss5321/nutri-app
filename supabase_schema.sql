@@ -556,3 +556,26 @@ create policy "perfiles: gestion para autenticados"
   on perfiles for all
   using (auth.role() = 'authenticated')
   with check (auth.role() = 'authenticated');
+
+-- ============================================================
+-- 18. MIGRACIÓN — columna email en perfiles + actualizar trigger
+-- ============================================================
+alter table perfiles add column if not exists email text;
+
+update perfiles p
+set email = u.email
+from auth.users u
+where p.id = u.id and p.email is null;
+
+create or replace function crear_perfil_nuevo_usuario()
+returns trigger language plpgsql security definer as $$
+begin
+  insert into public.perfiles (id, nombre_completo, email)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'full_name', new.email),
+    new.email
+  );
+  return new;
+end;
+$$;

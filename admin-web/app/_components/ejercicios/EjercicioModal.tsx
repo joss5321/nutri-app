@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { MUSCLE_GROUPS, type Exercise } from "@/app/_data/exercises";
 import { createEjercicio, deleteEjercicioVideo, updateEjercicio, uploadEjercicioVideo } from "@/app/_data/ejercicios";
+import { getYouTubeEmbedId, isYouTubeShort, VideoPlayer } from "@/app/_components/ejercicios/VideoPlayer";
 
 export default function EjercicioModal({
   exercise,
@@ -118,9 +119,11 @@ export default function EjercicioModal({
             {/* 2. Video demostrativo */}
             <section>
               <p className="text-sm font-bold text-gray-800 mb-3">2. Video demostrativo</p>
-              <div className="relative bg-gray-900 rounded-xl overflow-hidden h-44 flex items-center justify-center">
+              <div className={`relative bg-gray-900 rounded-xl overflow-hidden flex items-center justify-center ${
+                videoPreview && isYouTubeShort(videoPreview) ? "h-80" : "h-44"
+              }`}>
                 {videoPreview ? (
-                  <video src={videoPreview} controls className="w-full h-full object-cover" />
+                  <VideoPlayer src={videoPreview} controls className="w-full h-full" />
                 ) : (
                   <div className="flex flex-col items-center gap-2 text-gray-400">
                     <span className="text-4xl">🎬</span>
@@ -194,9 +197,11 @@ export default function EjercicioModal({
                 </div>
               </div>
 
-              <div className="bg-gray-200 rounded-xl h-36 flex items-center justify-center mb-3 overflow-hidden">
+              <div className={`bg-gray-200 rounded-xl flex items-center justify-center mb-3 overflow-hidden ${
+                videoPreview && isYouTubeShort(videoPreview) ? "h-64" : "h-36"
+              }`}>
                 {videoPreview ? (
-                  <video src={videoPreview} className="w-full h-full object-cover" muted />
+                  <VideoPlayer src={videoPreview} className="w-full h-full" />
                 ) : (
                   <span className="text-gray-400 text-sm">Sin video</span>
                 )}

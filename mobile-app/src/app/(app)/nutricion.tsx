@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import {
   ActivityIndicator,
   Modal,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -9,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native'
+import { useFocusEffect } from '@react-navigation/native'
 import { Ionicons } from '@expo/vector-icons'
 import { AppHeader } from '@/components/ui/AppHeader'
 import { COLORS } from '@/constants/colors'
@@ -43,22 +45,27 @@ function EquivalentesTab() {
   const userId = user?.id ?? ''
 
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [groups, setGroups] = useState<FoodGroupRow[]>([])
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null)
 
-  useEffect(() => {
+  const loadData = useCallback((isRefresh = false) => {
     if (!userId) return
+    if (isRefresh) setRefreshing(true); else setLoading(true)
     fetchMisEquivalentes(userId)
       .then((result) => {
         if (result && result.equivalentes.length > 0) {
-          const mapped = mapEquivalentesToGroups(result.equivalentes)
-          setGroups(mapped)
+          setGroups(mapEquivalentesToGroups(result.equivalentes))
           setExpandedIdx(0)
+        } else {
+          setGroups([])
         }
       })
       .catch(() => {})
-      .finally(() => setLoading(false))
+      .finally(() => { setLoading(false); setRefreshing(false) })
   }, [userId])
+
+  useFocusEffect(useCallback(() => { loadData() }, [loadData]))
 
   const toggle = (i: number) => setExpandedIdx((prev) => (prev === i ? null : i))
 
@@ -85,7 +92,8 @@ function EquivalentesTab() {
   }
 
   return (
-    <ScrollView showsVerticalScrollIndicator={false}>
+    <ScrollView showsVerticalScrollIndicator={false}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true)} colors={[COLORS.primary]} tintColor={COLORS.primary} />}>
       <View style={{ padding: 16, gap: 14 }}>
         {/* Objetivo del mes */}
         <View style={s.objetivoCard}>
@@ -281,18 +289,23 @@ function RecetasTab() {
   const userId = user?.id ?? ''
 
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [recipes, setRecipes] = useState<Recipe[]>([])
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState('Todos')
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null)
 
-  useEffect(() => {
+  const loadData = useCallback((isRefresh = false) => {
     if (!userId) return
+    if (isRefresh) setRefreshing(true); else setLoading(true)
     fetchMisRecetas(userId)
       .then((data) => setRecipes(data.map(mapReceta)))
       .catch(() => {})
-      .finally(() => setLoading(false))
+      .finally(() => { setLoading(false); setRefreshing(false) })
   }, [userId])
+
+  useFocusEffect(useCallback(() => { loadData() }, [loadData])
+  )
 
   const filters = ['Todos', 'Cereales', 'Frutas', 'Verduras', 'Leche', 'Proteína']
 
@@ -329,7 +342,8 @@ function RecetasTab() {
       {selectedRecipe && (
         <RecipeDetailModal recipe={selectedRecipe} onClose={() => setSelectedRecipe(null)} />
       )}
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true)} colors={[COLORS.primary]} tintColor={COLORS.primary} />}>
         <View style={{ padding: 16, gap: 14 }}>
           {/* Buscador */}
           <View style={s.searchBar}>

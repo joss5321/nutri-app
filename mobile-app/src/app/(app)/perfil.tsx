@@ -1,13 +1,15 @@
-import { useEffect, useState } from 'react'
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { useCallback, useState } from 'react'
+import { ActivityIndicator, Alert, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { useFocusEffect } from '@react-navigation/native'
+import * as ImagePicker from 'expo-image-picker'
 import { AppHeader } from '@/components/ui/AppHeader'
 import { COLORS } from '@/constants/colors'
 import { useAuthStore } from '@/store/auth'
 import { supabase } from '@/lib/supabase'
 import { fetchMiPerfil, type Perfil } from '@/lib/api/perfiles'
 import { fetchUltimaMedida, type Medida } from '@/lib/api/medidas'
-import { fetchMisCitas, type Cita } from '@/lib/api/citas'
+import { fetchMisCitas, updateEstadoCita, type Cita } from '@/lib/api/citas'
 
 const MONTH_SHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 
@@ -50,19 +52,61 @@ export default function PerfilScreen() {
   const email = user?.email ?? '—'
 
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [perfil, setPerfil] = useState<Perfil | null>(null)
   const [medida, setMedida] = useState<Medida | null>(null)
   const [citas, setCitas] = useState<Cita[]>([])
 
-  useEffect(() => {
+  const loadData = useCallback((isRefresh = false) => {
     if (!userId) return
+    if (isRefresh) setRefreshing(true); else setLoading(true)
     Promise.all([fetchMiPerfil(userId), fetchUltimaMedida(userId), fetchMisCitas(userId)])
       .then(([p, m, c]) => { setPerfil(p); setMedida(m); setCitas(c) })
       .catch(() => {})
-      .finally(() => setLoading(false))
+      .finally(() => { setLoading(false); setRefreshing(false) })
   }, [userId])
 
+  useFocusEffect(useCallback(() => { loadData() }, [loadData]))
+
   const handleSignOut = async () => { await supabase.auth.signOut() }
+
+  const handlePickAvatar = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    })
+    if (result.canceled || !result.assets[0]) return
+
+    try {
+      const uri = result.assets[0].uri
+      const ext = uri.split('.').pop()?.toLowerCase() ?? 'jpg'
+      const path = `${userId}.${ext}`
+
+      const response = await fetch(uri)
+      const blob = await response.blob()
+      const arrayBuffer = await new Response(blob).arrayBuffer()
+
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(path, arrayBuffer, { upsert: true, contentType: `image/${ext === 'png' ? 'png' : 'jpeg'}` })
+      if (uploadError) throw uploadError
+
+      const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
+      const avatarUrl = `${publicUrl}?t=${Date.now()}`
+
+      const { error: updateError } = await supabase
+        .from('perfiles')
+        .update({ avatar_url: avatarUrl })
+        .eq('id', userId)
+      if (updateError) throw updateError
+
+      setPerfil((prev) => prev ? { ...prev, avatar_url: avatarUrl } : prev)
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo subir la foto.')
+    }
+  }
 
   const nombre = perfil?.nombre_completo ?? user?.user_metadata?.full_name ?? 'Usuario'
   const isPremium = perfil?.plan_membresia === 'premium'
@@ -91,19 +135,24 @@ export default function PerfilScreen() {
   return (
     <View style={s.container}>
       <AppHeader title="Perfil" />
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true)} colors={[COLORS.primary]} tintColor={COLORS.primary} />}>
         <View style={{ padding: 16, gap: 16, paddingBottom: 32 }}>
 
           {/* Avatar + info */}
           <View style={s.profileCard}>
-            <View style={s.avatarWrap}>
-              <View style={s.avatar}>
-                <Ionicons name="person" size={42} color={COLORS.primary} />
-              </View>
-              <TouchableOpacity style={s.cameraBtn}>
+            <TouchableOpacity style={s.avatarWrap} onPress={handlePickAvatar} activeOpacity={0.7}>
+              {perfil?.avatar_url ? (
+                <Image source={{ uri: perfil.avatar_url }} style={s.avatar} />
+              ) : (
+                <View style={s.avatar}>
+                  <Ionicons name="person" size={42} color={COLORS.primary} />
+                </View>
+              )}
+              <View style={s.cameraBtn}>
                 <Ionicons name="camera" size={14} color={COLORS.white} />
-              </TouchableOpacity>
-            </View>
+              </View>
+            </TouchableOpacity>
             <View style={{ flex: 1 }}>
               <Text style={s.userName}>{nombre}</Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
@@ -176,6 +225,32 @@ export default function PerfilScreen() {
                       )}
                       {c.modalidad && (
                         <Text style={{ fontSize: 11, color: COLORS.muted }}>📍 {c.modalidad}</Text>
+                      )}
+                      {c.estado === 'pendiente' && (
+                        <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                          <TouchableOpacity
+                            style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: '#D1FAE5', borderRadius: 8, paddingVertical: 7 }}
+                            onPress={async () => {
+                              await updateEstadoCita(c.id, 'confirmada')
+                              setCitas((prev) => prev.map((ci) => ci.id === c.id ? { ...ci, estado: 'confirmada' } : ci))
+                            }}
+                            activeOpacity={0.7}
+                          >
+                            <Ionicons name="checkmark-circle" size={14} color="#065F46" />
+                            <Text style={{ fontSize: 12, fontWeight: '600', color: '#065F46' }}>Confirmar</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: '#FEE2E2', borderRadius: 8, paddingVertical: 7 }}
+                            onPress={async () => {
+                              await updateEstadoCita(c.id, 'cancelada')
+                              setCitas((prev) => prev.map((ci) => ci.id === c.id ? { ...ci, estado: 'cancelada' } : ci))
+                            }}
+                            activeOpacity={0.7}
+                          >
+                            <Ionicons name="close-circle" size={14} color="#991B1B" />
+                            <Text style={{ fontSize: 12, fontWeight: '600', color: '#991B1B' }}>Cancelar</Text>
+                          </TouchableOpacity>
+                        </View>
                       )}
                     </View>
                   </View>

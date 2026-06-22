@@ -94,9 +94,42 @@ export default function RecetaModal({
   const [error, setError] = useState<string | null>(null);
 
   const toNumber = (v: string): number | null => (v.trim() === "" ? null : Number(v));
+  const setPositive = (setter: (v: string) => void) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    setter(e.target.value.replace(/^-/, ""));
+  };
 
   const handleSave = async () => {
-    if (!nombre.trim()) return;
+    if (!nombre.trim()) {
+      setError("El nombre de la receta es obligatorio.");
+      return;
+    }
+
+    const numFields = [
+      { label: "Prep. (min)", value: tiempoPrep },
+      { label: "Cocción (min)", value: tiempoCoccion },
+      { label: "Calorías", value: calorias },
+      { label: "Proteínas (g)", value: proteinas },
+      { label: "Carbohidratos (g)", value: carbohidratos },
+      { label: "Grasas (g)", value: grasas },
+    ];
+    const negative = numFields.find((f) => f.value.trim() !== "" && Number(f.value) < 0);
+    if (negative) {
+      setError(`"${negative.label}" no puede ser negativo.`);
+      return;
+    }
+
+    const emptyIngredient = ingredientes.some((ing) => ing.trim() === "");
+    if (emptyIngredient) {
+      setError("Todos los ingredientes deben tener texto. Elimina los vacíos o completa su contenido.");
+      return;
+    }
+
+    const hasNumbers = ingredientes.some((ing) => /^\d+$/.test(ing.trim()));
+    if (hasNumbers) {
+      setError("Los ingredientes no pueden ser solo números. Describe el ingrediente con texto.");
+      return;
+    }
+
     setSaving(true);
     setError(null);
 
@@ -201,17 +234,17 @@ export default function RecetaModal({
               <div className="grid grid-cols-4 gap-3">
                 <div>
                   <label className="text-xs text-gray-500 block mb-1">Prep. (min)</label>
-                  <input type="number" min={0} value={tiempoPrep} onChange={(e) => setTiempoPrep(e.target.value)}
+                  <input type="number" min={0} value={tiempoPrep} onChange={setPositive(setTiempoPrep)}
                     className="w-full h-10 border border-gray-200 rounded-xl px-3 text-sm focus:outline-none focus:border-primary" />
                 </div>
                 <div>
                   <label className="text-xs text-gray-500 block mb-1">Cocción (min)</label>
-                  <input type="number" min={0} value={tiempoCoccion} onChange={(e) => setTiempoCoccion(e.target.value)}
+                  <input type="number" min={0} value={tiempoCoccion} onChange={setPositive(setTiempoCoccion)}
                     className="w-full h-10 border border-gray-200 rounded-xl px-3 text-sm focus:outline-none focus:border-primary" />
                 </div>
                 <div>
                   <label className="text-xs text-gray-500 block mb-1">Calorías (kcal)</label>
-                  <input type="number" min={0} value={calorias} onChange={(e) => setCalorias(e.target.value)}
+                  <input type="number" min={0} value={calorias} onChange={setPositive(setCalorias)}
                     className="w-full h-10 border border-gray-200 rounded-xl px-3 text-sm focus:outline-none focus:border-primary" />
                 </div>
                 <div>
@@ -229,17 +262,17 @@ export default function RecetaModal({
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="text-xs text-gray-500 block mb-1">Proteínas (g)</label>
-                  <input type="number" min={0} step="0.1" value={proteinas} onChange={(e) => setProteinas(e.target.value)}
+                  <input type="number" min={0} step="0.1" value={proteinas} onChange={setPositive(setProteinas)}
                     className="w-full h-10 border border-gray-200 rounded-xl px-3 text-sm focus:outline-none focus:border-primary" />
                 </div>
                 <div>
                   <label className="text-xs text-gray-500 block mb-1">Carbohidratos (g)</label>
-                  <input type="number" min={0} step="0.1" value={carbohidratos} onChange={(e) => setCarbohidratos(e.target.value)}
+                  <input type="number" min={0} step="0.1" value={carbohidratos} onChange={setPositive(setCarbohidratos)}
                     className="w-full h-10 border border-gray-200 rounded-xl px-3 text-sm focus:outline-none focus:border-primary" />
                 </div>
                 <div>
                   <label className="text-xs text-gray-500 block mb-1">Grasas (g)</label>
-                  <input type="number" min={0} step="0.1" value={grasas} onChange={(e) => setGrasas(e.target.value)}
+                  <input type="number" min={0} step="0.1" value={grasas} onChange={setPositive(setGrasas)}
                     className="w-full h-10 border border-gray-200 rounded-xl px-3 text-sm focus:outline-none focus:border-primary" />
                 </div>
               </div>

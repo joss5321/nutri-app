@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { MUSCLE_GROUPS, type Exercise } from "@/app/_data/exercises";
 import { fetchEjercicios } from "@/app/_data/ejercicios";
+import ConfirmModal from "@/app/_components/ConfirmModal";
 import {
   DAYS,
   deleteRutina,
@@ -37,6 +38,7 @@ export default function RutinaBuilderModal({
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     fetchEjercicios()
@@ -99,15 +101,32 @@ export default function RutinaBuilderModal({
   };
 
   const updateField = (uid: string, field: "series" | "reps" | "peso", value: string) => {
+    const sanitized = field === "reps" ? value.replace(/-/g, "") : value.replace(/^-/, "");
     setAssigned((prev) => ({
       ...prev,
-      [activeDay]: prev[activeDay].map((a) => a.uid === uid ? { ...a, [field]: value } : a),
+      [activeDay]: prev[activeDay].map((a) => a.uid === uid ? { ...a, [field]: sanitized } : a),
     }));
   };
 
   const totalAsignados = Object.values(assigned).reduce((acc, day) => acc + day.length, 0);
 
   const handleSave = async () => {
+    const allExercises = Object.entries(assigned).flatMap(([day, exs]) =>
+      exs.map((a) => ({ day, ...a }))
+    );
+    const invalid = allExercises.find((a) => !a.series.trim() || !a.reps.trim());
+    if (invalid) {
+      setFeedback({ type: "error", text: `Completa Series y Reps de todos los ejercicios (revisa ${invalid.day}).` });
+      return;
+    }
+    const negative = allExercises.find(
+      (a) => Number(a.series) < 0 || Number(a.peso) < 0
+    );
+    if (negative) {
+      setFeedback({ type: "error", text: `No se permiten valores negativos (revisa ${negative.day}).` });
+      return;
+    }
+
     setSaving(true);
     setFeedback(null);
     try {
@@ -140,7 +159,7 @@ export default function RutinaBuilderModal({
 
   const handleDelete = async () => {
     if (!rutinaId) return;
-    if (!confirm("¿Eliminar esta rutina? Esta acción no se puede deshacer.")) return;
+    setShowDeleteConfirm(false);
     setDeleting(true);
     setFeedback(null);
     try {
@@ -169,13 +188,7 @@ export default function RutinaBuilderModal({
               {patient.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
             </div>
             <div>
-              <h2 className="font-bold text-gray-900 text-xl">Rutina de {patient.name}</h2>
-              <input
-                value={nombre}
-                onChange={(e) => setNombre(e.target.value)}
-                placeholder="Nombre de la rutina"
-                className="text-gray-500 text-sm bg-transparent border-b border-dashed border-gray-300 focus:outline-none focus:border-primary mt-0.5"
-              />
+              <h2 className="font-bold text-gray-900 text-xl">{nombre}</h2>
             </div>
           </div>
           <button onClick={onClose} className="w-9 h-9 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 text-xl">×</button>
@@ -224,9 +237,14 @@ export default function RutinaBuilderModal({
                   <span className="text-gray-400 text-xs">⠿</span>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-gray-800 truncate">{ex.nombre}</p>
-                    {ex.grupo_muscular && (
-                      <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">{ex.grupo_muscular}</span>
-                    )}
+                    <div className="flex flex-wrap gap-1 mt-0.5">
+                      {ex.grupo_muscular && (
+                        <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">{ex.grupo_muscular}</span>
+                      )}
+                      {ex.grupos_secundarios.map((g) => (
+                        <span key={g} className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{g}</span>
+                      ))}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -300,6 +318,7 @@ export default function RutinaBuilderModal({
                             value={a[f.key]}
                             onChange={(e) => updateField(a.uid, f.key, e.target.value)}
                             type={f.key === "reps" ? "text" : "number"}
+                            min={f.key !== "reps" ? "0" : undefined}
                             className="w-14 h-8 text-center border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-primary"
                           />
                         </div>
@@ -322,7 +341,7 @@ export default function RutinaBuilderModal({
             </button>
             {rutinaId && (
               <button
-                onClick={handleDelete}
+                onClick={() => setShowDeleteConfirm(true)}
                 disabled={deleting || saving}
                 className="px-5 h-10 rounded-xl border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50 disabled:opacity-50"
               >
@@ -346,6 +365,15 @@ export default function RutinaBuilderModal({
           </div>
         </div>
       </div>
+      {showDeleteConfirm && (
+        <ConfirmModal
+          title="Eliminar rutina"
+          message="¿Estás seguro de que deseas eliminar esta rutina? Esta acción no se puede deshacer."
+          confirmLabel="Eliminar"
+          onConfirm={handleDelete}
+          onCancel={() => setShowDeleteConfirm(false)}
+        />
+      )}
     </div>
   );
 }

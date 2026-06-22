@@ -24,3 +24,11 @@ export async function fetchMisCitas(userId: string): Promise<Cita[]> {
   if (error) throw error
   return data as Cita[]
 }
+
+export async function updateEstadoCita(id: string, estado: string): Promise<void> {
+  const { error } = await supabase
+    .from('citas')
+    .update({ estado })
+    .eq('id', id)
+  if (error) throw error
+}

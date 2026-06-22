@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { useCallback, useState } from 'react'
+import { ActivityIndicator, Image, Linking, Modal, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { useFocusEffect } from '@react-navigation/native'
 import { COLORS } from '@/constants/colors'
 import { useAuthStore } from '@/store/auth'
 import { fetchMiRutina, type RutinaCompleta } from '@/lib/api/rutinas'
@@ -10,6 +11,8 @@ type DayStatus = 'completado' | 'pendiente' | 'descanso'
 interface Exercise {
   id: string; name: string; emoji: string
   series: string; reps: string; weight?: string; rest: string; rir?: string
+  grupo_muscular?: string; grupos_secundarios?: string[]
+  descripcion?: string; video_url?: string
 }
 interface Day {
   num: number; name: string; status: DayStatus; isRest: boolean; exercises: Exercise[]
@@ -30,6 +33,10 @@ function mapRutinaToDays(rutina: RutinaCompleta): Day[] {
       weight: ej.peso_sugerido_kg != null ? `${ej.peso_sugerido_kg} kg` : undefined,
       rest: ej.descanso_seg != null ? `${ej.descanso_seg} s` : '60 s',
       rir: ej.rir != null ? String(ej.rir) : undefined,
+      grupo_muscular: ej.ejercicios?.grupo_muscular ?? undefined,
+      grupos_secundarios: ej.ejercicios?.grupos_secundarios ?? undefined,
+      descripcion: ej.ejercicios?.descripcion ?? undefined,
+      video_url: ej.ejercicios?.video_url ?? undefined,
     })),
   }))
 }
@@ -56,6 +63,168 @@ function buildProgressList(days: Day[]) {
       }
     })
 }
+
+// ─── YouTube helper ──────────────────────────────────────────────────────────
+function getYouTubeEmbedId(url: string): string | null {
+  const patterns = [
+    /youtube\.com\/shorts\/([a-zA-Z0-9_-]+)/,
+    /youtube\.com\/watch\?v=([a-zA-Z0-9_-]+)/,
+    /youtu\.be\/([a-zA-Z0-9_-]+)/,
+    /youtube\.com\/embed\/([a-zA-Z0-9_-]+)/,
+  ]
+  for (const re of patterns) {
+    const match = url.match(re)
+    if (match) return match[1]
+  }
+  return null
+}
+
+function isYouTubeShort(url: string): boolean {
+  return /youtube\.com\/shorts\//.test(url)
+}
+
+// ─── Modal de detalle del ejercicio ─────────────────────────────────────────
+function ExerciseDetailModal({ exercise, onClose }: { exercise: Exercise; onClose: () => void }) {
+  const ytId = exercise.video_url ? getYouTubeEmbedId(exercise.video_url) : null
+  const isShort = exercise.video_url ? isYouTubeShort(exercise.video_url) : false
+  return (
+    <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+        {/* Header */}
+        <View style={ed.header}>
+          <TouchableOpacity style={ed.closeBtn} onPress={onClose} activeOpacity={0.7}>
+            <Ionicons name="chevron-down" size={22} color={COLORS.text} />
+          </TouchableOpacity>
+          <Text style={ed.headerTitle} numberOfLines={1}>{exercise.name}</Text>
+          <View style={{ width: 36 }} />
+        </View>
+
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+          {/* Video / placeholder */}
+          {ytId ? (
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => Linking.openURL(exercise.video_url!)}
+              style={{ height: isShort ? 320 : 220, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}
+            >
+              <Image
+                source={{ uri: `https://img.youtube.com/vi/${ytId}/hqdefault.jpg` }}
+                style={{ position: 'absolute', width: '100%', height: '100%', opacity: 0.6 }}
+                resizeMode="cover"
+              />
+              <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(255,0,0,0.9)', justifyContent: 'center', alignItems: 'center', elevation: 4, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 6, shadowOffset: { width: 0, height: 3 } }}>
+                <Ionicons name="logo-youtube" size={32} color="#fff" />
+              </View>
+              <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700', marginTop: 10 }}>Ver video en YouTube</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={ed.noVideo}>
+              <Text style={{ fontSize: 48 }}>{exercise.emoji}</Text>
+              <Text style={{ color: COLORS.muted, fontSize: 13, marginTop: 8 }}>
+                Aún no se ha cargado video
+              </Text>
+            </View>
+          )}
+
+          <View style={{ padding: 20, gap: 16 }}>
+            {/* Nombre + emoji */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <View style={ed.emojiBox}>
+                <Text style={{ fontSize: 28 }}>{exercise.emoji}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontWeight: '800', fontSize: 18, color: COLORS.text }}>{exercise.name}</Text>
+                {exercise.grupo_muscular && (
+                  <Text style={{ fontSize: 12, color: COLORS.primary, fontWeight: '600', marginTop: 2 }}>
+                    {exercise.grupo_muscular}
+                  </Text>
+                )}
+              </View>
+            </View>
+
+            {/* Grupos secundarios */}
+            {exercise.grupos_secundarios && exercise.grupos_secundarios.length > 0 && (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                {exercise.grupos_secundarios.map((g) => (
+                  <View key={g} style={ed.secBadge}>
+                    <Text style={ed.secBadgeText}>{g}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* Detalles de la rutina */}
+            <View style={ed.detailCard}>
+              <Text style={ed.detailTitle}>Detalles del ejercicio</Text>
+              <View style={ed.detailGrid}>
+                {[
+                  { label: 'Series', value: exercise.series || '—', icon: '🔁' },
+                  { label: 'Repeticiones', value: exercise.reps || '—', icon: '🔢' },
+                  { label: 'Peso', value: exercise.weight ?? '—', icon: '🏋️' },
+                  { label: 'Descanso', value: exercise.rest || '—', icon: '⏱' },
+                  ...(exercise.rir ? [{ label: 'RIR', value: exercise.rir, icon: '💪' }] : []),
+                ].map((d) => (
+                  <View key={d.label} style={ed.detailItem}>
+                    <Text style={{ fontSize: 18 }}>{d.icon}</Text>
+                    <Text style={ed.detailValue}>{d.value}</Text>
+                    <Text style={ed.detailLabel}>{d.label}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            {/* Descripción */}
+            {exercise.descripcion && (
+              <View style={ed.descCard}>
+                <Text style={{ fontWeight: '700', color: COLORS.text, marginBottom: 6 }}>📋 Descripción</Text>
+                <Text style={{ fontSize: 14, color: COLORS.text, lineHeight: 22 }}>{exercise.descripcion}</Text>
+              </View>
+            )}
+          </View>
+        </ScrollView>
+      </View>
+    </Modal>
+  )
+}
+
+const ed = StyleSheet.create({
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingTop: 16, paddingBottom: 12,
+    borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: COLORS.white,
+  },
+  headerTitle: { flex: 1, textAlign: 'center', fontWeight: '700', fontSize: 16, color: COLORS.text },
+  closeBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: COLORS.cardBg, alignItems: 'center', justifyContent: 'center',
+  },
+  noVideo: {
+    height: 180, backgroundColor: COLORS.cardBg, justifyContent: 'center', alignItems: 'center',
+  },
+  emojiBox: {
+    width: 52, height: 52, borderRadius: 14, backgroundColor: COLORS.cardBg,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  secBadge: {
+    backgroundColor: COLORS.cardBg, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4,
+  },
+  secBadgeText: { fontSize: 12, color: COLORS.muted, fontWeight: '500' },
+  detailCard: {
+    backgroundColor: COLORS.white, borderRadius: 14, padding: 14,
+    borderWidth: 1, borderColor: COLORS.border,
+  },
+  detailTitle: { fontWeight: '700', color: COLORS.text, marginBottom: 10 },
+  detailGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  detailItem: {
+    width: '30%', backgroundColor: COLORS.cardBg, borderRadius: 10, padding: 10, alignItems: 'center', gap: 2,
+  },
+  detailValue: { fontWeight: '800', fontSize: 14, color: COLORS.text },
+  detailLabel: { fontSize: 10, color: COLORS.muted },
+  descCard: {
+    backgroundColor: COLORS.white, borderRadius: 14, padding: 14,
+    borderWidth: 1, borderColor: COLORS.border,
+  },
+})
 
 // ─── Progress bar ────────────────────────────────────────────────────────────
 function WeekProgressBar({ days }: { days: Day[] }) {
@@ -88,9 +257,9 @@ function WeekProgressBar({ days }: { days: Day[] }) {
 }
 
 // ─── Tarjeta de ejercicio ────────────────────────────────────────────────────
-function ExerciseCard({ ex, index }: { ex: Exercise; index: number }) {
+function ExerciseCard({ ex, index, onPress }: { ex: Exercise; index: number; onPress: () => void }) {
   return (
-    <View style={s.exerciseCard}>
+    <TouchableOpacity style={s.exerciseCard} onPress={onPress} activeOpacity={0.7}>
       <View style={s.exerciseImg}>
         <Text style={{ fontSize: 26 }}>{ex.emoji}</Text>
       </View>
@@ -109,7 +278,8 @@ function ExerciseCard({ ex, index }: { ex: Exercise; index: number }) {
           {ex.rir && <Text style={s.exMeta}>RIR {ex.rir}</Text>}
         </View>
       </View>
-    </View>
+      <Ionicons name="chevron-forward" size={16} color={COLORS.muted} />
+    </TouchableOpacity>
   )
 }
 
@@ -119,14 +289,17 @@ export default function RutinasScreen() {
   const userId = user?.id ?? ''
 
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [rutinaNombre, setRutinaNombre] = useState('')
   const [activeTab, setActiveTab] = useState<'rutinas' | 'progreso'>('rutinas')
   const [days, setDays] = useState<Day[]>([])
   const [expanded, setExpanded] = useState<number[]>([])
   const [allExercises, setAllExercises] = useState<ReturnType<typeof buildProgressList>>([])
+  const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null)
 
-  useEffect(() => {
+  const loadData = useCallback((isRefresh = false) => {
     if (!userId) return
+    if (isRefresh) setRefreshing(true); else setLoading(true)
     fetchMiRutina(userId)
       .then((rutina) => {
         if (rutina) {
@@ -136,11 +309,15 @@ export default function RutinasScreen() {
           setAllExercises(buildProgressList(mapped))
           const firstWorkout = mapped.find((d) => !d.isRest)
           if (firstWorkout) setExpanded([firstWorkout.num])
+        } else {
+          setDays([])
         }
       })
       .catch(() => {})
-      .finally(() => setLoading(false))
+      .finally(() => { setLoading(false); setRefreshing(false) })
   }, [userId])
+
+  useFocusEffect(useCallback(() => { loadData() }, [loadData]))
 
   const toggleDay = (num: number) =>
     setExpanded((prev) => prev.includes(num) ? prev.filter((d) => d !== num) : [...prev, num])
@@ -183,7 +360,8 @@ export default function RutinasScreen() {
           </Text>
         </View>
       ) : (
-        <ScrollView style={s.body} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+        <ScrollView style={s.body} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true)} colors={[COLORS.primary]} tintColor={COLORS.primary} />}>
           {/* ── TAB RUTINAS ─────────────────────────────────────────────── */}
           {activeTab === 'rutinas' && (
             <View style={{ padding: 16, gap: 12 }}>
@@ -256,7 +434,7 @@ export default function RutinasScreen() {
                   {!day.isRest && expanded.includes(day.num) && (
                     <View style={{ marginTop: 14, gap: 10 }}>
                       {day.exercises.map((ex, i) => (
-                        <ExerciseCard key={ex.id} ex={ex} index={i} />
+                        <ExerciseCard key={ex.id} ex={ex} index={i} onPress={() => setSelectedExercise(ex)} />
                       ))}
                       {day.status === 'pendiente' && (
                         <TouchableOpacity style={s.completeBtn} onPress={() => markComplete(day.num)} activeOpacity={0.85}>
@@ -329,6 +507,9 @@ export default function RutinasScreen() {
             </View>
           )}
         </ScrollView>
+      )}
+      {selectedExercise && (
+        <ExerciseDetailModal exercise={selectedExercise} onClose={() => setSelectedExercise(null)} />
       )}
     </View>
   )

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import RecetaModal from "@/app/_components/recetas/RecetaModal";
+import ConfirmModal from "@/app/_components/ConfirmModal";
 import {
   CATEGORIAS_NUTRICIONALES,
   NIVELES_RECETA,
@@ -205,8 +206,10 @@ export default function RecetasPage() {
     setSelected((prev) => (prev?.id === receta.id ? receta : prev));
   };
 
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
   const handleDelete = async (id: string) => {
-    if (!confirm("¿Eliminar esta receta del catálogo? Esta acción no se puede deshacer.")) return;
+    setConfirmDeleteId(null);
     setDeletingId(id);
     try {
       await deleteReceta(id);
@@ -248,20 +251,23 @@ export default function RecetasPage() {
         </div>
 
         {/* Filters */}
-        <div className="flex flex-wrap items-center gap-3 mb-6">
-          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 h-10 shadow-sm">
-            <span className="text-gray-400 text-sm">🔍</span>
-            <input placeholder="Buscar recetas..."
-              value={search} onChange={(e) => setSearch(e.target.value)}
-              className="w-40 text-sm focus:outline-none text-gray-700" />
+        <div className="flex flex-wrap items-end gap-3 mb-6">
+          <div>
+            <label className="text-xs text-gray-400 font-medium mb-0.5 ml-1 block">&nbsp;</label>
+            <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 h-10 shadow-sm">
+              <span className="text-gray-400 text-sm">🔍</span>
+              <input placeholder="Buscar recetas..."
+                value={search} onChange={(e) => setSearch(e.target.value)}
+                className="w-40 text-sm focus:outline-none text-gray-700" />
+            </div>
           </div>
           {[
             { label: "Categoría",  value: categoria, set: setCategoria, options: ["Todas", ...CATEGORIAS_NUTRICIONALES] },
             { label: "Tipo",       value: tipo,      set: setTipo,      options: ["Todas", ...TIPOS_RECETA] },
             { label: "Dificultad", value: nivel,     set: setNivel,     options: ["Todas", ...NIVELES_RECETA] },
           ].map((f) => (
-            <div key={f.label} className="flex flex-col">
-              <label className="text-xs text-gray-400 font-medium mb-0.5 ml-1">{f.label}</label>
+            <div key={f.label}>
+              <label className="text-xs text-gray-400 font-medium mb-0.5 ml-1 block">{f.label}</label>
               <select value={f.value} onChange={(e) => f.set(e.target.value)}
                 className="h-10 border border-gray-200 rounded-xl px-3 text-sm focus:outline-none focus:border-primary bg-white shadow-sm">
                 {f.options.map((o) => <option key={o}>{o}</option>)}
@@ -340,7 +346,7 @@ export default function RecetasPage() {
           onClose={() => setSelected(null)}
           onEdit={() => setEditing(selected)}
           onDuplicate={() => handleDuplicate(selected)}
-          onDelete={() => handleDelete(selected.id)}
+          onDelete={() => setConfirmDeleteId(selected.id)}
           duplicating={duplicatingId === selected.id}
           deleting={deletingId === selected.id}
         />
@@ -351,6 +357,15 @@ export default function RecetasPage() {
       )}
       {editing && (
         <RecetaModal receta={editing} onSave={handleSaved} onClose={() => setEditing(null)} />
+      )}
+      {confirmDeleteId && (
+        <ConfirmModal
+          title="Eliminar receta"
+          message="¿Estás seguro de que deseas eliminar esta receta del catálogo? Esta acción no se puede deshacer."
+          confirmLabel="Eliminar"
+          onConfirm={() => handleDelete(confirmDeleteId)}
+          onCancel={() => setConfirmDeleteId(null)}
+        />
       )}
     </div>
   );

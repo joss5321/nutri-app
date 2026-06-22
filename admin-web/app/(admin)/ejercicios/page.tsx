@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import EjercicioModal from "@/app/_components/ejercicios/EjercicioModal";
 import { MUSCLE_GROUPS, type Exercise } from "@/app/_data/exercises";
 import { deleteEjercicio, fetchEjercicios } from "@/app/_data/ejercicios";
+import { getYouTubeEmbedId, isYouTubeShort } from "@/app/_components/ejercicios/VideoPlayer";
+import ConfirmModal from "@/app/_components/ConfirmModal";
 
 export default function EjerciciosPage() {
   const [exercises, setExercises] = useState<Exercise[]>([]);
@@ -44,8 +46,10 @@ export default function EjerciciosPage() {
     });
   };
 
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
   const handleDelete = async (id: string) => {
-    if (!confirm("¿Eliminar este ejercicio del catálogo? Esta acción no se puede deshacer.")) return;
+    setConfirmDeleteId(null);
     setDeletingId(id);
     try {
       await deleteEjercicio(id);
@@ -111,10 +115,28 @@ export default function EjerciciosPage() {
                 key={ex.id}
                 className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 hover:border-primary/50 transition-colors"
               >
-                <div className="bg-gray-900 rounded-xl h-32 flex items-center justify-center mb-3 overflow-hidden">
-                  {ex.video_url ? (
-                    <video src={ex.video_url} className="w-full h-full object-cover" muted />
-                  ) : (
+                <div className={`bg-gray-900 rounded-xl flex items-center justify-center mb-3 overflow-hidden relative ${
+                  ex.video_url && isYouTubeShort(ex.video_url) ? "h-48" : "h-32"
+                }`}>
+                  {ex.video_url ? (() => {
+                    const ytId = getYouTubeEmbedId(ex.video_url);
+                    if (ytId) {
+                      const short = isYouTubeShort(ex.video_url);
+                      return (
+                        <>
+                          <img
+                            src={short
+                              ? `https://img.youtube.com/vi/${ytId}/default.jpg`
+                              : `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`}
+                            alt=""
+                            className={short ? "h-full object-cover" : "w-full h-full object-cover"}
+                          />
+                          <span className="absolute inset-0 flex items-center justify-center text-white/80 text-3xl">▶</span>
+                        </>
+                      );
+                    }
+                    return <video src={ex.video_url} className="w-full h-full object-cover" muted />;
+                  })() : (
                     <span className="text-3xl">{ex.emoji || "🎬"}</span>
                   )}
                 </div>
@@ -140,7 +162,7 @@ export default function EjerciciosPage() {
                     ✏ Editar
                   </button>
                   <button
-                    onClick={() => handleDelete(ex.id)}
+                    onClick={() => setConfirmDeleteId(ex.id)}
                     disabled={deletingId === ex.id}
                     className="h-9 px-3 rounded-xl border border-gray-200 text-red-500 text-sm font-semibold hover:border-red-300 hover:bg-red-50 transition-colors disabled:opacity-50"
                   >
@@ -165,6 +187,15 @@ export default function EjerciciosPage() {
       )}
       {editing && (
         <EjercicioModal exercise={editing} onSave={handleSaved} onClose={() => setEditing(null)} />
+      )}
+      {confirmDeleteId && (
+        <ConfirmModal
+          title="Eliminar ejercicio"
+          message="¿Estás seguro de que deseas eliminar este ejercicio del catálogo? Esta acción no se puede deshacer."
+          confirmLabel="Eliminar"
+          onConfirm={() => handleDelete(confirmDeleteId)}
+          onCancel={() => setConfirmDeleteId(null)}
+        />
       )}
     </div>
   );

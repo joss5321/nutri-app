@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { useCallback, useState } from 'react'
+import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { useFocusEffect } from '@react-navigation/native'
 import { AppHeader } from '@/components/ui/AppHeader'
 import { COLORS } from '@/constants/colors'
 import { useAuthStore } from '@/store/auth'
@@ -153,6 +154,7 @@ export default function ProgresoScreen() {
   const userId = user?.id ?? ''
 
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [hasData, setHasData] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -176,8 +178,9 @@ export default function ProgresoScreen() {
   const [metric, setMetric] = useState<MetricKey>('peso')
   const [chartWidth, setChartWidth] = useState(0)
 
-  useEffect(() => {
+  const loadData = useCallback((isRefresh = false) => {
     if (!userId) return
+    if (isRefresh) setRefreshing(true); else setLoading(true)
     fetchUltimaMedida(userId)
       .then((medida) => {
         if (medida) {
@@ -187,8 +190,10 @@ export default function ProgresoScreen() {
         }
       })
       .catch(() => {})
-      .finally(() => setLoading(false))
+      .finally(() => { setLoading(false); setRefreshing(false) })
   }, [userId])
+
+  useFocusEffect(useCallback(() => { loadData() }, [loadData]))
 
   const handleSubmit = async () => {
     if (!userId) return
@@ -322,7 +327,8 @@ export default function ProgresoScreen() {
   return (
     <View style={s.container}>
       <AppHeader title="Mi Progreso" />
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true)} colors={[COLORS.primary]} tintColor={COLORS.primary} />}>
         <Text style={s.tableNote}>
           Aquí puedes ver el resumen de tus datos del{'\n'}monitoreo de tu progreso.
         </Text>
