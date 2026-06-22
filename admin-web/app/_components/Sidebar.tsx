@@ -47,9 +47,14 @@ export default function Sidebar() {
   return (
     <aside className="flex flex-col w-60 shrink-0 bg-sidebar h-full">
       {/* Logo */}
-      <div className="flex items-center gap-3 px-6 py-6 border-b border-white/10">
-        <Image src="/logo-icon.png" alt="MyFitTrack" width={36} height={36} className="rounded-xl" />
-        <span className="text-white font-bold text-lg tracking-wide">MyFitTrack</span>
+      <div className="flex items-center justify-center px-6 py-6 border-b border-white/10">
+        <Image
+          src="/logo-icon.png"
+          alt="MyFitTrack"
+          width={140}
+          height={140}
+          className="rounded-xl object-contain"
+        />
       </div>
 
       {/* Coach avatar */}
