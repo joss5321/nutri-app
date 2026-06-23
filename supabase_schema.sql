@@ -579,3 +579,43 @@ begin
   return new;
 end;
 $$;
+
+-- ============================================================
+-- 19. MIGRACIÓN — suplementos: columnas nuevas + escritura admin
+-- ============================================================
+alter table suplementos add column if not exists marca text;
+alter table suplementos add column if not exists gramaje text;
+alter table suplementos add column if not exists imagen_url text;
+
+drop policy if exists "suplementos: gestion para autenticados" on suplementos;
+create policy "suplementos: gestion para autenticados"
+  on suplementos for all
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
+
+drop policy if exists "plan_supp: gestion para autenticados" on plan_suplementacion;
+create policy "plan_supp: gestion para autenticados"
+  on plan_suplementacion for all
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
+
+-- ============================================================
+-- 20. MIGRACIÓN — historial de pesos por ejercicio
+-- ============================================================
+create table if not exists ejercicio_logs (
+  id            uuid        default uuid_generate_v4() primary key,
+  user_id       uuid        references auth.users(id) on delete cascade not null,
+  ejercicio_id  uuid        references ejercicios(id) on delete cascade not null,
+  peso_kg       numeric(6,2) not null,
+  fecha         date        not null default current_date,
+  created_at    timestamptz not null default now()
+);
+create index if not exists ejercicio_logs_user_ej_idx on ejercicio_logs (user_id, ejercicio_id, fecha);
+
+alter table ejercicio_logs enable row level security;
+create policy "ej_logs: usuario gestiona los suyos"
+  on ejercicio_logs for all using (auth.uid() = user_id);
+create policy "ej_logs: gestion para autenticados"
+  on ejercicio_logs for all
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');

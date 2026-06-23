@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { fetchPerfil, updatePerfil } from "@/app/_data/perfiles";
 import { fetchUltimaMedida, createMedida } from "@/app/_data/medidas";
+import ConfirmModal from "@/app/_components/ConfirmModal";
 
 function calcularEdad(fechaNacimiento: string): number | null {
   if (!fechaNacimiento) return null;
@@ -24,8 +25,13 @@ function imcInfo(imc: number) {
 export default function InformacionPersonalForm({ userId, onPerfilUpdated }: { userId: string; onPerfilUpdated?: () => void }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const [savingPerfil, setSavingPerfil] = useState(false);
+  const [perfilFeedback, setPerfilFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const [savingMedidas, setSavingMedidas] = useState(false);
+  const [medidasFeedback, setMedidasFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [showMedidasConfirm, setShowMedidasConfirm] = useState(false);
 
   const [nombreCompleto, setNombreCompleto] = useState("");
   const [fechaNacimiento, setFechaNacimiento] = useState("");
@@ -36,7 +42,6 @@ export default function InformacionPersonalForm({ userId, onPerfilUpdated }: { u
   const [altura, setAltura] = useState("");
   const [cintura, setCintura] = useState("");
   const [cadera, setCadera] = useState("");
-
   const [masaMuscular, setMasaMuscular] = useState("");
   const [grasa, setGrasa] = useState("");
   const [brazo, setBrazo] = useState("");
@@ -77,16 +82,32 @@ export default function InformacionPersonalForm({ userId, onPerfilUpdated }: { u
   const imc = pesoNum > 0 && alturaNum > 0 ? pesoNum / Math.pow(alturaNum / 100, 2) : null;
   const edad = calcularEdad(fechaNacimiento);
 
-  const handleSave = async () => {
-    setSaving(true);
-    setFeedback(null);
+  const handleSavePerfil = async () => {
+    setSavingPerfil(true);
+    setPerfilFeedback(null);
     try {
       await updatePerfil(userId, {
         nombre_completo: nombreCompleto.trim() || null,
         sexo,
         fecha_nacimiento: fechaNacimiento || null,
-        altura_cm: altura.trim() ? Number(altura) : null,
         plan_membresia: planMembresia,
+      });
+      setPerfilFeedback({ type: "success", text: "Datos personales guardados." });
+      onPerfilUpdated?.();
+    } catch (err) {
+      setPerfilFeedback({ type: "error", text: err instanceof Error ? err.message : "No se pudo guardar." });
+    } finally {
+      setSavingPerfil(false);
+    }
+  };
+
+  const handleSaveMedidas = async () => {
+    setShowMedidasConfirm(false);
+    setSavingMedidas(true);
+    setMedidasFeedback(null);
+    try {
+      await updatePerfil(userId, {
+        altura_cm: altura.trim() ? Number(altura) : null,
       });
       await createMedida(userId, {
         fecha: new Date().toISOString().slice(0, 10),
@@ -99,12 +120,11 @@ export default function InformacionPersonalForm({ userId, onPerfilUpdated }: { u
         pantorrilla_cm: pantorrilla.trim() ? Number(pantorrilla) : null,
         imc: imc != null ? Number(imc.toFixed(2)) : null,
       });
-      setFeedback({ type: "success", text: "Información guardada correctamente." });
-      onPerfilUpdated?.();
+      setMedidasFeedback({ type: "success", text: `Medidas registradas con fecha ${new Date().toLocaleDateString("es-MX")}.` });
     } catch (err) {
-      setFeedback({ type: "error", text: err instanceof Error ? err.message : "No se pudo guardar la información." });
+      setMedidasFeedback({ type: "error", text: err instanceof Error ? err.message : "No se pudo guardar." });
     } finally {
-      setSaving(false);
+      setSavingMedidas(false);
     }
   };
 
@@ -123,9 +143,10 @@ export default function InformacionPersonalForm({ userId, onPerfilUpdated }: { u
 
   return (
     <div className="space-y-5">
+      {/* ── Sección 1: Datos personales ── */}
       <div>
-        <p className="font-semibold text-gray-900">Información personal</p>
-        <p className="text-sm text-gray-500">Datos básicos, antropométricos y plan del usuario.</p>
+        <p className="font-semibold text-gray-900">Datos personales</p>
+        <p className="text-sm text-gray-500">Información básica del usuario que cambia con poca frecuencia.</p>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
@@ -163,12 +184,35 @@ export default function InformacionPersonalForm({ userId, onPerfilUpdated }: { u
             <option value="otro">Otro</option>
           </select>
         </div>
+      </div>
 
+      <div className="flex items-center justify-end gap-3">
+        {perfilFeedback && (
+          <span className={`text-xs font-medium ${perfilFeedback.type === "success" ? "text-green-600" : "text-red-600"}`}>
+            {perfilFeedback.text}
+          </span>
+        )}
+        <button onClick={handleSavePerfil} disabled={savingPerfil}
+          className="flex items-center gap-2 px-4 h-10 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-dark disabled:opacity-50">
+          {savingPerfil ? "Guardando..." : "💾 Guardar datos personales"}
+        </button>
+      </div>
+
+      {/* ── Separador ── */}
+      <div className="border-t border-gray-200" />
+
+      {/* ── Sección 2: Medidas antropométricas ── */}
+      <div>
+        <p className="font-semibold text-gray-900">Medidas antropométricas</p>
+        <p className="text-sm text-gray-500">Al guardar se creará un nuevo registro con la fecha de hoy en el historial de progreso.</p>
+      </div>
+
+      <div className="grid grid-cols-4 gap-3">
         {[
           { label: "Peso (kg)", value: peso, set: setPeso },
           { label: "Altura (cm)", value: altura, set: setAltura },
-          { label: "Circunferencia de cintura (cm)", value: cintura, set: setCintura },
-          { label: "Circunferencia de cadera (cm)", value: cadera, set: setCadera },
+          { label: "Circunferencia cintura (cm)", value: cintura, set: setCintura },
+          { label: "Circunferencia cadera (cm)", value: cadera, set: setCadera },
         ].map((f) => (
           <div key={f.label}>
             <label className="text-xs text-gray-500 font-medium block mb-1">{f.label}</label>
@@ -194,10 +238,6 @@ export default function InformacionPersonalForm({ userId, onPerfilUpdated }: { u
         )}
       </div>
 
-      <div className="pt-1">
-        <p className="font-semibold text-gray-900">Información opcional</p>
-        <p className="text-sm text-gray-500">Mediciones adicionales si están disponibles.</p>
-      </div>
       <div className="grid grid-cols-4 gap-3">
         {[
           { label: "% Masa muscular", value: masaMuscular, set: setMasaMuscular },
@@ -213,20 +253,29 @@ export default function InformacionPersonalForm({ userId, onPerfilUpdated }: { u
         ))}
       </div>
 
-      <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-100">
-        {feedback && (
-          <span className={`text-xs font-medium ${feedback.type === "success" ? "text-green-600" : "text-red-600"}`}>
-            {feedback.text}
+      <div className="flex items-center justify-end gap-3">
+        {medidasFeedback && (
+          <span className={`text-xs font-medium ${medidasFeedback.type === "success" ? "text-green-600" : "text-red-600"}`}>
+            {medidasFeedback.text}
           </span>
         )}
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="flex items-center gap-2 px-4 h-10 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-dark disabled:opacity-50"
-        >
-          {saving ? "Guardando..." : "💾 Guardar"}
+        <button onClick={() => setShowMedidasConfirm(true)} disabled={savingMedidas}
+          className="flex items-center gap-2 px-4 h-10 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800 disabled:opacity-50">
+          {savingMedidas ? "Guardando..." : "📊 Registrar medidas"}
         </button>
       </div>
+
+      {/* Confirm modal para medidas */}
+      {showMedidasConfirm && (
+        <ConfirmModal
+          title="Registrar medidas"
+          message={`¿Estás seguro de guardar estas medidas? Se creará un nuevo registro con fecha ${new Date().toLocaleDateString("es-MX")} que actualizará el progreso del usuario.`}
+          confirmLabel="Sí, registrar"
+          variant="warning"
+          onConfirm={handleSaveMedidas}
+          onCancel={() => setShowMedidasConfirm(false)}
+        />
+      )}
     </div>
   );
 }

@@ -2,8 +2,8 @@
 import { useEffect, useState } from "react";
 import type { Perfil } from "@/app/_data/perfiles";
 import { fetchMedidasHistorial, type Medida } from "@/app/_data/medidas";
-import { fetchEquivalentes, FOOD_GROUPS, MEAL_KEYS, type Equivalente } from "@/app/_data/nutricion";
 import { fetchRutinaActiva, type Rutina } from "@/app/_data/rutinas";
+import { fetchEjercicioLogsByUser, type EjercicioLog } from "@/app/_data/ejercicio_logs";
 import InformacionPersonalForm from "./InformacionPersonalForm";
 import CitasManager from "./CitasManager";
 
@@ -61,182 +61,191 @@ function LineChart({ data }: { data: { label: string; value: number }[] }) {
   );
 }
 
-// ── Tab: Progreso ────────────────────────────────────────────
+// ── Tab: Progreso Medidas ────────────────────────────────────
 const MONTH_SHORT = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
-function Progreso({ userId }: { userId: string }) {
+function buildChartData(medidas: Medida[], key: "peso_kg" | "cintura_cm" | "cadera_cm" | "brazo_cm" | "pantorrilla_cm") {
+  return medidas
+    .filter((m) => m[key] != null)
+    .map((m) => {
+      const [, month] = m.fecha.split("-").map(Number);
+      return { label: MONTH_SHORT[month - 1], value: m[key] as number };
+    });
+}
+
+function ProgresoMedidas({ userId }: { userId: string }) {
   const [loading, setLoading] = useState(true);
   const [medidas, setMedidas] = useState<Medida[]>([]);
-  const [equivalentes, setEquivalentes] = useState<Equivalente[]>([]);
-  const [rutina, setRutina] = useState<Rutina | null>(null);
 
   useEffect(() => {
-    Promise.all([
-      fetchMedidasHistorial(userId),
-      fetchEquivalentes(userId).then((r) => r.equivalentes).catch(() => [] as Equivalente[]),
-      fetchRutinaActiva(userId),
-    ])
-      .then(([m, eq, r]) => { setMedidas(m); setEquivalentes(eq); setRutina(r); })
+    fetchMedidasHistorial(userId)
+      .then(setMedidas)
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [userId]);
 
-  if (loading) {
-    return <p className="text-sm text-gray-400 text-center py-10">Cargando progreso...</p>;
-  }
+  if (loading) return <p className="text-sm text-gray-400 text-center py-10">Cargando medidas...</p>;
+  if (medidas.length === 0) return <p className="text-sm text-gray-400 text-center py-10">Sin registros de medidas aún.</p>;
 
-  const weightData = medidas
-    .filter((m) => m.peso_kg != null)
-    .map((m) => {
-      const [, month] = m.fecha.split("-").map(Number);
-      return { label: MONTH_SHORT[month - 1], value: m.peso_kg! };
-    });
+  const latest = medidas[medidas.length - 1];
+  const first = medidas[0];
+  const pesoDelta = latest?.peso_kg != null && first?.peso_kg != null ? (latest.peso_kg - first.peso_kg) : null;
+  const masaDelta = latest?.masa_muscular_pct != null && first?.masa_muscular_pct != null ? (latest.masa_muscular_pct - first.masa_muscular_pct) : null;
 
-  const latest = medidas.length > 0 ? medidas[medidas.length - 1] : null;
-  const first = medidas.length > 0 ? medidas[0] : null;
-  const pesoDelta = latest?.peso_kg != null && first?.peso_kg != null
-    ? (latest.peso_kg - first.peso_kg) : null;
-  const masaDelta = latest?.masa_muscular_pct != null && first?.masa_muscular_pct != null
-    ? (latest.masa_muscular_pct - first.masa_muscular_pct) : null;
+  const charts: { title: string; key: "peso_kg" | "cintura_cm" | "cadera_cm" | "brazo_cm" | "pantorrilla_cm"; unit: string; color: string }[] = [
+    { title: "Evolución de peso", key: "peso_kg", unit: "kg", color: "#2EBD8C" },
+    { title: "Cintura", key: "cintura_cm", unit: "cm", color: "#60A5FA" },
+    { title: "Cadera", key: "cadera_cm", unit: "cm", color: "#F472B6" },
+    { title: "Brazo", key: "brazo_cm", unit: "cm", color: "#A78BFA" },
+    { title: "Pantorrilla", key: "pantorrilla_cm", unit: "cm", color: "#FBBF24" },
+  ];
 
-  const eqRows = FOOD_GROUPS.map((fg) => {
-    const row = equivalentes.find((e) => e.grupo === fg.grupo);
-    const total = row ? MEAL_KEYS.reduce((acc, k) => acc + row[k], 0) : 0;
-    return { grupo: fg.grupo, icono: fg.icono, total };
-  }).filter((r) => r.total > 0);
+  return (
+    <div className="space-y-4 text-sm">
+      {/* Resumen */}
+      <div className="grid grid-cols-4 gap-2">
+        {[
+          { label: "Peso actual", value: latest?.peso_kg != null ? `${latest.peso_kg} kg` : "—" },
+          { label: "IMC actual", value: latest?.imc != null ? latest.imc.toFixed(1) : "—" },
+          { label: "Cambio peso", value: pesoDelta != null ? `${pesoDelta > 0 ? "+" : ""}${pesoDelta.toFixed(1)} kg` : "—" },
+          { label: "Cambio masa", value: masaDelta != null ? `${masaDelta > 0 ? "+" : ""}${masaDelta.toFixed(1)} %` : "—" },
+          { label: "Cintura", value: latest?.cintura_cm != null ? `${latest.cintura_cm} cm` : "—" },
+          { label: "Cadera", value: latest?.cadera_cm != null ? `${latest.cadera_cm} cm` : "—" },
+          { label: "% Grasa", value: latest?.grasa_pct != null ? `${latest.grasa_pct} %` : "—" },
+          { label: "Registros", value: String(medidas.length) },
+        ].map((s) => (
+          <div key={s.label} className="bg-gray-50 rounded-xl p-2.5 border border-gray-100">
+            <p className="text-xs text-gray-500">{s.label}</p>
+            <p className="font-bold text-gray-900 text-xs mt-0.5">{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Gráficas */}
+      <div className="grid grid-cols-2 gap-4">
+        {charts.map((c) => {
+          const data = buildChartData(medidas, c.key);
+          if (data.length < 2) return null;
+          const last = data[data.length - 1].value;
+          const firstV = data[0].value;
+          const delta = last - firstV;
+          return (
+            <div key={c.key} className="bg-white rounded-xl border border-gray-200 p-3">
+              <div className="flex justify-between items-center mb-2">
+                <p className="font-bold text-gray-900 text-xs">{c.title}</p>
+                <span className={`text-xs font-semibold ${delta <= 0 ? "text-green-600" : "text-red-500"}`}>
+                  {delta > 0 ? "+" : ""}{delta.toFixed(1)} {c.unit}
+                </span>
+              </div>
+              <LineChart data={data} />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Tab: Progreso Ejercicios ────────────────────────────────
+function ProgresoEjercicios({ userId }: { userId: string }) {
+  const [loading, setLoading] = useState(true);
+  const [ejLogs, setEjLogs] = useState<EjercicioLog[]>([]);
+  const [rutina, setRutina] = useState<Rutina | null>(null);
+
+  useEffect(() => {
+    Promise.all([fetchEjercicioLogsByUser(userId), fetchRutinaActiva(userId)])
+      .then(([logs, r]) => { setEjLogs(logs); setRutina(r); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [userId]);
+
+  if (loading) return <p className="text-sm text-gray-400 text-center py-10">Cargando ejercicios...</p>;
+
+  const loggedIds = [...new Set(ejLogs.map((l) => l.ejercicio_id))];
+  const exercisesWithLogs = loggedIds
+    .map((ejId) => {
+      const logs = ejLogs.filter((l) => l.ejercicio_id === ejId).slice(-10);
+      const best = logs.length > 0 ? Math.max(...logs.map((l) => l.peso_kg)) : null;
+      const nombre = logs[0]?.ejercicios?.nombre ?? "Ejercicio";
+      const emoji = logs[0]?.ejercicios?.emoji ?? "🏋️";
+      return { id: ejId, nombre, emoji, logs, best };
+    })
+    .filter((ej) => ej.logs.length > 0);
 
   const rutinaDias = rutina?.rutina_dias ?? [];
   const workoutDays = rutinaDias.filter((d) => !d.es_descanso);
   const totalEjercicios = workoutDays.reduce((acc, d) => acc + d.rutina_ejercicios.length, 0);
 
   return (
-    <div className="grid grid-cols-3 gap-4 text-sm">
-      {/* Resumen general */}
-      <div className="flex flex-col gap-3">
-        <p className="font-bold text-gray-900">Resumen de medidas</p>
-        {medidas.length === 0 ? (
-          <p className="text-xs text-gray-400 text-center py-6">Sin registros de medidas aún.</p>
-        ) : (
-          <>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { label: "Peso actual", value: latest?.peso_kg != null ? `${latest.peso_kg} kg` : "—" },
-                { label: "IMC actual", value: latest?.imc != null ? latest.imc.toFixed(1) : "—" },
-                { label: "Cambio de peso", value: pesoDelta != null ? `${pesoDelta > 0 ? "+" : ""}${pesoDelta.toFixed(1)} kg` : "—" },
-                { label: "Cambio masa muscular", value: masaDelta != null ? `${masaDelta > 0 ? "+" : ""}${masaDelta.toFixed(1)} %` : "—" },
-                { label: "Cintura", value: latest?.cintura_cm != null ? `${latest.cintura_cm} cm` : "—" },
-                { label: "Cadera", value: latest?.cadera_cm != null ? `${latest.cadera_cm} cm` : "—" },
-              ].map((s) => (
-                <div key={s.label} className="bg-gray-50 rounded-xl p-2.5 border border-gray-100">
-                  <p className="text-xs text-gray-500">{s.label}</p>
-                  <p className="font-bold text-gray-900 text-xs mt-0.5">{s.value}</p>
-                </div>
-              ))}
+    <div className="space-y-4 text-sm">
+      {/* Rutina resumen */}
+      {rutina && (
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <div className="flex justify-between items-center mb-3">
+            <div>
+              <p className="font-bold text-gray-900">{rutina.nombre}</p>
+              <p className="text-xs text-gray-500">{workoutDays.length} días de entrenamiento · {totalEjercicios} ejercicios</p>
             </div>
-            <div className="bg-primary/5 rounded-xl p-3 border border-primary/20">
-              <p className="text-xs text-gray-500">📊 Total de registros</p>
-              <p className="font-extrabold text-xl text-gray-900">{medidas.length} medidas</p>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Evolución de peso */}
-      <div className="flex flex-col gap-3">
-        <div className="bg-white rounded-xl border border-gray-200 p-3">
-          <p className="font-bold text-gray-900 text-xs mb-2">Evolución de peso</p>
-          {weightData.length >= 2 ? (
-            <>
-              <LineChart data={weightData} />
-              {pesoDelta != null && (
-                <p className={`text-xs font-medium mt-1 ${pesoDelta <= 0 ? "text-primary" : "text-red-500"}`}>
-                  {pesoDelta <= 0 ? "↓" : "↑"} {Math.abs(pesoDelta).toFixed(1)} kg en {medidas.length} registros
-                </p>
-              )}
-            </>
-          ) : (
-            <p className="text-xs text-gray-400 text-center py-8">Se necesitan al menos 2 registros para la gráfica.</p>
-          )}
-        </div>
-
-        {/* Rutina actual */}
-        <div className="bg-white rounded-xl border border-gray-200 p-3">
-          <p className="font-bold text-gray-900 text-xs mb-2">Rutina asignada</p>
-          {rutina ? (
-            <>
-              <p className="text-xs text-primary font-semibold mb-2">{rutina.nombre}</p>
-              <div className="flex justify-between">
-                {rutinaDias.map((d) => (
-                  <div key={d.numero_dia} className="flex flex-col items-center gap-1.5">
-                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs ${
-                      d.es_descanso ? "bg-gray-100 text-gray-400" : "bg-primary text-white"
-                    }`}>
-                      {d.es_descanso ? "○" : d.rutina_ejercicios.length}
-                    </div>
-                    <span className="text-[9px] text-gray-500">{d.nombre_dia.slice(0, 3)}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-3">
-                <div className="flex justify-between text-xs text-gray-500 mb-1">
-                  <span>{workoutDays.length} días de entrenamiento</span>
-                  <span>{totalEjercicios} ejercicios</span>
+          </div>
+          <div className="flex gap-2">
+            {rutinaDias.map((d) => (
+              <div key={d.numero_dia} className="flex flex-col items-center gap-1 flex-1">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
+                  d.es_descanso ? "bg-gray-100 text-gray-400" : "bg-primary text-white"
+                }`}>
+                  {d.es_descanso ? "—" : d.rutina_ejercicios.length}
                 </div>
-                <div className="h-2 bg-gray-100 rounded-full">
-                  <div className="h-full bg-primary rounded-full" style={{ width: `${(workoutDays.length / 7) * 100}%` }} />
-                </div>
-              </div>
-            </>
-          ) : (
-            <p className="text-xs text-gray-400 text-center py-4">Sin rutina asignada.</p>
-          )}
-        </div>
-      </div>
-
-      {/* Progreso nutricional */}
-      <div className="flex flex-col gap-3">
-        <div className="bg-white rounded-xl border border-gray-200 p-3">
-          <p className="font-bold text-gray-900 text-xs mb-2">Plan de equivalentes</p>
-          {eqRows.length > 0 ? (
-            <>
-              <p className="text-xs text-gray-500 mb-3">Equivalentes diarios asignados</p>
-              {eqRows.map((n) => (
-                <div key={n.grupo} className="mb-2">
-                  <div className="flex justify-between text-xs mb-0.5">
-                    <span className="text-gray-600">{n.icono} {n.grupo}</span>
-                    <span className="font-semibold text-gray-800">{n.total}</span>
-                  </div>
-                  <div className="h-1.5 bg-gray-100 rounded-full">
-                    <div className="h-full bg-primary rounded-full" style={{ width: `${Math.min(100, n.total * 10)}%` }} />
-                  </div>
-                </div>
-              ))}
-            </>
-          ) : (
-            <p className="text-xs text-gray-400 text-center py-4">Sin plan de equivalentes asignado.</p>
-          )}
-        </div>
-
-        {/* Resumen de rutina: ejercicios */}
-        {rutina && workoutDays.length > 0 && (
-          <div className="bg-white rounded-xl border border-gray-200 p-3">
-            <p className="font-bold text-gray-900 text-xs mb-2">Ejercicios principales</p>
-            {workoutDays.slice(0, 2).map((d) => (
-              <div key={d.id} className="mb-2">
-                <p className="text-xs text-primary font-semibold">{d.nombre_dia}</p>
-                {d.rutina_ejercicios.slice(0, 3).map((ej) => (
-                  <p key={ej.id} className="text-xs text-gray-500">
-                    • {ej.series != null ? `${ej.series}×` : ""}{ej.repeticiones ?? ""} {ej.peso_sugerido_kg != null ? `(${ej.peso_sugerido_kg} kg)` : ""}
-                  </p>
-                ))}
-                {d.rutina_ejercicios.length > 3 && (
-                  <p className="text-xs text-gray-400">+{d.rutina_ejercicios.length - 3} más</p>
-                )}
+                <span className="text-[9px] text-gray-500">{d.nombre_dia.slice(0, 3)}</span>
               </div>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* Gráficas de ejercicios */}
+      {exercisesWithLogs.length === 0 ? (
+        <p className="text-xs text-gray-400 text-center py-10">El usuario no ha registrado pesos en ejercicios aún.</p>
+      ) : (
+        <div className="grid grid-cols-2 gap-4">
+          {exercisesWithLogs.map((ej) => {
+            const first = ej.logs[0].peso_kg;
+            const last = ej.logs[ej.logs.length - 1].peso_kg;
+            const delta = last - first;
+            return (
+              <div key={ej.id} className="bg-white rounded-xl border border-gray-200 p-3">
+                <div className="flex justify-between items-center mb-1">
+                  <p className="text-xs font-bold text-gray-800 truncate">{ej.emoji} {ej.nombre}</p>
+                  {ej.best != null && (
+                    <span className="text-xs font-bold text-primary shrink-0">🏆 {ej.best} kg</span>
+                  )}
+                </div>
+                {ej.logs.length >= 2 && (
+                  <p className={`text-[10px] font-semibold mb-2 ${delta >= 0 ? "text-green-600" : "text-red-500"}`}>
+                    {delta >= 0 ? "↑" : "↓"} {Math.abs(delta).toFixed(1)} kg desde el primer registro
+                  </p>
+                )}
+                <div className="flex items-end gap-1 h-14">
+                  {ej.logs.map((log, i) => {
+                    const maxV = Math.max(...ej.logs.map((l) => l.peso_kg));
+                    const barH = Math.max(4, Math.round((log.peso_kg / maxV) * 48));
+                    const isLast = i === ej.logs.length - 1;
+                    const [, m, d] = log.fecha.split("-").map(Number);
+                    return (
+                      <div key={log.id} className="flex flex-col items-center flex-1" title={`${log.peso_kg} kg — ${d}/${m}`}>
+                        <span className={`text-[8px] mb-0.5 ${isLast ? "text-primary font-bold" : "text-gray-400"}`}>
+                          {log.peso_kg}
+                        </span>
+                        <div className={`w-3 rounded-sm ${isLast ? "bg-primary" : "bg-gray-300"}`} style={{ height: barH }} />
+                        <span className="text-[7px] text-gray-400 mt-0.5">{d}/{m}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -248,7 +257,7 @@ function formatFecha(fecha: string | null): string {
 }
 
 // ── Modal principal ──────────────────────────────────────────
-type Tab = "historial" | "progreso" | "citas";
+type Tab = "historial" | "progresoMedidas" | "progresoEjercicios" | "citas";
 
 export default function UserModal({ perfil: perfilInicial, onClose }: { perfil: Perfil; onClose: () => void }) {
   const [tab, setTab] = useState<Tab>("historial");
@@ -261,9 +270,10 @@ export default function UserModal({ perfil: perfilInicial, onClose }: { perfil: 
   };
 
   const TABS: { key: Tab; label: string; icon: string }[] = [
-    { key: "historial", label: "Historial Clínico", icon: "🩺" },
-    { key: "progreso",  label: "Progreso",          icon: "📈" },
-    { key: "citas",     label: "Próximas Citas",    icon: "📅" },
+    { key: "historial",          label: "Historial Clínico",   icon: "🩺" },
+    { key: "progresoMedidas",    label: "Progreso Medidas",    icon: "📊" },
+    { key: "progresoEjercicios", label: "Progreso Ejercicios", icon: "🏋️" },
+    { key: "citas",              label: "Próximas Citas",      icon: "📅" },
   ];
 
   const nombre = perfil.nombre_completo || "Usuario sin nombre";
@@ -330,9 +340,10 @@ export default function UserModal({ perfil: perfilInicial, onClose }: { perfil: 
 
         {/* Content */}
         <div className="p-6">
-          {tab === "historial" && <InformacionPersonalForm userId={perfil.id} onPerfilUpdated={refreshPerfil} />}
-          {tab === "progreso"  && <Progreso userId={perfil.id} />}
-          {tab === "citas"     && <CitasManager userId={perfil.id} />}
+          {tab === "historial"          && <InformacionPersonalForm userId={perfil.id} onPerfilUpdated={refreshPerfil} />}
+          {tab === "progresoMedidas"    && <ProgresoMedidas userId={perfil.id} />}
+          {tab === "progresoEjercicios" && <ProgresoEjercicios userId={perfil.id} />}
+          {tab === "citas"              && <CitasManager userId={perfil.id} />}
         </div>
       </div>
     </div>

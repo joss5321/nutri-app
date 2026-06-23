@@ -1,15 +1,16 @@
-import { useCallback, useState } from 'react'
-import { ActivityIndicator, Image, Linking, Modal, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { useCallback, useEffect, useState } from 'react'
+import { ActivityIndicator, Alert, Image, Linking, Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useFocusEffect } from '@react-navigation/native'
 import { COLORS } from '@/constants/colors'
 import { useAuthStore } from '@/store/auth'
 import { fetchMiRutina, type RutinaCompleta } from '@/lib/api/rutinas'
+import { fetchEjercicioLogs, fetchAllEjercicioLogs, createEjercicioLog, type EjercicioLog } from '@/lib/api/ejercicio_logs'
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 type DayStatus = 'completado' | 'pendiente' | 'descanso'
 interface Exercise {
-  id: string; name: string; emoji: string
+  id: string; ejercicio_id: string; name: string; emoji: string
   series: string; reps: string; weight?: string; rest: string; rir?: string
   grupo_muscular?: string; grupos_secundarios?: string[]
   descripcion?: string; video_url?: string
@@ -26,6 +27,7 @@ function mapRutinaToDays(rutina: RutinaCompleta): Day[] {
     isRest: dia.es_descanso,
     exercises: dia.rutina_ejercicios.map((ej) => ({
       id: ej.id,
+      ejercicio_id: ej.ejercicio_id,
       name: ej.ejercicios?.nombre ?? 'Ejercicio',
       emoji: ej.ejercicios?.emoji ?? '🏋️',
       series: ej.series != null ? `${ej.series} series` : '',
@@ -41,25 +43,33 @@ function mapRutinaToDays(rutina: RutinaCompleta): Day[] {
   }))
 }
 
-function buildProgressList(days: Day[]) {
+type ProgressExercise = {
+  ejercicio_id: string
+  name: string
+  emoji: string
+  reps: string
+  actual: string
+  best: string
+  history: { peso: number; fecha: string }[]
+}
+
+function buildProgressList(days: Day[], allLogs: EjercicioLog[]): ProgressExercise[] {
+  const seen = new Set<string>()
   return days
     .filter((d) => !d.isRest)
     .flatMap((d) => d.exercises)
+    .filter((ex) => { if (seen.has(ex.ejercicio_id)) return false; seen.add(ex.ejercicio_id); return true })
     .map((ex) => {
-      const rawWeight = ex.weight && ex.weight !== 'PC' ? parseFloat(ex.weight) : null
-      const history = rawWeight !== null
-        ? [0, 1, 2, 3, 4].map((i) => Math.round((rawWeight * 0.8 + (rawWeight * 0.2 / 4) * i) * 10) / 10)
-        : [6, 7, 7, 8, 8]
-      const best = rawWeight !== null
-        ? `${Math.round((rawWeight * 1.05) * 2) / 2} kg`
-        : 'PC'
+      const logs = allLogs.filter((l) => l.ejercicio_id === ex.ejercicio_id)
+      const best = logs.length > 0 ? Math.max(...logs.map((l) => l.peso_kg)) : null
       return {
+        ejercicio_id: ex.ejercicio_id,
         name: ex.name,
         emoji: ex.emoji,
         reps: `${ex.reps} • ${ex.series}`,
         actual: ex.weight ?? 'PC',
-        best,
-        history,
+        best: best != null ? `${best} kg` : ex.weight ?? '—',
+        history: logs.slice(-8).map((l) => ({ peso: l.peso_kg, fecha: l.fecha })),
       }
     })
 }
@@ -84,9 +94,39 @@ function isYouTubeShort(url: string): boolean {
 }
 
 // ─── Modal de detalle del ejercicio ─────────────────────────────────────────
-function ExerciseDetailModal({ exercise, onClose }: { exercise: Exercise; onClose: () => void }) {
+function ExerciseDetailModal({ exercise, userId, onClose }: { exercise: Exercise; userId: string; onClose: () => void }) {
   const ytId = exercise.video_url ? getYouTubeEmbedId(exercise.video_url) : null
   const isShort = exercise.video_url ? isYouTubeShort(exercise.video_url) : false
+
+  const [pesoInput, setPesoInput] = useState('')
+  const [savingPeso, setSavingPeso] = useState(false)
+  const [logs, setLogs] = useState<EjercicioLog[]>([])
+  const [loadingLogs, setLoadingLogs] = useState(true)
+
+  useEffect(() => {
+    fetchEjercicioLogs(userId, exercise.ejercicio_id)
+      .then(setLogs)
+      .catch(() => {})
+      .finally(() => setLoadingLogs(false))
+  }, [userId, exercise.ejercicio_id])
+
+  const handleSavePeso = async () => {
+    const val = parseFloat(pesoInput)
+    if (!val || val <= 0) { Alert.alert('Error', 'Ingresa un peso válido mayor a 0.'); return }
+    setSavingPeso(true)
+    try {
+      await createEjercicioLog(userId, exercise.ejercicio_id, val)
+      const updated = await fetchEjercicioLogs(userId, exercise.ejercicio_id)
+      setLogs(updated)
+      setPesoInput('')
+      Alert.alert('Registrado', `${val} kg guardado con fecha de hoy.`)
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo guardar.')
+    } finally { setSavingPeso(false) }
+  }
+
+  const bestWeight = logs.length > 0 ? Math.max(...logs.map((l) => l.peso_kg)) : null
+
   return (
     <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: COLORS.background }}>
@@ -160,7 +200,7 @@ function ExerciseDetailModal({ exercise, onClose }: { exercise: Exercise; onClos
                 {[
                   { label: 'Series', value: exercise.series || '—', icon: '🔁' },
                   { label: 'Repeticiones', value: exercise.reps || '—', icon: '🔢' },
-                  { label: 'Peso', value: exercise.weight ?? '—', icon: '🏋️' },
+                  { label: 'Peso sugerido', value: exercise.weight ?? '—', icon: '🏋️' },
                   { label: 'Descanso', value: exercise.rest || '—', icon: '⏱' },
                   ...(exercise.rir ? [{ label: 'RIR', value: exercise.rir, icon: '💪' }] : []),
                 ].map((d) => (
@@ -171,6 +211,59 @@ function ExerciseDetailModal({ exercise, onClose }: { exercise: Exercise; onClos
                   </View>
                 ))}
               </View>
+            </View>
+
+            {/* Registrar peso */}
+            <View style={ed.detailCard}>
+              <Text style={ed.detailTitle}>Registrar peso de hoy</Text>
+              <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                <TextInput
+                  value={pesoInput}
+                  onChangeText={setPesoInput}
+                  keyboardType="numeric"
+                  placeholder="Peso (kg)"
+                  style={{ flex: 1, height: 44, borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, paddingHorizontal: 12, fontSize: 16, color: COLORS.text }}
+                />
+                <TouchableOpacity onPress={handleSavePeso} disabled={savingPeso} activeOpacity={0.85}
+                  style={{ height: 44, paddingHorizontal: 16, borderRadius: 10, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', flexDirection: 'row', gap: 6 }}>
+                  <Ionicons name="save-outline" size={16} color={COLORS.white} />
+                  <Text style={{ color: COLORS.white, fontWeight: '700', fontSize: 13 }}>{savingPeso ? '...' : 'Guardar'}</Text>
+                </TouchableOpacity>
+              </View>
+              {bestWeight != null && (
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: COLORS.border }}>
+                  <Text style={{ fontSize: 12, color: COLORS.muted }}>Mejor peso registrado</Text>
+                  <Text style={{ fontSize: 14, fontWeight: '800', color: COLORS.primary }}>{bestWeight} kg</Text>
+                </View>
+              )}
+            </View>
+
+            {/* Historial de pesos */}
+            <View style={ed.detailCard}>
+              <Text style={ed.detailTitle}>Historial de pesos</Text>
+              {loadingLogs ? (
+                <ActivityIndicator size="small" color={COLORS.primary} />
+              ) : logs.length === 0 ? (
+                <Text style={{ fontSize: 12, color: COLORS.muted, textAlign: 'center', paddingVertical: 12 }}>
+                  Aún no hay registros. Guarda tu primer peso arriba.
+                </Text>
+              ) : (
+                <View style={{ gap: 0 }}>
+                  {[...logs].reverse().map((log) => {
+                    const [y, m, d] = log.fecha.split('-').map(Number)
+                    const isBest = log.peso_kg === bestWeight
+                    return (
+                      <View key={log.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' }}>
+                        <Text style={{ fontSize: 13, color: COLORS.muted }}>{d}/{m}/{y}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={{ fontSize: 15, fontWeight: '700', color: isBest ? COLORS.primary : COLORS.text }}>{log.peso_kg} kg</Text>
+                          {isBest && <Text style={{ fontSize: 10 }}>🏆</Text>}
+                        </View>
+                      </View>
+                    )
+                  })}
+                </View>
+              )}
             </View>
 
             {/* Descripción */}
@@ -294,23 +387,24 @@ export default function RutinasScreen() {
   const [activeTab, setActiveTab] = useState<'rutinas' | 'progreso'>('rutinas')
   const [days, setDays] = useState<Day[]>([])
   const [expanded, setExpanded] = useState<number[]>([])
-  const [allExercises, setAllExercises] = useState<ReturnType<typeof buildProgressList>>([])
+  const [allExercises, setAllExercises] = useState<ProgressExercise[]>([])
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null)
 
   const loadData = useCallback((isRefresh = false) => {
     if (!userId) return
     if (isRefresh) setRefreshing(true); else setLoading(true)
-    fetchMiRutina(userId)
-      .then((rutina) => {
+    Promise.all([fetchMiRutina(userId), fetchAllEjercicioLogs(userId)])
+      .then(([rutina, logs]) => {
         if (rutina) {
           const mapped = mapRutinaToDays(rutina)
           setDays(mapped)
           setRutinaNombre(rutina.nombre)
-          setAllExercises(buildProgressList(mapped))
+          setAllExercises(buildProgressList(mapped, logs))
           const firstWorkout = mapped.find((d) => !d.isRest)
           if (firstWorkout) setExpanded([firstWorkout.num])
         } else {
           setDays([])
+          setAllExercises([])
         }
       })
       .catch(() => {})
@@ -465,8 +559,8 @@ export default function RutinasScreen() {
               <Text style={{ fontWeight: '700', fontSize: 13, color: COLORS.muted, marginBottom: 12 }}>
                 {allExercises.length} ejercicios en tu rutina
               </Text>
-              {allExercises.map((ex, i) => (
-                <View key={i} style={s.progressCard}>
+              {allExercises.map((ex) => (
+                <View key={ex.ejercicio_id} style={s.progressCard}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 }}>
                     <View style={s.progressImg}>
                       <Text style={{ fontSize: 22 }}>{ex.emoji}</Text>
@@ -481,25 +575,32 @@ export default function RutinasScreen() {
                     </View>
                   </View>
 
-                  <View style={s.historyRow}>
-                    {ex.history.map((v, vi) => {
-                      const maxV = Math.max(...ex.history)
-                      const barH = Math.max(4, Math.round((v / maxV) * 44))
-                      const isLast = vi === ex.history.length - 1
-                      return (
-                        <View key={vi} style={{ alignItems: 'center', flex: 1, justifyContent: 'flex-end' }}>
-                          <Text style={{ fontSize: 8, color: isLast ? COLORS.primary : COLORS.muted, fontWeight: isLast ? '700' : '400', marginBottom: 2 }}>
-                            {v}
-                          </Text>
-                          <View style={{ width: 10, height: barH, backgroundColor: isLast ? COLORS.primary : COLORS.border, borderRadius: 3 }} />
-                          <Text style={{ fontSize: 8, color: COLORS.muted, marginTop: 3 }}>S{vi + 1}</Text>
-                        </View>
-                      )
-                    })}
-                  </View>
+                  {ex.history.length > 0 ? (
+                    <View style={s.historyRow}>
+                      {ex.history.map((h, vi) => {
+                        const maxV = Math.max(...ex.history.map((x) => x.peso))
+                        const barH = Math.max(4, Math.round((h.peso / maxV) * 44))
+                        const isLast = vi === ex.history.length - 1
+                        const [, m, d] = h.fecha.split('-').map(Number)
+                        return (
+                          <View key={vi} style={{ alignItems: 'center', flex: 1, justifyContent: 'flex-end' }}>
+                            <Text style={{ fontSize: 8, color: isLast ? COLORS.primary : COLORS.muted, fontWeight: isLast ? '700' : '400', marginBottom: 2 }}>
+                              {h.peso}
+                            </Text>
+                            <View style={{ width: 12, height: barH, backgroundColor: isLast ? COLORS.primary : COLORS.border, borderRadius: 4 }} />
+                            <Text style={{ fontSize: 7, color: COLORS.muted, marginTop: 3 }}>{d}/{m}</Text>
+                          </View>
+                        )
+                      })}
+                    </View>
+                  ) : (
+                    <View style={[s.historyRow, { justifyContent: 'center', alignItems: 'center' }]}>
+                      <Text style={{ fontSize: 11, color: COLORS.muted }}>Sin registros aún — toca un ejercicio para registrar peso</Text>
+                    </View>
+                  )}
 
                   <View style={s.progressFooter}>
-                    <Text style={{ fontSize: 12, color: COLORS.muted }}>Peso actual:</Text>
+                    <Text style={{ fontSize: 12, color: COLORS.muted }}>Peso sugerido:</Text>
                     <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.text }}>{ex.actual}</Text>
                   </View>
                 </View>
@@ -509,7 +610,7 @@ export default function RutinasScreen() {
         </ScrollView>
       )}
       {selectedExercise && (
-        <ExerciseDetailModal exercise={selectedExercise} onClose={() => setSelectedExercise(null)} />
+        <ExerciseDetailModal exercise={selectedExercise} userId={userId} onClose={() => setSelectedExercise(null)} />
       )}
     </View>
   )

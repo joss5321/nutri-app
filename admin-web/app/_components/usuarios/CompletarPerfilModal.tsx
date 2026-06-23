@@ -2,11 +2,9 @@
 import { useState } from "react";
 import type { Perfil } from "@/app/_data/perfiles";
 import InformacionPersonalForm from "./InformacionPersonalForm";
-import NutricionEquivalentesForm from "./NutricionEquivalentesForm";
-import RecetasAsignadasForm from "./RecetasAsignadasForm";
 import CitasManager from "./CitasManager";
 
-type Tab = "personal" | "nutricion" | "cita";
+type Tab = "personal" | "cita";
 
 export default function CompletarPerfilModal({ perfiles, onClose }: { perfiles: Perfil[]; onClose: () => void }) {
   const [selectedUserId, setSelectedUserId] = useState("");
@@ -14,7 +12,6 @@ export default function CompletarPerfilModal({ perfiles, onClose }: { perfiles: 
 
   const TABS: { key: Tab; label: string; icon: string }[] = [
     { key: "personal",  label: "Información Personal", icon: "👤" },
-    { key: "nutricion", label: "Nutrición",            icon: "🥗" },
     { key: "cita",      label: "Cita",                 icon: "📅" },
   ];
 
@@ -28,7 +25,7 @@ export default function CompletarPerfilModal({ perfiles, onClose }: { perfiles: 
         <div className="flex items-center justify-between p-6 border-b border-gray-100">
           <div>
             <h2 className="font-bold text-gray-900 text-xl">Completar perfil de usuario</h2>
-            <p className="text-gray-500 text-sm">Selecciona un usuario registrado y completa su información personal, nutrición y citas.</p>
+            <p className="text-gray-500 text-sm">Selecciona un usuario registrado y completa su información personal y citas.</p>
           </div>
           <button onClick={onClose} className="w-9 h-9 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 text-xl">×</button>
         </div>
@@ -66,14 +63,8 @@ export default function CompletarPerfilModal({ perfiles, onClose }: { perfiles: 
             <p className="text-sm text-gray-400 text-center py-10">Selecciona un usuario para completar su información.</p>
           ) : (
             <>
-              {tab === "personal"  && <InformacionPersonalForm key={selectedUserId} userId={selectedUserId} />}
-              {tab === "nutricion" && (
-                <div className="space-y-8">
-                  <NutricionEquivalentesForm key={selectedUserId} userId={selectedUserId} />
-                  <RecetasAsignadasForm key={`r-${selectedUserId}`} userId={selectedUserId} />
-                </div>
-              )}
-              {tab === "cita"      && <CitasManager key={selectedUserId} userId={selectedUserId} />}
+              {tab === "personal" && <InformacionPersonalForm key={selectedUserId} userId={selectedUserId} />}
+              {tab === "cita"     && <CitasManager key={selectedUserId} userId={selectedUserId} />}
             </>
           )}
         </div>

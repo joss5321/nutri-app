@@ -417,140 +417,161 @@ function RecetasTab() {
 }
 
 // ─── SUPLEMENTACIÓN ───────────────────────────────────────────────────────────
-const SUPPLEMENTS = [
-  { icon: '🧴', name: 'Proteína en polvo',    dose: '1 medida (30 g) con 250 ml de agua', time: '12:00 PM', when: 'Post entrenamiento',     done: true  },
-  { icon: '⚗️', name: 'Aminoácidos (BCAA)',   dose: '1 medida (5 g) con 250 ml de agua',  time: '17:00 PM', when: 'Durante entrenamiento',   done: false },
-  { icon: '💊', name: 'Multivitamínico',       dose: '1 cápsula con el desayuno',          time: '08:00 AM', when: 'Con alimentos',           done: true  },
-  { icon: '🐟', name: 'Omega 3',              dose: '1 cápsula con la comida',             time: '13:30 PM', when: 'Con alimentos',           done: false },
-]
+import { fetchMisSuplementos, type SuplementoAsignado } from '@/lib/api/suplementacion'
+import * as Notifications from 'expo-notifications'
+
+function fmtHora(hora: string | null): string {
+  if (!hora) return '—'
+  const [h, m] = hora.split(':').map(Number)
+  const ampm = h < 12 ? 'AM' : 'PM'
+  const h12 = h % 12 || 12
+  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`
+}
 
 function SuplementacionTab() {
-  const [supp, setSupp]             = useState(SUPPLEMENTS)
-  const [reminderOn, setReminderOn] = useState(false)
-  const [reminderH, setReminderH]   = useState(8)
-  const [reminderM, setReminderM]   = useState(0)
+  const { user } = useAuthStore()
+  const userId = user?.id ?? ''
 
-  const toggleSupp = (i: number) =>
-    setSupp(prev => prev.map((s, idx) => idx === i ? { ...s, done: !s.done } : s))
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [suplementos, setSuplementos] = useState<SuplementoAsignado[]>([])
+  const [checked, setChecked] = useState<Set<string>>(new Set())
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false)
 
-  const fmtTime = (h: number, m: number) =>
-    `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`
+  const loadData = useCallback((isRefresh = false) => {
+    if (!userId) return
+    if (isRefresh) setRefreshing(true); else setLoading(true)
+    fetchMisSuplementos(userId)
+      .then(setSuplementos)
+      .catch(() => {})
+      .finally(() => { setLoading(false); setRefreshing(false) })
+  }, [userId])
+
+  useFocusEffect(useCallback(() => { loadData() }, [loadData]))
+
+  const toggleCheck = (id: string) => {
+    setChecked((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  const handleEnableNotifications = async () => {
+    const { status: existing } = await Notifications.getPermissionsAsync()
+    let finalStatus = existing
+    if (existing !== 'granted') {
+      const { status } = await Notifications.requestPermissionsAsync()
+      finalStatus = status
+    }
+    if (finalStatus === 'granted') {
+      await Notifications.cancelAllScheduledNotificationsAsync()
+      for (const sup of suplementos) {
+        if (sup.hora) {
+          const [h, m] = sup.hora.split(':').map(Number)
+          await Notifications.scheduleNotificationAsync({
+            content: {
+              title: `💊 ${sup.suplementos.nombre}`,
+              body: sup.dosis
+                ? `${sup.dosis}${sup.momento ? ` — ${sup.momento}` : ''}`
+                : 'Es hora de tu suplemento',
+              sound: true,
+            },
+            trigger: { type: Notifications.SchedulableTriggerInputTypes.DAILY, hour: h, minute: m },
+          })
+        }
+      }
+      setNotificationsEnabled(true)
+    }
+  }
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 48 }}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+      </View>
+    )
+  }
+
+  if (suplementos.length === 0) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32, paddingVertical: 48 }}>
+        <Text style={{ fontSize: 48, marginBottom: 16 }}>💊</Text>
+        <Text style={{ fontWeight: '700', fontSize: 16, color: COLORS.text, textAlign: 'center' }}>
+          Tu nutriólogo aún no ha asignado suplementos
+        </Text>
+        <Text style={{ fontSize: 13, color: COLORS.muted, textAlign: 'center', marginTop: 8, lineHeight: 20 }}>
+          Cuando los asigne desde la plataforma, aparecerán aquí automáticamente.
+        </Text>
+      </View>
+    )
+  }
+
+  const completados = suplementos.filter((sup) => checked.has(sup.id)).length
+  const total = suplementos.length
+  const pct = total > 0 ? Math.round((completados / total) * 100) : 0
 
   return (
-    <ScrollView showsVerticalScrollIndicator={false}>
+    <ScrollView showsVerticalScrollIndicator={false}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true)} colors={[COLORS.primary]} tintColor={COLORS.primary} />}>
       <View style={{ padding: 16, gap: 14 }}>
         {/* Progress card */}
         <View style={s.progressCard}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
             <View style={s.circle}>
-              <Text style={s.circleNum}>85%</Text>
-              <Text style={s.circleSub}>Constancia{'\n'}semanal</Text>
+              <Text style={s.circleNum}>{pct}%</Text>
+              <Text style={s.circleSub}>Completado{'\n'}hoy</Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ color: COLORS.muted, fontSize: 12 }}>Tu racha</Text>
-              <Text style={{ fontWeight: '800', fontSize: 22, color: COLORS.text }}>🔥 12 días</Text>
+              <Text style={{ color: COLORS.muted, fontSize: 12 }}>Progreso del día</Text>
+              <Text style={{ fontWeight: '800', fontSize: 22, color: COLORS.text }}>
+                {completados} de {total}
+              </Text>
               <Text style={{ fontSize: 12, color: COLORS.muted }}>
-                Seguidos tomando{'\n'}tus suplementos
+                suplementos tomados
               </Text>
             </View>
             <Text style={{ fontSize: 40 }}>💊</Text>
           </View>
         </View>
 
-        {/* Suplementos de hoy */}
-        <Text style={s.sectionTitle}>Suplementos de hoy</Text>
-        {supp.map((item, i) => (
-          <TouchableOpacity key={i} style={[s.suppCard, item.done && s.suppCardDone]} onPress={() => toggleSupp(i)} activeOpacity={0.8}>
-            <View style={s.suppIcon}><Text style={{ fontSize: 24 }}>{item.icon}</Text></View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontWeight: '600', color: COLORS.text }}>{item.name}</Text>
-              <Text style={{ fontSize: 12, color: COLORS.muted }}>{item.dose}</Text>
-              <Text style={{ fontSize: 11, color: COLORS.muted }}>⏱ {item.when}</Text>
-            </View>
-            <View style={{ alignItems: 'flex-end', gap: 6 }}>
-              <Text style={{ fontSize: 12, color: COLORS.muted }}>{item.time}</Text>
-              <View style={[s.checkCircle, item.done && s.checkCircleDone]}>
-                {item.done && <Ionicons name="checkmark" size={14} color={COLORS.white} />}
+        {/* Suplementos asignados */}
+        <Text style={s.sectionTitle}>Mis suplementos</Text>
+        {suplementos.map((item) => {
+          const done = checked.has(item.id)
+          return (
+            <TouchableOpacity key={item.id} style={[s.suppCard, done && s.suppCardDone]} onPress={() => toggleCheck(item.id)} activeOpacity={0.8}>
+              <View style={s.suppIcon}><Text style={{ fontSize: 24 }}>💊</Text></View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontWeight: '600', color: COLORS.text }}>{item.suplementos.nombre}</Text>
+                {item.dosis && <Text style={{ fontSize: 12, color: COLORS.muted }}>{item.dosis}</Text>}
+                {item.momento && <Text style={{ fontSize: 11, color: COLORS.muted }}>⏱ {item.momento}</Text>}
+                {item.suplementos.marca && (
+                  <Text style={{ fontSize: 10, color: COLORS.muted }}>{item.suplementos.marca}{item.suplementos.gramaje ? ` · ${item.suplementos.gramaje}` : ''}</Text>
+                )}
               </View>
-            </View>
-          </TouchableOpacity>
-        ))}
-
-        <TouchableOpacity style={s.viewPlanBtn}>
-          <Ionicons name="calendar-outline" size={16} color={COLORS.primary} />
-          <Text style={s.viewPlanText}>Ver plan completo de suplementación</Text>
-          <Ionicons name="chevron-forward" size={16} color={COLORS.primary} />
-        </TouchableOpacity>
-
-        {/* Recordatorio de hidratación (notificación programable) */}
-        <View style={s.reminderCard}>
-          <View style={s.reminderHeader}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <View style={s.reminderIconBox}>
-                <Text style={{ fontSize: 22 }}>💧</Text>
+              <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                <Text style={{ fontSize: 12, color: COLORS.primary, fontWeight: '600' }}>{fmtHora(item.hora)}</Text>
+                <View style={[s.checkCircle, done && s.checkCircleDone]}>
+                  {done && <Ionicons name="checkmark" size={14} color={COLORS.white} />}
+                </View>
               </View>
-              <View>
-                <Text style={{ fontWeight: '700', color: COLORS.text }}>Recordatorio de agua</Text>
-                <Text style={{ fontSize: 12, color: COLORS.muted }}>Notificación programada</Text>
-              </View>
-            </View>
-            {/* Toggle */}
-            <TouchableOpacity
-              style={[s.toggle, reminderOn && s.toggleOn]}
-              onPress={() => setReminderOn(v => !v)}
-              activeOpacity={0.8}
-            >
-              <View style={[s.toggleThumb, reminderOn && s.toggleThumbOn]} />
             </TouchableOpacity>
-          </View>
+          )
+        })}
 
-          {reminderOn && (
-            <View style={s.reminderBody}>
-              <Text style={{ fontSize: 13, color: COLORS.muted, textAlign: 'center', marginBottom: 12 }}>
-                Selecciona la hora del recordatorio
-              </Text>
-
-              {/* Selector de hora */}
-              <View style={s.timePicker}>
-                {/* Horas */}
-                <View style={s.timeColumn}>
-                  <TouchableOpacity onPress={() => setReminderH(h => (h + 1) % 24)} style={s.timeArrow}>
-                    <Ionicons name="chevron-up" size={20} color={COLORS.primary} />
-                  </TouchableOpacity>
-                  <Text style={s.timeValue}>{String(reminderH).padStart(2, '0')}</Text>
-                  <TouchableOpacity onPress={() => setReminderH(h => (h - 1 + 24) % 24)} style={s.timeArrow}>
-                    <Ionicons name="chevron-down" size={20} color={COLORS.primary} />
-                  </TouchableOpacity>
-                </View>
-
-                <Text style={s.timeSep}>:</Text>
-
-                {/* Minutos */}
-                <View style={s.timeColumn}>
-                  <TouchableOpacity onPress={() => setReminderM(m => (m + 15) % 60)} style={s.timeArrow}>
-                    <Ionicons name="chevron-up" size={20} color={COLORS.primary} />
-                  </TouchableOpacity>
-                  <Text style={s.timeValue}>{String(reminderM).padStart(2, '0')}</Text>
-                  <TouchableOpacity onPress={() => setReminderM(m => (m - 15 + 60) % 60)} style={s.timeArrow}>
-                    <Ionicons name="chevron-down" size={20} color={COLORS.primary} />
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              <Text style={{ textAlign: 'center', fontSize: 13, color: COLORS.muted, marginTop: 8 }}>
-                Recordatorio diario a las{' '}
-                <Text style={{ color: COLORS.primary, fontWeight: '700' }}>
-                  {fmtTime(reminderH, reminderM)}
-                </Text>
-              </Text>
-
-              <TouchableOpacity style={s.scheduleBtn} activeOpacity={0.85}>
-                <Ionicons name="notifications" size={16} color={COLORS.white} />
-                <Text style={s.scheduleBtnText}>Programar notificación</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
+        {/* Botón de notificaciones */}
+        <TouchableOpacity
+          style={[s.scheduleBtn, notificationsEnabled && { backgroundColor: COLORS.completed }]}
+          onPress={handleEnableNotifications}
+          activeOpacity={0.85}
+          disabled={notificationsEnabled}
+        >
+          <Ionicons name={notificationsEnabled ? 'checkmark-circle' : 'notifications'} size={18} color={notificationsEnabled ? COLORS.completedText : COLORS.white} />
+          <Text style={[s.scheduleBtnText, notificationsEnabled && { color: COLORS.completedText }]}>
+            {notificationsEnabled ? 'Notificaciones activadas' : 'Activar notificaciones de suplementos'}
+          </Text>
+        </TouchableOpacity>
 
       </View>
     </ScrollView>

@@ -3,12 +3,23 @@ import { Stack } from 'expo-router'
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native'
 import * as Linking from 'expo-linking'
 import * as SplashScreen from 'expo-splash-screen'
+import * as Notifications from 'expo-notifications'
 import { useColorScheme } from 'react-native'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/auth'
 import '../global.css'
 
 SplashScreen.preventAutoHideAsync()
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+})
 
 export default function RootLayout() {
   const colorScheme = useColorScheme()

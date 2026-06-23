@@ -5,14 +5,39 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
-const NAV = [
-  { href: "/dashboard", label: "Dashboard",  icon: "📊" },
-  { href: "/usuarios",  label: "Usuarios",   icon: "👥" },
-  { href: "/rutinas",   label: "Rutinas",    icon: "🏋️" },
-  { href: "/ejercicios", label: "Ejercicios", icon: "💪" },
-  { href: "/recetas",   label: "Recetas",    icon: "🥗" },
-  { href: "/administradores", label: "Admins", icon: "🛡️" },
-  { href: "/mi-perfil", label: "Mi Perfil",  icon: "⚙️" },
+type NavItem = { href: string; label: string; icon: string };
+type NavGroup = { label: string; icon: string; children: NavItem[] };
+type NavEntry = NavItem | NavGroup;
+
+function isGroup(entry: NavEntry): entry is NavGroup {
+  return "children" in entry;
+}
+
+const NAV: NavEntry[] = [
+  { href: "/dashboard", label: "Dashboard", icon: "📊" },
+  { href: "/usuarios", label: "Usuarios", icon: "👥" },
+  {
+    label: "Asignación de planes", icon: "📋",
+    children: [
+      { href: "/rutinas", label: "Rutinas", icon: "🏋️" },
+      { href: "/nutricion", label: "Nutrición", icon: "🥗" },
+    ],
+  },
+  {
+    label: "Catálogos", icon: "📂",
+    children: [
+      { href: "/ejercicios", label: "Ejercicios", icon: "💪" },
+      { href: "/recetas", label: "Recetas", icon: "🍽" },
+      { href: "/suplementos", label: "Suplementos", icon: "💊" },
+    ],
+  },
+  {
+    label: "Configuración", icon: "⚙️",
+    children: [
+      { href: "/administradores", label: "Admins", icon: "🛡️" },
+      { href: "/mi-perfil", label: "Mi Perfil", icon: "👤" },
+    ],
+  },
 ];
 
 export default function Sidebar() {
@@ -21,6 +46,17 @@ export default function Sidebar() {
   const [name, setName] = useState("Coach Admin");
   const [email, setEmail] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
+    const initial: Record<string, boolean> = {};
+    for (const entry of NAV) {
+      if (isGroup(entry) && entry.children.some((c) => pathname.startsWith(c.href))) {
+        initial[entry.label] = true;
+      }
+    }
+    return initial;
+  });
+  const toggleGroup = (label: string) =>
+    setOpenGroups((prev) => ({ ...prev, [label]: !prev[label] }));
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
@@ -67,20 +103,56 @@ export default function Sidebar() {
 
       {/* Nav */}
       <nav className="flex-1 flex flex-col gap-1 px-3 py-4">
-        {NAV.map((item) => {
-          const active = pathname.startsWith(item.href);
+        {NAV.map((entry) => {
+          if (isGroup(entry)) {
+            const groupActive = entry.children.some((c) => pathname.startsWith(c.href));
+            return (
+              <div key={entry.label}>
+                <button
+                  onClick={() => toggleGroup(entry.label)}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-colors ${
+                    groupActive ? "bg-white/15 text-white" : "text-white/60 hover:bg-white/10 hover:text-white"
+                  }`}
+                >
+                  <span className="text-base">{entry.icon}</span>
+                  {entry.label}
+                  <span className={`ml-auto text-xs transition-transform ${openGroups[entry.label] ? "rotate-180" : ""}`}>▾</span>
+                </button>
+                {openGroups[entry.label] && (
+                  <div className="flex flex-col gap-0.5 mt-0.5 ml-4 pl-3 border-l border-white/10">
+                    {entry.children.map((child) => {
+                      const active = pathname.startsWith(child.href);
+                      return (
+                        <Link
+                          key={child.href}
+                          href={child.href}
+                          className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors ${
+                            active ? "bg-white/15 text-white" : "text-white/60 hover:bg-white/10 hover:text-white"
+                          }`}
+                        >
+                          <span className="text-base">{child.icon}</span>
+                          {child.label}
+                          {active && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          }
+
+          const active = pathname.startsWith(entry.href);
           return (
             <Link
-              key={item.href}
-              href={item.href}
+              key={entry.href}
+              href={entry.href}
               className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-colors ${
-                active
-                  ? "bg-white/15 text-white"
-                  : "text-white/60 hover:bg-white/10 hover:text-white"
+                active ? "bg-white/15 text-white" : "text-white/60 hover:bg-white/10 hover:text-white"
               }`}
             >
-              <span className="text-base">{item.icon}</span>
-              {item.label}
+              <span className="text-base">{entry.icon}</span>
+              {entry.label}
               {active && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />}
             </Link>
           );

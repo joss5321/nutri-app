@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { ActivityIndicator, Alert, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { ActivityIndicator, Alert, Image, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useFocusEffect } from '@react-navigation/native'
 import * as ImagePicker from 'expo-image-picker'
@@ -7,7 +7,7 @@ import { AppHeader } from '@/components/ui/AppHeader'
 import { COLORS } from '@/constants/colors'
 import { useAuthStore } from '@/store/auth'
 import { supabase } from '@/lib/supabase'
-import { fetchMiPerfil, type Perfil } from '@/lib/api/perfiles'
+import { fetchMiPerfil, updateMiPerfil, type Perfil } from '@/lib/api/perfiles'
 import { fetchUltimaMedida, type Medida } from '@/lib/api/medidas'
 import { fetchMisCitas, updateEstadoCita, type Cita } from '@/lib/api/citas'
 
@@ -111,6 +111,46 @@ export default function PerfilScreen() {
   const nombre = perfil?.nombre_completo ?? user?.user_metadata?.full_name ?? 'Usuario'
   const isPremium = perfil?.plan_membresia === 'premium'
 
+  // Edit mode
+  const [editing, setEditing] = useState(false)
+  const [editNombre, setEditNombre] = useState('')
+  const [editFecha, setEditFecha] = useState('')
+  const [editSexo, setEditSexo] = useState('')
+  const [editAltura, setEditAltura] = useState('')
+  const [savingEdit, setSavingEdit] = useState(false)
+
+  const startEdit = () => {
+    setEditNombre(perfil?.nombre_completo ?? '')
+    setEditFecha(perfil?.fecha_nacimiento ?? '')
+    setEditSexo(perfil?.sexo ?? 'femenino')
+    setEditAltura(perfil?.altura_cm != null ? String(perfil.altura_cm) : '')
+    setEditing(true)
+  }
+
+  const handleSaveEdit = async () => {
+    setSavingEdit(true)
+    try {
+      await updateMiPerfil(userId, {
+        sexo: editSexo || null,
+        fecha_nacimiento: editFecha || null,
+        altura_cm: editAltura.trim() ? Number(editAltura) : null,
+      })
+      await supabase.from('perfiles').update({ nombre_completo: editNombre.trim() || null }).eq('id', userId)
+      setPerfil((prev) => prev ? {
+        ...prev,
+        nombre_completo: editNombre.trim() || null,
+        sexo: editSexo || null,
+        fecha_nacimiento: editFecha || null,
+        altura_cm: editAltura.trim() ? Number(editAltura) : null,
+      } : prev)
+      setEditing(false)
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo guardar.')
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
   const dataRows = [
     { icon: 'person-outline' as const, label: 'Nombre completo', value: nombre },
     { icon: 'mail-outline' as const, label: 'Correo electrónico', value: email },
@@ -175,16 +215,67 @@ export default function PerfilScreen() {
           </View>
 
           {/* Datos personales */}
-          <Text style={s.sectionTitle}>Datos personales</Text>
-          <View style={s.dataCard}>
-            {dataRows.map((row, i) => (
-              <View key={i} style={[s.dataRow, i < dataRows.length - 1 && s.dataRowBorder]}>
-                <Ionicons name={row.icon} size={18} color={COLORS.muted} />
-                <Text style={s.dataLabel}>{row.label}</Text>
-                <Text style={s.dataValue}>{row.value}</Text>
-              </View>
-            ))}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={s.sectionTitle}>Datos personales</Text>
+            {!editing && (
+              <TouchableOpacity onPress={startEdit} style={s.editToggle} activeOpacity={0.7}>
+                <Ionicons name="pencil-outline" size={14} color={COLORS.primary} />
+                <Text style={{ fontSize: 12, color: COLORS.primary, fontWeight: '600' }}>Editar</Text>
+              </TouchableOpacity>
+            )}
           </View>
+
+          {editing ? (
+            <View style={s.dataCard}>
+              <View style={[s.editRow, s.dataRowBorder]}>
+                <Text style={s.editLabel}>Nombre completo</Text>
+                <TextInput value={editNombre} onChangeText={setEditNombre} style={s.editInput} placeholder="Tu nombre" />
+              </View>
+              <View style={[s.editRow, s.dataRowBorder]}>
+                <Text style={s.editLabel}>Fecha de nacimiento</Text>
+                <TextInput value={editFecha} onChangeText={setEditFecha} style={s.editInput} placeholder="AAAA-MM-DD" />
+              </View>
+              <View style={[s.editRow, s.dataRowBorder]}>
+                <Text style={s.editLabel}>Sexo</Text>
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  {['femenino', 'masculino', 'otro'].map((opt) => (
+                    <TouchableOpacity key={opt} onPress={() => setEditSexo(opt)}
+                      style={[s.sexoChip, editSexo === opt && s.sexoChipActive]} activeOpacity={0.7}>
+                      <Text style={[s.sexoChipText, editSexo === opt && s.sexoChipTextActive]}>
+                        {opt.charAt(0).toUpperCase() + opt.slice(1)}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+              <View style={s.editRow}>
+                <Text style={s.editLabel}>Estatura (cm)</Text>
+                <TextInput value={editAltura} onChangeText={setEditAltura} style={s.editInput} placeholder="Ej. 170" keyboardType="numeric" />
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 8, padding: 14 }}>
+                <TouchableOpacity style={s.cancelBtn} onPress={() => setEditing(false)} activeOpacity={0.7}>
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.muted }}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={s.saveBtn} onPress={handleSaveEdit} disabled={savingEdit} activeOpacity={0.85}>
+                  <Ionicons name="checkmark" size={16} color={COLORS.white} />
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.white }}>
+                    {savingEdit ? 'Guardando...' : 'Guardar'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <View style={s.dataCard}>
+              {dataRows.map((row, i) => (
+                <View key={i} style={[s.dataRow, i < dataRows.length - 1 && s.dataRowBorder]}>
+                  <Ionicons name={row.icon} size={18} color={COLORS.muted} />
+                  <Text style={s.dataLabel}>{row.label}</Text>
+                  <Text style={s.dataValue}>{row.value}</Text>
+                </View>
+              ))}
+            </View>
+          )}
 
           {/* Próximas citas */}
           <Text style={s.sectionTitle}>Próximas citas</Text>
@@ -382,4 +473,30 @@ const s = StyleSheet.create({
     borderRadius: 12, padding: 14, marginTop: 8,
   },
   signOutText: { color: '#EF4444', fontWeight: '600', fontSize: 15 },
+  editToggle: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    borderWidth: 1, borderColor: COLORS.border, borderRadius: 20,
+    paddingHorizontal: 10, paddingVertical: 4,
+  },
+  editRow: { padding: 14, gap: 6 },
+  editLabel: { fontSize: 12, color: COLORS.muted, fontWeight: '500' },
+  editInput: {
+    height: 40, borderWidth: 1, borderColor: COLORS.border,
+    borderRadius: 10, paddingHorizontal: 10, fontSize: 14, color: COLORS.text,
+  },
+  sexoChip: {
+    paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20,
+    borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.white,
+  },
+  sexoChipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  sexoChipText: { fontSize: 12, color: COLORS.text },
+  sexoChipTextActive: { color: COLORS.white, fontWeight: '700' },
+  cancelBtn: {
+    flex: 1, height: 44, borderRadius: 10, borderWidth: 1, borderColor: COLORS.border,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  saveBtn: {
+    flex: 1, height: 44, borderRadius: 10, backgroundColor: COLORS.primary,
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6,
+  },
 })
