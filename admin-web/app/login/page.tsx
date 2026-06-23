@@ -72,8 +72,8 @@ export default function LoginPage() {
 
         {/* Logo */}
         <div className="relative z-10 flex items-center gap-3 p-8">
-          <Image src="/logo-icon.png" alt="MyFitTrack" width={40} height={40} className="rounded-xl" />
-          <span className="text-white font-semibold text-lg tracking-wide">MyFitTrack</span>
+          <Image src="/logo-icon.png" alt="MyFitTrack" width={90} height={90} className="rounded-xl" />
+          <span className="text-white font-semibold text-xl tracking-wide">MyFitTrack</span>
         </div>
 
         {/* Heading central */}
@@ -107,7 +107,7 @@ export default function LoginPage() {
       <div className="flex flex-1 flex-col items-center justify-center bg-white px-8 lg:px-16">
         <div className="w-full max-w-sm">
           <div className="mb-8 text-center flex flex-col items-center">
-            <Image src="/logo-horizontal.png" alt="MyFitTrack" width={180} height={76} className="mb-4" />
+            <Image src="/logo-horizontal.png" alt="MyFitTrack" width={240} height={115} className="mb-4" />
             <h2 className="text-3xl font-extrabold text-primary">¡Bienvenido de nuevo!</h2>
             <p className="text-gray-500 mt-2 text-sm">Inicia sesión para continuar</p>
           </div>
