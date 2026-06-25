@@ -4,6 +4,8 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import PasswordInput from "./PasswordInput";
+import { useSearchParams } from "next/navigation";
+import { useEffect } from "react";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -50,6 +52,25 @@ export default function LoginPage() {
     router.push("/dashboard");
     router.refresh();
   };
+
+  const handleGoogleLogin = async () => {
+      setError(null);
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      if (error) setError(error.message);
+    };
+
+  const searchParams = useSearchParams();
+    useEffect(() => {
+      if (searchParams.get("error") === "no_admin") {
+        setError("No tienes permisos para acceder al panel de administración.");
+      }
+    }, [searchParams]
+  );
 
   return (
     <div className="flex h-screen w-screen overflow-hidden">
@@ -162,7 +183,9 @@ export default function LoginPage() {
 
           {/* Social */}
           <div className="flex flex-col gap-3">
-            <button className="flex items-center justify-center gap-3 h-14 rounded-2xl border border-gray-200 hover:bg-gray-50 transition-colors font-semibold text-gray-700 text-sm">
+            <button 
+              onClick={handleGoogleLogin}
+              className="flex items-center justify-center gap-3 h-14 rounded-2xl border border-gray-200 hover:bg-gray-50 transition-colors font-semibold text-gray-700 text-sm">
               <span className="text-xl font-bold text-[#4285F4]">G</span>
               Continue with Google
             </button>
