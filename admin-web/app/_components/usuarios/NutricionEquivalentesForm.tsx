@@ -9,6 +9,19 @@ import {
   type EquivalenteInput,
 } from "@/app/_data/nutricion";
 
+// Valores nutricionales por equivalente — Sistema Mexicano de Alimentos Equivalentes (SMAE)
+const NUTRICION_POR_EQUIV: Record<string, { hco: number; prot: number; lip: number; kcal: number }> = {
+  "Cereales sin grasa":  { hco: 15, prot: 2, lip: 0, kcal: 70 },
+  "Frutas":              { hco: 15, prot: 0, lip: 0, kcal: 60 },
+  "Verduras":            { hco: 4,  prot: 2, lip: 0, kcal: 25 },
+  "Leche descremada":    { hco: 12, prot: 8, lip: 2, kcal: 95 },
+  "POA muy bajo aporte": { hco: 0,  prot: 7, lip: 1, kcal: 40 },
+  "POA bajo aporte":     { hco: 0,  prot: 7, lip: 3, kcal: 55 },
+  "POA medio aporte":    { hco: 0,  prot: 7, lip: 5, kcal: 75 },
+  "Aceites y grasas":    { hco: 0,  prot: 0, lip: 5, kcal: 45 },
+  "AC y C c/Proteína":   { hco: 20, prot: 8, lip: 1, kcal: 120 },
+};
+
 const buildEmptyRows = (): EquivalenteInput[] =>
   FOOD_GROUPS.map((fg) => ({
     icono: fg.icono,
@@ -96,11 +109,14 @@ export default function NutricionEquivalentesForm({ userId }: { userId: string }
     );
   }
 
+  // Totales generales
+  let totalRaciones = 0, totalHCO = 0, totalProt = 0, totalLip = 0, totalKcal = 0;
+
   return (
     <div className="space-y-6">
       <div>
         <p className="font-semibold text-gray-900">Tabla de equivalentes</p>
-        <p className="text-sm text-gray-500">Define cuántos equivalentes de cada grupo corresponden a cada tiempo de comida.</p>
+        <p className="text-sm text-gray-500">Define cuántos equivalentes de cada grupo corresponden a cada tiempo de comida. Los valores nutricionales se calculan según el SMAE.</p>
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-gray-200">
@@ -111,12 +127,28 @@ export default function NutricionEquivalentesForm({ userId }: { userId: string }
               {MEAL_LABELS.map((m) => (
                 <th key={m} className="px-2 py-2 text-xs font-semibold text-primary text-center">{m}</th>
               ))}
-              <th className="px-2 py-2 text-xs font-semibold text-gray-600 text-center">Total</th>
+              <th className="px-2 py-2 text-xs font-semibold text-gray-600 text-center"># Raciones</th>
+              <th className="px-2 py-2 text-xs font-semibold text-amber-600 text-center">HCO (g)</th>
+              <th className="px-2 py-2 text-xs font-semibold text-red-600 text-center">Prot (g)</th>
+              <th className="px-2 py-2 text-xs font-semibold text-purple-600 text-center">Líp (g)</th>
+              <th className="px-2 py-2 text-xs font-semibold text-green-700 text-center">Kcal</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row, gi) => {
-              const total = MEAL_KEYS.reduce((acc, key) => acc + row[key], 0);
+              const raciones = MEAL_KEYS.reduce((acc, key) => acc + row[key], 0);
+              const nutri = NUTRICION_POR_EQUIV[row.grupo] ?? { hco: 0, prot: 0, lip: 0, kcal: 0 };
+              const hco = raciones * nutri.hco;
+              const prot = raciones * nutri.prot;
+              const lip = raciones * nutri.lip;
+              const kcal = raciones * nutri.kcal;
+
+              totalRaciones += raciones;
+              totalHCO += hco;
+              totalProt += prot;
+              totalLip += lip;
+              totalKcal += kcal;
+
               return (
                 <tr key={row.grupo} className="border-t border-gray-100">
                   <td className="px-3 py-2">
@@ -133,14 +165,56 @@ export default function NutricionEquivalentesForm({ userId }: { userId: string }
                     </td>
                   ))}
                   <td className="px-2 py-1.5 text-center">
-                    <span className="text-xs font-bold bg-primary/10 text-primary px-2.5 py-1 rounded-full">{total}</span>
+                    <span className="text-xs font-bold bg-primary/10 text-primary px-2.5 py-1 rounded-full">{raciones}</span>
                   </td>
+                  <td className="px-2 py-1.5 text-center text-xs text-amber-700 font-medium">{hco.toFixed(0)}</td>
+                  <td className="px-2 py-1.5 text-center text-xs text-red-600 font-medium">{prot.toFixed(0)}</td>
+                  <td className="px-2 py-1.5 text-center text-xs text-purple-600 font-medium">{lip.toFixed(0)}</td>
+                  <td className="px-2 py-1.5 text-center text-xs text-green-700 font-bold">{kcal.toFixed(0)}</td>
                 </tr>
               );
             })}
           </tbody>
+          <tfoot>
+            <tr className="border-t-2 border-gray-300 bg-gray-50 font-bold">
+              <td className="px-3 py-2.5 text-xs text-gray-700" colSpan={MEAL_KEYS.length + 1}>TOTAL</td>
+              <td className="px-2 py-2.5 text-center">
+                <span className="text-sm font-extrabold bg-primary text-white px-3 py-1 rounded-full">{totalRaciones}</span>
+              </td>
+              <td className="px-2 py-2.5 text-center text-xs text-amber-700">{totalHCO.toFixed(0)}</td>
+              <td className="px-2 py-2.5 text-center text-xs text-red-600">{totalProt.toFixed(0)}</td>
+              <td className="px-2 py-2.5 text-center text-xs text-purple-600">{totalLip.toFixed(0)}</td>
+              <td className="px-2 py-2.5 text-center text-sm text-green-700 font-extrabold">{totalKcal.toFixed(0)}</td>
+            </tr>
+          </tfoot>
         </table>
       </div>
+
+      {/* Resumen de macros */}
+      {totalKcal > 0 && (
+        <div className="grid grid-cols-4 gap-3">
+          <div className="bg-amber-50 rounded-xl p-3 border border-amber-200 text-center">
+            <p className="text-xs text-amber-600 font-medium">HCO</p>
+            <p className="text-xl font-extrabold text-amber-700">{totalHCO.toFixed(0)}g</p>
+            <p className="text-xs text-amber-500">{((totalHCO * 4 / totalKcal) * 100).toFixed(1)}%</p>
+          </div>
+          <div className="bg-red-50 rounded-xl p-3 border border-red-200 text-center">
+            <p className="text-xs text-red-600 font-medium">Proteína</p>
+            <p className="text-xl font-extrabold text-red-700">{totalProt.toFixed(0)}g</p>
+            <p className="text-xs text-red-500">{((totalProt * 4 / totalKcal) * 100).toFixed(1)}%</p>
+          </div>
+          <div className="bg-purple-50 rounded-xl p-3 border border-purple-200 text-center">
+            <p className="text-xs text-purple-600 font-medium">Lípidos</p>
+            <p className="text-xl font-extrabold text-purple-700">{totalLip.toFixed(0)}g</p>
+            <p className="text-xs text-purple-500">{((totalLip * 9 / totalKcal) * 100).toFixed(1)}%</p>
+          </div>
+          <div className="bg-green-50 rounded-xl p-3 border border-green-200 text-center">
+            <p className="text-xs text-green-600 font-medium">Total</p>
+            <p className="text-xl font-extrabold text-green-700">{totalKcal.toFixed(0)}</p>
+            <p className="text-xs text-green-500">kcal</p>
+          </div>
+        </div>
+      )}
 
       <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-100">
         {feedback && (

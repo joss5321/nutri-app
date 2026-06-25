@@ -4,6 +4,72 @@ import { fetchPerfiles, type Perfil } from "@/app/_data/perfiles";
 import NutricionEquivalentesForm from "@/app/_components/usuarios/NutricionEquivalentesForm";
 import RecetasAsignadasForm from "@/app/_components/usuarios/RecetasAsignadasForm";
 import SuplementosAsignadosForm from "@/app/_components/usuarios/SuplementosAsignadosForm";
+import DietocalculoForm from "@/app/_components/usuarios/DietocalculoForm";
+
+type NutricionTab = "dietocalculo" | "equivalentes" | "recetas" | "suplementos";
+
+function NutricionModal({ perfil, onClose }: { perfil: Perfil; onClose: () => void }) {
+  const [tab, setTab] = useState<NutricionTab>("dietocalculo");
+  const nombre = perfil.nombre_completo || "Usuario";
+  const initials = nombre.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
+
+  const TABS: { key: NutricionTab; label: string; icon: string }[] = [
+    { key: "dietocalculo", label: "Dietocálculo",         icon: "🧮" },
+    { key: "equivalentes", label: "Cálculo equivalentes", icon: "🔢" },
+    { key: "recetas",      label: "Recetas",              icon: "🍽" },
+    { key: "suplementos",  label: "Suplementos",          icon: "💊" },
+  ];
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-full bg-primary/15 flex items-center justify-center text-primary font-bold text-lg">
+              {initials}
+            </div>
+            <div>
+              <h2 className="font-bold text-gray-900 text-xl">Nutrición de {nombre}</h2>
+              <p className="text-gray-500 text-sm">Asigna equivalentes, recetas y suplementos</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="w-9 h-9 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 text-xl">×</button>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex border-b border-gray-100 px-6">
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 transition-colors ${
+                tab === t.key ? "border-primary text-primary" : "border-transparent text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              {t.icon} {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Content */}
+        <div className="p-6">
+          {tab === "dietocalculo" && <DietocalculoForm key={`d-${perfil.id}`} userId={perfil.id} />}
+          {tab === "equivalentes" && <NutricionEquivalentesForm key={perfil.id} userId={perfil.id} />}
+          {tab === "recetas"      && <RecetasAsignadasForm key={`r-${perfil.id}`} userId={perfil.id} />}
+          {tab === "suplementos"  && <SuplementosAsignadosForm key={`s-${perfil.id}`} userId={perfil.id} />}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end px-6 py-4 border-t border-gray-100">
+          <button onClick={onClose} className="px-5 h-10 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50">
+            Cerrar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function PlanBadge({ plan }: { plan: string }) {
   const isPremium = plan === "premium";
@@ -128,37 +194,7 @@ export default function NutricionPage() {
       )}
 
       {/* Modal de nutrición */}
-      {selected && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setSelected(null)}>
-          <div
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between p-6 border-b border-gray-100">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-primary/15 flex items-center justify-center text-primary font-bold text-lg">
-                  {(selected.nombre_completo || "U").split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
-                </div>
-                <div>
-                  <h2 className="font-bold text-gray-900 text-xl">Nutrición de {selected.nombre_completo || "Usuario"}</h2>
-                  <p className="text-gray-500 text-sm">Equivalentes, recetas y suplementación</p>
-                </div>
-              </div>
-              <button onClick={() => setSelected(null)} className="w-9 h-9 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 text-xl">×</button>
-            </div>
-            <div className="p-6 space-y-8">
-              <NutricionEquivalentesForm key={selected.id} userId={selected.id} />
-              <RecetasAsignadasForm key={`r-${selected.id}`} userId={selected.id} />
-              <SuplementosAsignadosForm key={`s-${selected.id}`} userId={selected.id} />
-            </div>
-            <div className="flex items-center justify-end px-6 py-4 border-t border-gray-100">
-              <button onClick={() => setSelected(null)} className="px-5 h-10 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50">
-                Cerrar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {selected && <NutricionModal perfil={selected} onClose={() => setSelected(null)} />}
     </div>
   );
 }

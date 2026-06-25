@@ -8,6 +8,7 @@ export type Perfil = {
   fecha_nacimiento: string | null;
   altura_cm: number | null;
   avatar_url: string | null;
+  telefono: string | null;
   plan_membresia: string;
   rol: string;
   created_at?: string;

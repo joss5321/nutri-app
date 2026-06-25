@@ -619,3 +619,45 @@ create policy "ej_logs: gestion para autenticados"
   on ejercicio_logs for all
   using (auth.role() = 'authenticated')
   with check (auth.role() = 'authenticated');
+
+-- ============================================================
+-- 21. MIGRACIÓN — columna telefono en perfiles
+-- ============================================================
+alter table perfiles add column if not exists telefono text;
+
+-- ============================================================
+-- 22. MIGRACIÓN — tabla dietocalculo para guardar cálculos nutricionales
+-- ============================================================
+create table if not exists dietocalculo (
+  id              uuid        default uuid_generate_v4() primary key,
+  user_id         uuid        references auth.users(id) on delete cascade not null,
+  formula         text        not null,
+  actividad       text        not null,
+  objetivo        text        not null default 'mantenimiento',
+  nivel_pct       numeric(4,1) default 0,
+  geb             numeric(8,1),
+  eta             numeric(8,1),
+  factor_af       numeric(4,3),
+  get_total       numeric(8,1),
+  get_ajustado    numeric(8,1),
+  carbs_gr_kg     numeric(5,2) default 0,
+  prote_gr_kg     numeric(5,2) default 0,
+  lipidos_gr_kg   numeric(5,2) default 0,
+  carbs_kcal      numeric(8,1) default 0,
+  prote_kcal      numeric(8,1) default 0,
+  lipidos_kcal    numeric(8,1) default 0,
+  carbs_pct       numeric(5,1) default 0,
+  prote_pct       numeric(5,1) default 0,
+  lipidos_pct     numeric(5,1) default 0,
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now()
+);
+
+alter table dietocalculo enable row level security;
+create policy "dietocalculo: usuario ve el suyo"
+  on dietocalculo for all using (auth.uid() = user_id);
+drop policy if exists "dietocalculo: gestion para autenticados" on dietocalculo;
+create policy "dietocalculo: gestion para autenticados"
+  on dietocalculo for all
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');

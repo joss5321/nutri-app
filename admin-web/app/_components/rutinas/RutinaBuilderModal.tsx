@@ -333,6 +333,61 @@ export default function RutinaBuilderModal({
         </div>
         )}
 
+        {/* Distribución muscular */}
+        {!loadingRutina && !error && (() => {
+          const muscleSeries: Record<string, { series: number; ejercicios: Set<string> }> = {};
+          for (const day of DAYS) {
+            for (const a of assigned[day]) {
+              const ex = exercises.find((e) => e.id === a.exerciseId);
+              if (!ex) continue;
+              const s = parseInt(a.series) || 0;
+              const groups = [ex.grupo_muscular, ...ex.grupos_secundarios].filter(Boolean) as string[];
+              for (const g of groups) {
+                if (!muscleSeries[g]) muscleSeries[g] = { series: 0, ejercicios: new Set() };
+                muscleSeries[g].series += s;
+                muscleSeries[g].ejercicios.add(ex.nombre);
+              }
+            }
+          }
+          const entries = Object.entries(muscleSeries).sort((a, b) => b[1].series - a[1].series);
+          if (entries.length === 0) return null;
+          const maxSeries = Math.max(...entries.map(([, v]) => v.series));
+          const totalSeries = entries.reduce((acc, [, v]) => acc + v.series, 0);
+          const totalEjercicios = new Set(Object.values(assigned).flat().map((a) => a.exerciseId)).size;
+
+          return (
+            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50">
+              <div className="flex items-center justify-between mb-3">
+                <p className="font-bold text-gray-900 text-sm">📊 Distribución muscular semanal</p>
+                <div className="flex gap-3 text-xs text-gray-500">
+                  <span><span className="font-bold text-gray-900">{totalEjercicios}</span> ejercicios</span>
+                  <span><span className="font-bold text-gray-900">{totalSeries}</span> series totales</span>
+                  <span><span className="font-bold text-gray-900">{entries.length}</span> músculos</span>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {entries.map(([muscle, data]) => {
+                  const pct = (data.series / maxSeries) * 100;
+                  return (
+                    <div key={muscle} className="flex items-center gap-2 bg-white rounded-lg p-2 border border-gray-100">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="text-xs font-semibold text-gray-700 truncate">{muscle}</span>
+                          <span className="text-xs font-bold text-primary shrink-0">{data.series} series</span>
+                        </div>
+                        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div className="h-full bg-primary rounded-full" style={{ width: `${pct}%` }} />
+                        </div>
+                        <p className="text-[10px] text-gray-400 mt-0.5 truncate">{data.ejercicios.size} ej: {[...data.ejercicios].slice(0, 3).join(", ")}{data.ejercicios.size > 3 ? "..." : ""}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Footer */}
         <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100">
           <div className="flex items-center gap-3">
