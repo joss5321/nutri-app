@@ -5,14 +5,19 @@ export const MEAL_KEYS = ["desayuno", "colacion_1", "comida", "colacion_2", "cen
 
 export const FOOD_GROUPS: { icono: string; grupo: string }[] = [
   { icono: "🥣", grupo: "Cereales sin grasa" },
+  { icono: "🌽", grupo: "Cereales con grasa" },
   { icono: "🍎", grupo: "Frutas" },
   { icono: "🥦", grupo: "Verduras" },
   { icono: "🥛", grupo: "Leche descremada" },
+  { icono: "🫘", grupo: "Leguminosas" },
   { icono: "🍗", grupo: "POA muy bajo aporte" },
   { icono: "🐟", grupo: "POA bajo aporte" },
   { icono: "🥩", grupo: "POA medio aporte" },
-  { icono: "🫒", grupo: "Aceites y grasas" },
-  { icono: "🫘", grupo: "AC y C c/Proteína" },
+  { icono: "🥓", grupo: "POA alto aporte" },
+  { icono: "🥑", grupo: "Aceites y grasas" },
+  { icono: "🥜", grupo: "AC y G c/Proteína" },
+  { icono: "🍯", grupo: "Azúcares sin grasa" },
+  { icono: "🍮", grupo: "Azúcares con grasa" },
 ];
 
 export type Equivalente = {

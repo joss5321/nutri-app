@@ -1,12 +1,10 @@
 import { supabase } from "@/lib/supabase";
 
-export const TIPOS_RECETA = ["Desayuno", "Almuerzo", "Cena", "Snack"] as const;
+export const TIPOS_RECETA = ["Desayuno", "Almuerzo", "Cena", "Colación"] as const;
 export const NIVELES_RECETA = ["Fácil", "Medio", "Difícil"] as const;
 export const CATEGORIAS_NUTRICIONALES = [
   "Alta en proteína",
   "Alta en fibra",
-  "Omega 3",
-  "Grasas saludables",
   "Baja en carbohidratos",
 ];
 
@@ -15,6 +13,16 @@ export type RecetaIngrediente = {
   receta_id: string;
   orden: number;
   descripcion: string;
+  alimento_id: string | null;
+  cantidad: number | null;
+  unidad: string | null;
+};
+
+export type RecetaIngredienteInput = {
+  descripcion: string;
+  alimento_id?: string | null;
+  cantidad?: number | null;
+  unidad?: string | null;
 };
 
 export type RecetaPaso = {
@@ -46,7 +54,7 @@ export type Receta = {
 };
 
 export type RecetaInput = Omit<Receta, "id" | "created_at" | "ingredientes" | "pasos"> & {
-  ingredientes: string[];
+  ingredientes: RecetaIngredienteInput[];
   pasos: string[];
 };
 
@@ -85,14 +93,21 @@ async function fetchRecetaById(id: string): Promise<Receta> {
   return normalizeReceta(data as RecetaRow);
 }
 
-async function replaceIngredientes(recetaId: string, descripciones: string[]): Promise<void> {
+async function replaceIngredientes(recetaId: string, ingredientes: RecetaIngredienteInput[]): Promise<void> {
   const { error: deleteError } = await supabase.from("receta_ingredientes").delete().eq("receta_id", recetaId);
   if (deleteError) throw deleteError;
 
-  const rows = descripciones
-    .map((d) => d.trim())
-    .filter((d) => d.length > 0)
-    .map((descripcion, i) => ({ receta_id: recetaId, orden: i + 1, descripcion }));
+  const rows = ingredientes
+    .map((ing) => ({ ...ing, descripcion: ing.descripcion.trim() }))
+    .filter((ing) => ing.descripcion.length > 0)
+    .map((ing, i) => ({
+      receta_id: recetaId,
+      orden: i + 1,
+      descripcion: ing.descripcion,
+      alimento_id: ing.alimento_id ?? null,
+      cantidad: ing.cantidad ?? null,
+      unidad: ing.unidad ?? null,
+    }));
 
   if (rows.length > 0) {
     const { error } = await supabase.from("receta_ingredientes").insert(rows);
@@ -160,7 +175,12 @@ export async function duplicateReceta(receta: Receta): Promise<Receta> {
   return createReceta({
     ...rest,
     nombre: `${rest.nombre} (copia)`,
-    ingredientes: ingredientes.map((i) => i.descripcion),
+    ingredientes: ingredientes.map((i) => ({
+      descripcion: i.descripcion,
+      alimento_id: i.alimento_id ?? null,
+      cantidad: i.cantidad ?? null,
+      unidad: i.unidad ?? null,
+    })),
     pasos: pasos.map((p) => p.descripcion),
   });
 }

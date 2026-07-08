@@ -73,9 +73,143 @@ function buildChartData(medidas: Medida[], key: "peso_kg" | "cintura_cm" | "cade
     });
 }
 
+type MedidaKey = "peso_kg" | "cintura_cm" | "cadera_cm" | "brazo_cm" | "pantorrilla_cm" | "imc" | "grasa_pct" | "masa_muscular_pct";
+type ChartDef = { title: string; key: MedidaKey; unit: string; color: string };
+type Period = "all" | "3m" | "6m" | "1y";
+
+const CHARTS: ChartDef[] = [
+  { title: "Evolución de peso", key: "peso_kg", unit: "kg", color: "#2EBD8C" },
+  { title: "Cintura", key: "cintura_cm", unit: "cm", color: "#60A5FA" },
+  { title: "Cadera", key: "cadera_cm", unit: "cm", color: "#F472B6" },
+  { title: "Brazo", key: "brazo_cm", unit: "cm", color: "#A78BFA" },
+  { title: "Pantorrilla", key: "pantorrilla_cm", unit: "cm", color: "#FBBF24" },
+  { title: "IMC", key: "imc", unit: "", color: "#F59E0B" },
+  { title: "% Grasa", key: "grasa_pct", unit: "%", color: "#EF4444" },
+  { title: "% Masa muscular", key: "masa_muscular_pct", unit: "%", color: "#8B5CF6" },
+];
+
+const PERIOD_LABELS: Record<Period, string> = { all: "Todo", "3m": "3 meses", "6m": "6 meses", "1y": "1 año" };
+
+function filterByPeriod(medidas: Medida[], period: Period): Medida[] {
+  if (period === "all") return medidas;
+  const now = new Date();
+  const months = period === "3m" ? 3 : period === "6m" ? 6 : 12;
+  const cutoff = new Date(now.getFullYear(), now.getMonth() - months, now.getDate());
+  return medidas.filter((m) => new Date(m.fecha) >= cutoff);
+}
+
+function buildChartDataFull(medidas: Medida[], key: MedidaKey) {
+  return medidas
+    .filter((m) => m[key] != null)
+    .map((m) => {
+      const [, month, day] = m.fecha.split("-").map(Number);
+      return { label: `${day}/${MONTH_SHORT[month - 1]}`, value: m[key] as number, fecha: m.fecha };
+    });
+}
+
+function ChartDetailModal({ chart, medidas, onClose }: { chart: ChartDef; medidas: Medida[]; onClose: () => void }) {
+  const [period, setPeriod] = useState<Period>("all");
+  const filtered = filterByPeriod(medidas, period);
+  const data = buildChartDataFull(filtered, chart.key);
+  const best = data.length > 0 ? Math.max(...data.map((d) => d.value)) : null;
+  const worst = data.length > 0 ? Math.min(...data.map((d) => d.value)) : null;
+  const latest = data.length > 0 ? data[data.length - 1] : null;
+  const first = data.length > 0 ? data[0] : null;
+  const delta = latest && first ? latest.value - first.value : null;
+  const avg = data.length > 0 ? data.reduce((a, d) => a + d.value, 0) / data.length : null;
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-[70] flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-6 border-b border-gray-100">
+          <div>
+            <h3 className="font-bold text-gray-900 text-lg">{chart.title}</h3>
+            <p className="text-sm text-gray-500">{data.length} registros</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 text-xl">×</button>
+        </div>
+
+        <div className="p-6 space-y-5">
+          {/* Período */}
+          <div className="flex gap-2">
+            {(Object.keys(PERIOD_LABELS) as Period[]).map((p) => (
+              <button key={p} onClick={() => setPeriod(p)}
+                className={`px-4 py-2 rounded-xl text-xs font-semibold transition-colors ${
+                  period === p ? "bg-primary text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}>
+                {PERIOD_LABELS[p]}
+              </button>
+            ))}
+          </div>
+
+          {/* Stats */}
+          <div className="grid grid-cols-5 gap-3">
+            {[
+              { label: "Actual", value: latest ? `${latest.value.toFixed(1)} ${chart.unit}` : "—" },
+              { label: "Cambio", value: delta != null ? `${delta > 0 ? "+" : ""}${delta.toFixed(1)} ${chart.unit}` : "—", color: delta != null ? (delta <= 0 ? "text-green-600" : "text-red-500") : "" },
+              { label: "Promedio", value: avg != null ? `${avg.toFixed(1)} ${chart.unit}` : "—" },
+              { label: "Máximo", value: best != null ? `${best.toFixed(1)} ${chart.unit}` : "—" },
+              { label: "Mínimo", value: worst != null ? `${worst.toFixed(1)} ${chart.unit}` : "—" },
+            ].map((s) => (
+              <div key={s.label} className="bg-gray-50 rounded-xl p-3 border border-gray-100 text-center">
+                <p className="text-xs text-gray-500">{s.label}</p>
+                <p className={`font-bold text-sm mt-0.5 ${("color" in s && s.color) || "text-gray-900"}`}>{s.value}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Gráfica grande */}
+          {data.length >= 2 ? (
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <LineChart data={data} />
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400 text-center py-8">Se necesitan al menos 2 registros en este período.</p>
+          )}
+
+          {/* Tabla de datos */}
+          {data.length > 0 && (
+            <div className="rounded-xl border border-gray-200 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50">
+                    <th className="text-left px-4 py-2 text-xs font-semibold text-gray-500">Fecha</th>
+                    <th className="text-right px-4 py-2 text-xs font-semibold text-gray-500">Valor</th>
+                    <th className="text-right px-4 py-2 text-xs font-semibold text-gray-500">Cambio</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...data].reverse().map((d, i, arr) => {
+                    const prev = i < arr.length - 1 ? arr[i + 1] : null;
+                    const change = prev ? d.value - prev.value : null;
+                    return (
+                      <tr key={d.fecha} className="border-t border-gray-100">
+                        <td className="px-4 py-2 text-xs text-gray-700">{d.label}</td>
+                        <td className="px-4 py-2 text-xs text-right font-semibold text-gray-900">{d.value.toFixed(1)} {chart.unit}</td>
+                        <td className="px-4 py-2 text-xs text-right">
+                          {change != null ? (
+                            <span className={change <= 0 ? "text-green-600" : "text-red-500"}>
+                              {change > 0 ? "+" : ""}{change.toFixed(1)}
+                            </span>
+                          ) : "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ProgresoMedidas({ userId }: { userId: string }) {
   const [loading, setLoading] = useState(true);
   const [medidas, setMedidas] = useState<Medida[]>([]);
+  const [detailChart, setDetailChart] = useState<ChartDef | null>(null);
 
   useEffect(() => {
     fetchMedidasHistorial(userId)
@@ -91,14 +225,6 @@ function ProgresoMedidas({ userId }: { userId: string }) {
   const first = medidas[0];
   const pesoDelta = latest?.peso_kg != null && first?.peso_kg != null ? (latest.peso_kg - first.peso_kg) : null;
   const masaDelta = latest?.masa_muscular_pct != null && first?.masa_muscular_pct != null ? (latest.masa_muscular_pct - first.masa_muscular_pct) : null;
-
-  const charts: { title: string; key: "peso_kg" | "cintura_cm" | "cadera_cm" | "brazo_cm" | "pantorrilla_cm"; unit: string; color: string }[] = [
-    { title: "Evolución de peso", key: "peso_kg", unit: "kg", color: "#2EBD8C" },
-    { title: "Cintura", key: "cintura_cm", unit: "cm", color: "#60A5FA" },
-    { title: "Cadera", key: "cadera_cm", unit: "cm", color: "#F472B6" },
-    { title: "Brazo", key: "brazo_cm", unit: "cm", color: "#A78BFA" },
-    { title: "Pantorrilla", key: "pantorrilla_cm", unit: "cm", color: "#FBBF24" },
-  ];
 
   return (
     <div className="space-y-4 text-sm">
@@ -122,15 +248,17 @@ function ProgresoMedidas({ userId }: { userId: string }) {
       </div>
 
       {/* Gráficas */}
+      <p className="text-xs text-gray-400">Haz clic en una gráfica para ver más detalles</p>
       <div className="grid grid-cols-2 gap-4">
-        {charts.map((c) => {
-          const data = buildChartData(medidas, c.key);
+        {CHARTS.map((c) => {
+          const data = buildChartData(medidas, c.key as Parameters<typeof buildChartData>[1]);
           if (data.length < 2) return null;
           const last = data[data.length - 1].value;
           const firstV = data[0].value;
           const delta = last - firstV;
           return (
-            <div key={c.key} className="bg-white rounded-xl border border-gray-200 p-3">
+            <div key={c.key} onClick={() => setDetailChart(c)}
+              className="bg-white rounded-xl border border-gray-200 p-3 cursor-pointer hover:border-primary/50 hover:shadow-md transition-all">
               <div className="flex justify-between items-center mb-2">
                 <p className="font-bold text-gray-900 text-xs">{c.title}</p>
                 <span className={`text-xs font-semibold ${delta <= 0 ? "text-green-600" : "text-red-500"}`}>
@@ -138,9 +266,154 @@ function ProgresoMedidas({ userId }: { userId: string }) {
                 </span>
               </div>
               <LineChart data={data} />
+              <p className="text-[10px] text-gray-400 text-right mt-1">Clic para ampliar</p>
             </div>
           );
         })}
+      </div>
+
+      {detailChart && <ChartDetailModal chart={detailChart} medidas={medidas} onClose={() => setDetailChart(null)} />}
+    </div>
+  );
+}
+
+// ── Modal detalle de ejercicio ───────────────────────────────
+type EjExercise = { id: string; nombre: string; emoji: string; logs: EjercicioLog[]; best: number | null };
+
+function EjercicioDetailModal({ ej, onClose }: { ej: EjExercise; onClose: () => void }) {
+  const [period, setPeriod] = useState<Period>("all");
+  const allLogs = ej.logs;
+  const filtered = period === "all" ? allLogs : (() => {
+    const now = new Date();
+    const months = period === "3m" ? 3 : period === "6m" ? 6 : 12;
+    const cutoff = new Date(now.getFullYear(), now.getMonth() - months, now.getDate());
+    return allLogs.filter((l) => new Date(l.fecha) >= cutoff);
+  })();
+
+  const best = filtered.length > 0 ? Math.max(...filtered.map((l) => l.peso_kg)) : null;
+  const worst = filtered.length > 0 ? Math.min(...filtered.map((l) => l.peso_kg)) : null;
+  const latest = filtered.length > 0 ? filtered[filtered.length - 1] : null;
+  const first = filtered.length > 0 ? filtered[0] : null;
+  const delta = latest && first ? latest.peso_kg - first.peso_kg : null;
+  const avg = filtered.length > 0 ? filtered.reduce((a, l) => a + l.peso_kg, 0) / filtered.length : null;
+
+  const chartData = filtered.map((l) => {
+    const [, m, d] = l.fecha.split("-").map(Number);
+    return { label: `${d}/${MONTH_SHORT[m - 1]}`, value: l.peso_kg };
+  });
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-[70] flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-6 border-b border-gray-100">
+          <div>
+            <h3 className="font-bold text-gray-900 text-lg">{ej.emoji} {ej.nombre}</h3>
+            <p className="text-sm text-gray-500">{filtered.length} registros de peso</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 text-xl">×</button>
+        </div>
+
+        <div className="p-6 space-y-5">
+          {/* Período */}
+          <div className="flex gap-2">
+            {(Object.keys(PERIOD_LABELS) as Period[]).map((p) => (
+              <button key={p} onClick={() => setPeriod(p)}
+                className={`px-4 py-2 rounded-xl text-xs font-semibold transition-colors ${
+                  period === p ? "bg-primary text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}>
+                {PERIOD_LABELS[p]}
+              </button>
+            ))}
+          </div>
+
+          {/* Stats */}
+          <div className="grid grid-cols-5 gap-3">
+            {[
+              { label: "Actual", value: latest ? `${latest.peso_kg} kg` : "—" },
+              { label: "Cambio", value: delta != null ? `${delta >= 0 ? "+" : ""}${delta.toFixed(1)} kg` : "—", color: delta != null ? (delta >= 0 ? "text-green-600" : "text-red-500") : "" },
+              { label: "Promedio", value: avg != null ? `${avg.toFixed(1)} kg` : "—" },
+              { label: "Máximo 🏆", value: best != null ? `${best} kg` : "—" },
+              { label: "Mínimo", value: worst != null ? `${worst} kg` : "—" },
+            ].map((s) => (
+              <div key={s.label} className="bg-gray-50 rounded-xl p-3 border border-gray-100 text-center">
+                <p className="text-xs text-gray-500">{s.label}</p>
+                <p className={`font-bold text-sm mt-0.5 ${("color" in s && s.color) || "text-gray-900"}`}>{s.value}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Gráfica de línea grande */}
+          {chartData.length >= 2 ? (
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <LineChart data={chartData} />
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400 text-center py-8">Se necesitan al menos 2 registros en este período.</p>
+          )}
+
+          {/* Gráfica de barras */}
+          {filtered.length > 0 && (
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <p className="text-xs font-bold text-gray-700 mb-3">Historial de pesos</p>
+              <div className="flex items-end gap-1.5" style={{ height: 80 }}>
+                {filtered.map((log, i) => {
+                  const maxV = best ?? 1;
+                  const barH = Math.max(6, Math.round((log.peso_kg / maxV) * 64));
+                  const isLast = i === filtered.length - 1;
+                  const isBest = log.peso_kg === best;
+                  const [, m, d] = log.fecha.split("-").map(Number);
+                  return (
+                    <div key={log.id} className="flex flex-col items-center flex-1" title={`${log.peso_kg} kg — ${d}/${m}`}>
+                      <span className={`text-[9px] mb-1 font-semibold ${isBest ? "text-primary" : isLast ? "text-gray-700" : "text-gray-400"}`}>
+                        {log.peso_kg}
+                      </span>
+                      <div className={`w-4 rounded-sm ${isBest ? "bg-primary" : isLast ? "bg-primary/60" : "bg-gray-300"}`} style={{ height: barH }} />
+                      <span className="text-[8px] text-gray-400 mt-1">{d}/{m}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Tabla */}
+          {filtered.length > 0 && (
+            <div className="rounded-xl border border-gray-200 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50">
+                    <th className="text-left px-4 py-2 text-xs font-semibold text-gray-500">Fecha</th>
+                    <th className="text-right px-4 py-2 text-xs font-semibold text-gray-500">Peso</th>
+                    <th className="text-right px-4 py-2 text-xs font-semibold text-gray-500">Cambio</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...filtered].reverse().map((log, i, arr) => {
+                    const prev = i < arr.length - 1 ? arr[i + 1] : null;
+                    const change = prev ? log.peso_kg - prev.peso_kg : null;
+                    const [, m, d] = log.fecha.split("-").map(Number);
+                    const isBest = log.peso_kg === best;
+                    return (
+                      <tr key={log.id} className="border-t border-gray-100">
+                        <td className="px-4 py-2 text-xs text-gray-700">{d}/{MONTH_SHORT[m - 1]}</td>
+                        <td className="px-4 py-2 text-xs text-right font-semibold text-gray-900">
+                          {log.peso_kg} kg {isBest && "🏆"}
+                        </td>
+                        <td className="px-4 py-2 text-xs text-right">
+                          {change != null ? (
+                            <span className={change >= 0 ? "text-green-600" : "text-red-500"}>
+                              {change >= 0 ? "+" : ""}{change.toFixed(1)}
+                            </span>
+                          ) : "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -151,6 +424,7 @@ function ProgresoEjercicios({ userId }: { userId: string }) {
   const [loading, setLoading] = useState(true);
   const [ejLogs, setEjLogs] = useState<EjercicioLog[]>([]);
   const [rutina, setRutina] = useState<Rutina | null>(null);
+  const [detailEj, setDetailEj] = useState<EjExercise | null>(null);
 
   useEffect(() => {
     Promise.all([fetchEjercicioLogsByUser(userId), fetchRutinaActiva(userId)])
@@ -162,9 +436,9 @@ function ProgresoEjercicios({ userId }: { userId: string }) {
   if (loading) return <p className="text-sm text-gray-400 text-center py-10">Cargando ejercicios...</p>;
 
   const loggedIds = [...new Set(ejLogs.map((l) => l.ejercicio_id))];
-  const exercisesWithLogs = loggedIds
+  const exercisesWithLogs: EjExercise[] = loggedIds
     .map((ejId) => {
-      const logs = ejLogs.filter((l) => l.ejercicio_id === ejId).slice(-10);
+      const logs = ejLogs.filter((l) => l.ejercicio_id === ejId);
       const best = logs.length > 0 ? Math.max(...logs.map((l) => l.peso_kg)) : null;
       const nombre = logs[0]?.ejercicios?.nombre ?? "Ejercicio";
       const emoji = logs[0]?.ejercicios?.emoji ?? "🏋️";
@@ -206,46 +480,54 @@ function ProgresoEjercicios({ userId }: { userId: string }) {
       {exercisesWithLogs.length === 0 ? (
         <p className="text-xs text-gray-400 text-center py-10">El usuario no ha registrado pesos en ejercicios aún.</p>
       ) : (
-        <div className="grid grid-cols-2 gap-4">
-          {exercisesWithLogs.map((ej) => {
-            const first = ej.logs[0].peso_kg;
-            const last = ej.logs[ej.logs.length - 1].peso_kg;
-            const delta = last - first;
-            return (
-              <div key={ej.id} className="bg-white rounded-xl border border-gray-200 p-3">
-                <div className="flex justify-between items-center mb-1">
-                  <p className="text-xs font-bold text-gray-800 truncate">{ej.emoji} {ej.nombre}</p>
-                  {ej.best != null && (
-                    <span className="text-xs font-bold text-primary shrink-0">🏆 {ej.best} kg</span>
+        <>
+          <p className="text-xs text-gray-400">Haz clic en una gráfica para ver más detalles</p>
+          <div className="grid grid-cols-2 gap-4">
+            {exercisesWithLogs.map((ej) => {
+              const recentLogs = ej.logs.slice(-10);
+              const firstPeso = recentLogs[0].peso_kg;
+              const lastPeso = recentLogs[recentLogs.length - 1].peso_kg;
+              const delta = lastPeso - firstPeso;
+              return (
+                <div key={ej.id} onClick={() => setDetailEj(ej)}
+                  className="bg-white rounded-xl border border-gray-200 p-3 cursor-pointer hover:border-primary/50 hover:shadow-md transition-all">
+                  <div className="flex justify-between items-center mb-1">
+                    <p className="text-xs font-bold text-gray-800 truncate">{ej.emoji} {ej.nombre}</p>
+                    {ej.best != null && (
+                      <span className="text-xs font-bold text-primary shrink-0">🏆 {ej.best} kg</span>
+                    )}
+                  </div>
+                  {recentLogs.length >= 2 && (
+                    <p className={`text-[10px] font-semibold mb-2 ${delta >= 0 ? "text-green-600" : "text-red-500"}`}>
+                      {delta >= 0 ? "↑" : "↓"} {Math.abs(delta).toFixed(1)} kg desde el primer registro
+                    </p>
                   )}
+                  <div className="flex items-end gap-1 h-14">
+                    {recentLogs.map((log, i) => {
+                      const maxV = Math.max(...recentLogs.map((l) => l.peso_kg));
+                      const barH = Math.max(4, Math.round((log.peso_kg / maxV) * 48));
+                      const isLast = i === recentLogs.length - 1;
+                      const [, m, d] = log.fecha.split("-").map(Number);
+                      return (
+                        <div key={log.id} className="flex flex-col items-center flex-1" title={`${log.peso_kg} kg — ${d}/${m}`}>
+                          <span className={`text-[8px] mb-0.5 ${isLast ? "text-primary font-bold" : "text-gray-400"}`}>
+                            {log.peso_kg}
+                          </span>
+                          <div className={`w-3 rounded-sm ${isLast ? "bg-primary" : "bg-gray-300"}`} style={{ height: barH }} />
+                          <span className="text-[7px] text-gray-400 mt-0.5">{d}/{m}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[10px] text-gray-400 text-right mt-1">Clic para ampliar</p>
                 </div>
-                {ej.logs.length >= 2 && (
-                  <p className={`text-[10px] font-semibold mb-2 ${delta >= 0 ? "text-green-600" : "text-red-500"}`}>
-                    {delta >= 0 ? "↑" : "↓"} {Math.abs(delta).toFixed(1)} kg desde el primer registro
-                  </p>
-                )}
-                <div className="flex items-end gap-1 h-14">
-                  {ej.logs.map((log, i) => {
-                    const maxV = Math.max(...ej.logs.map((l) => l.peso_kg));
-                    const barH = Math.max(4, Math.round((log.peso_kg / maxV) * 48));
-                    const isLast = i === ej.logs.length - 1;
-                    const [, m, d] = log.fecha.split("-").map(Number);
-                    return (
-                      <div key={log.id} className="flex flex-col items-center flex-1" title={`${log.peso_kg} kg — ${d}/${m}`}>
-                        <span className={`text-[8px] mb-0.5 ${isLast ? "text-primary font-bold" : "text-gray-400"}`}>
-                          {log.peso_kg}
-                        </span>
-                        <div className={`w-3 rounded-sm ${isLast ? "bg-primary" : "bg-gray-300"}`} style={{ height: barH }} />
-                        <span className="text-[7px] text-gray-400 mt-0.5">{d}/{m}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        </>
       )}
+
+      {detailEj && <EjercicioDetailModal ej={detailEj} onClose={() => setDetailEj(null)} />}
     </div>
   );
 }

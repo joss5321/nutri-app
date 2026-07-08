@@ -29,6 +29,7 @@ const NAV: NavEntry[] = [
       { href: "/ejercicios", label: "Ejercicios", icon: "💪" },
       { href: "/recetas", label: "Recetas", icon: "🍽" },
       { href: "/suplementos", label: "Suplementos", icon: "💊" },
+      { href: "/alimentos", label: "Alimentos", icon: "🥗" },
     ],
   },
   {

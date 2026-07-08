@@ -51,12 +51,20 @@ const ACTIVIDAD_LABELS: Record<ActividadKey, string> = {
   sedentario: "Sedentario (mínimo ejercicio)", ligero: "Ligero (1-3 días/semana)",
   moderado: "Moderado (3-5 días/semana)", activo: "Activo (5-6 días/semana)", muy_activo: "Muy activo (6-7 días/semana)",
 };
+// Etiquetas específicas para Valencia y Schofield (rangos 1.40-1.69 / 1.70-1.99 / 2.0-2.40)
+const ACTIVIDAD_LABELS_VS: Record<ActividadKey, string> = {
+  sedentario: "Sedentario",
+  ligero:     "Ligera (1.40 – 1.69)",
+  moderado:   "Moderada (1.70 – 1.99)",
+  activo:     "Intensa (2.00 – 2.20)",
+  muy_activo: "Intensa máx. (2.21 – 2.40)",
+};
 const FACTORES: Record<Formula, Record<ActividadKey, number>> = {
-  mifflin:   { sedentario: 1.2, ligero: 1.375, moderado: 1.55, activo: 1.725, muy_activo: 1.9 },
-  harris:    { sedentario: 1.2, ligero: 1.375, moderado: 1.55, activo: 1.725, muy_activo: 1.9 },
-  fao:       { sedentario: 1.4, ligero: 1.55, moderado: 1.75, activo: 2.0, muy_activo: 2.2 },
-  valencia:  { sedentario: 1.3, ligero: 1.5, moderado: 1.65, activo: 1.8, muy_activo: 2.0 },
-  schofield: { sedentario: 1.3, ligero: 1.5, moderado: 1.65, activo: 1.8, muy_activo: 2.0 },
+  mifflin:   { sedentario: 1.2,  ligero: 1.375, moderado: 1.55,  activo: 1.725, muy_activo: 1.9  },
+  harris:    { sedentario: 1.2,  ligero: 1.375, moderado: 1.55,  activo: 1.725, muy_activo: 1.9  },
+  fao:       { sedentario: 1.4,  ligero: 1.55,  moderado: 1.75,  activo: 2.0,   muy_activo: 2.2  },
+  valencia:  { sedentario: 1.3,  ligero: 1.55,  moderado: 1.85,  activo: 2.10,  muy_activo: 2.40 },
+  schofield: { sedentario: 1.3,  ligero: 1.55,  moderado: 1.85,  activo: 2.10,  muy_activo: 2.40 },
 };
 
 type Objetivo = "deficit" | "mantenimiento" | "superavit";
@@ -201,7 +209,7 @@ export default function DietocalculoForm({ userId }: { userId: string }) {
           <select value={actividad} onChange={(e) => setActividad(e.target.value as ActividadKey)}
             className="w-full h-10 border border-gray-200 rounded-xl px-3 text-sm bg-white focus:outline-none focus:border-primary">
             {(Object.keys(ACTIVIDAD_LABELS) as ActividadKey[]).map((a) => (
-              <option key={a} value={a}>{ACTIVIDAD_LABELS[a]} — {FACTORES[formula][a]}</option>
+              <option key={a} value={a}>{(formula === "valencia" || formula === "schofield") ? ACTIVIDAD_LABELS_VS[a] : ACTIVIDAD_LABELS[a]} — {FACTORES[formula][a]}</option>
             ))}
           </select>
         </div>
@@ -286,10 +294,10 @@ export default function DietocalculoForm({ userId }: { userId: string }) {
               {protePct > 0 && <div className="bg-red-400 h-full" style={{ width: `${Math.min(protePct, 100)}%` }} />}
               {lipidosPct > 0 && <div className="bg-purple-400 h-full" style={{ width: `${Math.min(lipidosPct, 100)}%` }} />}
             </div>
-            <div className="flex justify-between text-[10px] text-gray-400 mt-1">
-              <span>Carbs {carbsPct.toFixed(1)}%</span>
-              <span>Prot {protePct.toFixed(1)}%</span>
-              <span>Líp {lipidosPct.toFixed(1)}%</span>
+            <div className="flex justify-between text-[10px] text-gray-500 mt-1">
+              <span className="text-amber-600 font-medium">Carbs <strong>{(carbsGr * peso).toFixed(0)}g</strong> ({carbsPct.toFixed(1)}%)</span>
+              <span className="text-red-500 font-medium">Prot <strong>{(proteGr * peso).toFixed(0)}g</strong> ({protePct.toFixed(1)}%)</span>
+              <span className="text-purple-500 font-medium">Líp <strong>{(lipidosGr * peso).toFixed(0)}g</strong> ({lipidosPct.toFixed(1)}%)</span>
             </div>
           </div>
         )}

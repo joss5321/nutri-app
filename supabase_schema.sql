@@ -661,3 +661,50 @@ create policy "dietocalculo: gestion para autenticados"
   on dietocalculo for all
   using (auth.role() = 'authenticated')
   with check (auth.role() = 'authenticated');
+
+-- ============================================================
+-- 23. MIGRACIÓN — catálogo de alimentos con info nutricional
+-- ============================================================
+create table if not exists alimentos (
+  id            uuid        primary key default uuid_generate_v4(),
+  nombre        text        not null,
+  categoria     text,
+  cantidad      numeric,
+  unidad        text,
+  peso_bruto_g  numeric,
+  peso_neto_g   numeric,
+  kcal          numeric,
+  proteinas_g   numeric,
+  lipidos_g     numeric,
+  hco_g         numeric,
+  fibra_g       numeric,
+  created_at    timestamptz not null default now()
+);
+
+alter table alimentos enable row level security;
+
+drop policy if exists "alimentos: lectura para autenticados" on alimentos;
+create policy "alimentos: lectura para autenticados"
+  on alimentos for select
+  using (auth.role() = 'authenticated');
+
+drop policy if exists "alimentos: gestion para autenticados" on alimentos;
+create policy "alimentos: gestion para autenticados"
+  on alimentos for all
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
+
+-- ============================================================
+-- 24. MIGRACIÓN — receta_ingredientes: alimento_id, cantidad, unidad
+-- ============================================================
+alter table receta_ingredientes
+  add column if not exists alimento_id uuid references alimentos(id) on delete set null,
+  add column if not exists cantidad    numeric,
+  add column if not exists unidad      text;
+
+-- ============================================================
+-- 25. MIGRACIÓN — rutina_ejercicios: rpe y series_detalle por serie
+-- ============================================================
+alter table rutina_ejercicios
+  add column if not exists rpe            numeric,
+  add column if not exists series_detalle jsonb;
