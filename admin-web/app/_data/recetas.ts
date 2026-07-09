@@ -48,12 +48,14 @@ export type Receta = {
   proteinas_g: number | null;
   carbohidratos_g: number | null;
   grasas_g: number | null;
+  user_id: string | null;
+  receta_base_id: string | null;
   created_at?: string;
   ingredientes: RecetaIngrediente[];
   pasos: RecetaPaso[];
 };
 
-export type RecetaInput = Omit<Receta, "id" | "created_at" | "ingredientes" | "pasos"> & {
+export type RecetaInput = Omit<Receta, "id" | "created_at" | "user_id" | "receta_base_id" | "ingredientes" | "pasos"> & {
   ingredientes: RecetaIngredienteInput[];
   pasos: string[];
 };
@@ -74,16 +76,7 @@ function normalizeReceta(row: RecetaRow): Receta {
   };
 }
 
-export async function fetchRecetas(): Promise<Receta[]> {
-  const { data, error } = await supabase
-    .from("recetas")
-    .select(RECETA_SELECT)
-    .order("created_at", { ascending: false });
-  if (error) throw error;
-  return (data as RecetaRow[]).map(normalizeReceta);
-}
-
-async function fetchRecetaById(id: string): Promise<Receta> {
+export async function fetchRecetaById(id: string): Promise<Receta> {
   const { data, error } = await supabase
     .from("recetas")
     .select(RECETA_SELECT)
@@ -91,6 +84,17 @@ async function fetchRecetaById(id: string): Promise<Receta> {
     .single();
   if (error) throw error;
   return normalizeReceta(data as RecetaRow);
+}
+
+// Only returns base catalog recipes (user_id IS NULL)
+export async function fetchRecetas(): Promise<Receta[]> {
+  const { data, error } = await supabase
+    .from("recetas")
+    .select(RECETA_SELECT)
+    .is("user_id", null)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data as RecetaRow[]).map(normalizeReceta);
 }
 
 async function replaceIngredientes(recetaId: string, ingredientes: RecetaIngredienteInput[]): Promise<void> {
@@ -168,9 +172,8 @@ export async function deleteReceta(id: string): Promise<void> {
 }
 
 export async function duplicateReceta(receta: Receta): Promise<Receta> {
-  const { id, created_at, ingredientes, pasos, ...rest } = receta;
-  void id;
-  void created_at;
+  const { id, created_at, user_id, receta_base_id, ingredientes, pasos, ...rest } = receta;
+  void id; void created_at; void user_id; void receta_base_id;
 
   return createReceta({
     ...rest,
@@ -183,4 +186,46 @@ export async function duplicateReceta(receta: Receta): Promise<Receta> {
     })),
     pasos: pasos.map((p) => p.descripcion),
   });
+}
+
+/**
+ * Creates or updates a personal copy of a base recipe for a specific user.
+ * If the user already has a personalized version, it updates it.
+ * Otherwise, it clones the base recipe with user_id and receta_base_id set.
+ * Returns the recipe and the new ID if a clone was created (null if updated).
+ */
+export async function saveRecetaPersonalizada(
+  userId: string,
+  baseRecetaId: string,
+  input: RecetaInput
+): Promise<{ receta: Receta; newId: string | null }> {
+  // Check if user already has a personal copy of this base recipe
+  const { data: existing } = await supabase
+    .from("recetas")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("receta_base_id", baseRecetaId)
+    .maybeSingle();
+
+  if (existing) {
+    const receta = await updateReceta(existing.id as string, input);
+    return { receta, newId: null };
+  }
+
+  // Create a brand-new personal copy
+  const { ingredientes, pasos, ...recetaData } = input;
+  const { data: clone, error } = await supabase
+    .from("recetas")
+    .insert({ ...recetaData, user_id: userId, receta_base_id: baseRecetaId })
+    .select()
+    .single();
+  if (error) throw error;
+
+  await Promise.all([
+    replaceIngredientes(clone.id, ingredientes),
+    replacePasos(clone.id, pasos),
+  ]);
+
+  const receta = await fetchRecetaById(clone.id);
+  return { receta, newId: clone.id as string };
 }

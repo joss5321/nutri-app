@@ -10,6 +10,11 @@ export type EjercicioInfo = {
   video_url: string | null
 }
 
+export type SerieDetalle = {
+  reps: string | null
+  peso: number | null
+}
+
 export type RutinaEjercicio = {
   id: string
   dia_id: string
@@ -20,6 +25,8 @@ export type RutinaEjercicio = {
   peso_sugerido_kg: number | null
   descanso_seg: number | null
   rir: number | null
+  rpe: number | null
+  series_detalle: SerieDetalle[] | null
   ejercicios: EjercicioInfo
 }
 

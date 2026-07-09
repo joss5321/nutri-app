@@ -24,3 +24,11 @@ export async function fetchMisSuplementos(userId: string): Promise<SuplementoAsi
   if (error) throw error
   return data as SuplementoAsignado[]
 }
+
+export async function updateSuplementoHora(id: string, hora: string): Promise<void> {
+  const { error } = await supabase
+    .from('plan_suplementacion')
+    .update({ hora })
+    .eq('id', id)
+  if (error) throw error
+}

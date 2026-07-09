@@ -21,8 +21,8 @@ const MONTH_SHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Se
 
 function metricsFromHistorial(historial: Medida[]) {
   const labels = historial.map((m) => {
-    const [, month] = m.fecha.split('-').map(Number)
-    return MONTH_SHORT[month - 1]
+    const [, month, day] = m.fecha.split('-').map(Number)
+    return `${day}/${MONTH_SHORT[month - 1]}`
   })
   return {
     labels,
@@ -35,9 +35,9 @@ function metricsFromHistorial(historial: Medida[]) {
 
 function tableFromHistorial(historial: Medida[], alturaCm: number | null) {
   return historial.map((m) => {
-    const [, month] = m.fecha.split('-').map(Number)
+    const [year, month, day] = m.fecha.split('-').map(Number)
     return {
-      mes: MONTH_SHORT[month - 1],
+      fecha: `${day}/${MONTH_SHORT[month - 1]}/${String(year).slice(2)}`,
       peso: m.peso_kg?.toFixed(1) ?? '—',
       altura: alturaCm != null ? String(alturaCm) : '—',
       cintura: m.cintura_cm?.toFixed(1) ?? '—',
@@ -177,6 +177,7 @@ export default function ProgresoScreen() {
   // Chart state
   const [metric, setMetric] = useState<MetricKey>('peso')
   const [chartWidth, setChartWidth] = useState(0)
+  const [showAllRows, setShowAllRows] = useState(false)
 
   const loadData = useCallback((isRefresh = false) => {
     if (!userId) return
@@ -335,25 +336,38 @@ export default function ProgresoScreen() {
 
         {/* Tabla */}
         {tableData.length > 0 && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
-            <View>
-              <View style={s.tableHeader}>
-                {['Mes', 'Peso (kg)', 'Altura (cm)', 'Cintura (cm)', 'Cadera (cm)', 'IMC'].map((h) => (
-                  <Text key={h} style={s.th}>{h}</Text>
+          <View style={{ marginTop: 8 }}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View>
+                <View style={s.tableHeader}>
+                  {['Fecha', 'Peso (kg)', 'Altura (cm)', 'Cintura (cm)', 'Cadera (cm)', 'IMC'].map((h) => (
+                    <Text key={h} style={s.th}>{h}</Text>
+                  ))}
+                </View>
+                {(showAllRows ? tableData : tableData.slice(-3)).map((row, i) => (
+                  <View key={i} style={[s.tableRow, i % 2 === 0 && { backgroundColor: '#F0FAF5' }]}>
+                    <Text style={[s.td, { color: COLORS.primary, fontWeight: '700' }]}>{row.fecha}</Text>
+                    <Text style={s.td}>{row.peso}</Text>
+                    <Text style={s.td}>{row.altura}</Text>
+                    <Text style={s.td}>{row.cintura}</Text>
+                    <Text style={s.td}>{row.cadera}</Text>
+                    <Text style={s.td}>{row.imc}</Text>
+                  </View>
                 ))}
               </View>
-              {tableData.map((row, i) => (
-                <View key={i} style={[s.tableRow, i % 2 === 0 && { backgroundColor: '#F0FAF5' }]}>
-                  <Text style={[s.td, { color: COLORS.primary, fontWeight: '700' }]}>{row.mes}</Text>
-                  <Text style={s.td}>{row.peso}</Text>
-                  <Text style={s.td}>{row.altura}</Text>
-                  <Text style={s.td}>{row.cintura}</Text>
-                  <Text style={s.td}>{row.cadera}</Text>
-                  <Text style={s.td}>{row.imc}</Text>
-                </View>
-              ))}
-            </View>
-          </ScrollView>
+            </ScrollView>
+            {tableData.length > 3 && (
+              <TouchableOpacity
+                onPress={() => setShowAllRows((v) => !v)}
+                style={{ alignItems: 'center', paddingVertical: 10 }}
+                activeOpacity={0.7}
+              >
+                <Text style={{ fontSize: 13, color: COLORS.primary, fontWeight: '700' }}>
+                  {showAllRows ? '▲ Ver menos' : `▼ Ver todos los registros (${tableData.length})`}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
         )}
 
         {/* Card motivacional */}

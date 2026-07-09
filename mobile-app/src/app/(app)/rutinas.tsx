@@ -4,16 +4,18 @@ import { Ionicons } from '@expo/vector-icons'
 import { useFocusEffect } from '@react-navigation/native'
 import { COLORS } from '@/constants/colors'
 import { useAuthStore } from '@/store/auth'
-import { fetchMiRutina, type RutinaCompleta } from '@/lib/api/rutinas'
+import { fetchMiRutina, type RutinaCompleta, type SerieDetalle } from '@/lib/api/rutinas'
 import { fetchEjercicioLogs, fetchAllEjercicioLogs, createEjercicioLog, type EjercicioLog } from '@/lib/api/ejercicio_logs'
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 type DayStatus = 'completado' | 'pendiente' | 'descanso'
 interface Exercise {
   id: string; ejercicio_id: string; name: string; emoji: string
-  series: string; reps: string; weight?: string; rest: string; rir?: string
+  series: string; series_count: number; reps: string; weight?: string; rest: string
+  rir?: string; rpe?: string
   grupo_muscular?: string; grupos_secundarios?: string[]
   descripcion?: string; video_url?: string
+  series_detalle: SerieDetalle[] | null
 }
 interface Day {
   num: number; name: string; status: DayStatus; isRest: boolean; exercises: Exercise[]
@@ -31,10 +33,13 @@ function mapRutinaToDays(rutina: RutinaCompleta): Day[] {
       name: ej.ejercicios?.nombre ?? 'Ejercicio',
       emoji: ej.ejercicios?.emoji ?? '🏋️',
       series: ej.series != null ? `${ej.series} series` : '',
+      series_count: ej.series ?? 0,
       reps: ej.repeticiones ?? '',
       weight: ej.peso_sugerido_kg != null ? `${ej.peso_sugerido_kg} kg` : undefined,
       rest: ej.descanso_seg != null ? `${ej.descanso_seg} s` : '60 s',
       rir: ej.rir != null ? String(ej.rir) : undefined,
+      rpe: ej.rpe != null ? String(ej.rpe) : undefined,
+      series_detalle: ej.series_detalle ?? null,
       grupo_muscular: ej.ejercicios?.grupo_muscular ?? undefined,
       grupos_secundarios: ej.ejercicios?.grupos_secundarios ?? undefined,
       descripcion: ej.ejercicios?.descripcion ?? undefined,
@@ -98,10 +103,21 @@ function ExerciseDetailModal({ exercise, userId, onClose }: { exercise: Exercise
   const ytId = exercise.video_url ? getYouTubeEmbedId(exercise.video_url) : null
   const isShort = exercise.video_url ? isYouTubeShort(exercise.video_url) : false
 
-  const [pesoInput, setPesoInput] = useState('')
   const [savingPeso, setSavingPeso] = useState(false)
   const [logs, setLogs] = useState<EjercicioLog[]>([])
   const [loadingLogs, setLoadingLogs] = useState(true)
+
+  // Build series rows from series_detalle or fallback
+  const seriesRows: SerieDetalle[] = exercise.series_detalle?.length
+    ? exercise.series_detalle
+    : Array.from({ length: Math.max(exercise.series_count, 1) }, () => ({
+        reps: exercise.reps || null,
+        peso: null,
+      }))
+
+  const [serieInputs, setSerieInputs] = useState<string[]>(
+    seriesRows.map((s) => (s.peso != null ? String(s.peso) : ''))
+  )
 
   useEffect(() => {
     fetchEjercicioLogs(userId, exercise.ejercicio_id)
@@ -110,16 +126,20 @@ function ExerciseDetailModal({ exercise, userId, onClose }: { exercise: Exercise
       .finally(() => setLoadingLogs(false))
   }, [userId, exercise.ejercicio_id])
 
-  const handleSavePeso = async () => {
-    const val = parseFloat(pesoInput)
-    if (!val || val <= 0) { Alert.alert('Error', 'Ingresa un peso válido mayor a 0.'); return }
+  const handleSaveSeries = async () => {
+    const entries = serieInputs
+      .map((v, i) => ({ serie: i + 1, peso: parseFloat(v) }))
+      .filter((e) => e.peso > 0)
+    if (entries.length === 0) {
+      Alert.alert('Error', 'Ingresa al menos un peso válido mayor a 0.')
+      return
+    }
     setSavingPeso(true)
     try {
-      await createEjercicioLog(userId, exercise.ejercicio_id, val)
+      await Promise.all(entries.map((e) => createEjercicioLog(userId, exercise.ejercicio_id, e.peso)))
       const updated = await fetchEjercicioLogs(userId, exercise.ejercicio_id)
       setLogs(updated)
-      setPesoInput('')
-      Alert.alert('Registrado', `${val} kg guardado con fecha de hoy.`)
+      Alert.alert('Registrado', `${entries.length} serie${entries.length > 1 ? 's' : ''} guardada${entries.length > 1 ? 's' : ''} correctamente.`)
     } catch (err) {
       Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo guardar.')
     } finally { setSavingPeso(false) }
@@ -193,16 +213,15 @@ function ExerciseDetailModal({ exercise, userId, onClose }: { exercise: Exercise
               </View>
             )}
 
-            {/* Detalles de la rutina */}
+            {/* Detalles generales */}
             <View style={ed.detailCard}>
               <Text style={ed.detailTitle}>Detalles del ejercicio</Text>
               <View style={ed.detailGrid}>
                 {[
                   { label: 'Series', value: exercise.series || '—', icon: '🔁' },
-                  { label: 'Repeticiones', value: exercise.reps || '—', icon: '🔢' },
-                  { label: 'Peso sugerido', value: exercise.weight ?? '—', icon: '🏋️' },
                   { label: 'Descanso', value: exercise.rest || '—', icon: '⏱' },
                   ...(exercise.rir ? [{ label: 'RIR', value: exercise.rir, icon: '💪' }] : []),
+                  ...(exercise.rpe ? [{ label: 'RPE', value: exercise.rpe, icon: '⚡' }] : []),
                 ].map((d) => (
                   <View key={d.label} style={ed.detailItem}>
                     <Text style={{ fontSize: 18 }}>{d.icon}</Text>
@@ -213,29 +232,50 @@ function ExerciseDetailModal({ exercise, userId, onClose }: { exercise: Exercise
               </View>
             </View>
 
-            {/* Registrar peso */}
+            {/* Series con reps, peso plan y registro */}
             <View style={ed.detailCard}>
-              <Text style={ed.detailTitle}>Registrar peso de hoy</Text>
-              <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-                <TextInput
-                  value={pesoInput}
-                  onChangeText={setPesoInput}
-                  keyboardType="numeric"
-                  placeholder="Peso (kg)"
-                  style={{ flex: 1, height: 44, borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, paddingHorizontal: 12, fontSize: 16, color: COLORS.text }}
-                />
-                <TouchableOpacity onPress={handleSavePeso} disabled={savingPeso} activeOpacity={0.85}
-                  style={{ height: 44, paddingHorizontal: 16, borderRadius: 10, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', flexDirection: 'row', gap: 6 }}>
-                  <Ionicons name="save-outline" size={16} color={COLORS.white} />
-                  <Text style={{ color: COLORS.white, fontWeight: '700', fontSize: 13 }}>{savingPeso ? '...' : 'Guardar'}</Text>
-                </TouchableOpacity>
+              <Text style={ed.detailTitle}>Series — registrar peso de hoy</Text>
+              {/* Cabecera */}
+              <View style={ed.serieHeader}>
+                <Text style={[ed.serieHeaderCell, { flex: 0.6 }]}>Serie</Text>
+                <Text style={ed.serieHeaderCell}>Reps</Text>
+                <Text style={ed.serieHeaderCell}>Plan (kg)</Text>
+                <Text style={ed.serieHeaderCell}>Tu peso</Text>
               </View>
+              {seriesRows.map((sr, i) => (
+                <View key={i} style={[ed.serieRow, i % 2 === 0 && { backgroundColor: '#F9FAFB' }]}>
+                  <View style={[ed.serieCell, { flex: 0.6, alignItems: 'center' }]}>
+                    <View style={ed.serieBadge}>
+                      <Text style={ed.serieBadgeText}>S{i + 1}</Text>
+                    </View>
+                  </View>
+                  <Text style={ed.serieCell}>{sr.reps ?? '—'}</Text>
+                  <Text style={ed.serieCell}>{sr.peso != null ? `${sr.peso}` : '—'}</Text>
+                  <View style={{ flex: 1, paddingHorizontal: 4 }}>
+                    <TextInput
+                      value={serieInputs[i]}
+                      onChangeText={(v) => setSerieInputs((prev) => prev.map((x, j) => (j === i ? v : x)))}
+                      keyboardType="numeric"
+                      placeholder="—"
+                      placeholderTextColor={COLORS.muted}
+                      style={ed.serieInput}
+                    />
+                  </View>
+                </View>
+              ))}
               {bestWeight != null && (
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: COLORS.border }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: COLORS.border }}>
                   <Text style={{ fontSize: 12, color: COLORS.muted }}>Mejor peso registrado</Text>
-                  <Text style={{ fontSize: 14, fontWeight: '800', color: COLORS.primary }}>{bestWeight} kg</Text>
+                  <Text style={{ fontSize: 14, fontWeight: '800', color: COLORS.primary }}>{bestWeight} kg 🏆</Text>
                 </View>
               )}
+              <TouchableOpacity onPress={handleSaveSeries} disabled={savingPeso} activeOpacity={0.85}
+                style={{ height: 44, borderRadius: 10, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', flexDirection: 'row', gap: 6, marginTop: 12 }}>
+                <Ionicons name="save-outline" size={16} color={COLORS.white} />
+                <Text style={{ color: COLORS.white, fontWeight: '700', fontSize: 14 }}>
+                  {savingPeso ? 'Guardando...' : 'Guardar series'}
+                </Text>
+              </TouchableOpacity>
             </View>
 
             {/* Historial de pesos */}
@@ -245,7 +285,7 @@ function ExerciseDetailModal({ exercise, userId, onClose }: { exercise: Exercise
                 <ActivityIndicator size="small" color={COLORS.primary} />
               ) : logs.length === 0 ? (
                 <Text style={{ fontSize: 12, color: COLORS.muted, textAlign: 'center', paddingVertical: 12 }}>
-                  Aún no hay registros. Guarda tu primer peso arriba.
+                  Aún no hay registros. Guarda tus primeras series arriba.
                 </Text>
               ) : (
                 <View style={{ gap: 0 }}>
@@ -317,6 +357,23 @@ const ed = StyleSheet.create({
     backgroundColor: COLORS.white, borderRadius: 14, padding: 14,
     borderWidth: 1, borderColor: COLORS.border,
   },
+  serieHeader: {
+    flexDirection: 'row', backgroundColor: '#F0FAF5',
+    paddingVertical: 8, paddingHorizontal: 4, borderRadius: 8, marginBottom: 4,
+  },
+  serieHeaderCell: { flex: 1, textAlign: 'center', fontSize: 11, fontWeight: '700', color: COLORS.primary },
+  serieRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, borderRadius: 6 },
+  serieCell: { flex: 1, textAlign: 'center', fontSize: 13, color: COLORS.text },
+  serieBadge: {
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center',
+  },
+  serieBadgeText: { color: COLORS.white, fontSize: 11, fontWeight: '700' },
+  serieInput: {
+    height: 36, borderWidth: 1, borderColor: COLORS.border,
+    borderRadius: 8, paddingHorizontal: 8, fontSize: 14, color: COLORS.text,
+    textAlign: 'center',
+  },
 })
 
 // ─── Progress bar ────────────────────────────────────────────────────────────
@@ -369,6 +426,7 @@ function ExerciseCard({ ex, index, onPress }: { ex: Exercise; index: number; onP
         <View style={{ flexDirection: 'row', gap: 12, marginTop: 3 }}>
           <Text style={s.exMeta}>⏱ {ex.rest}</Text>
           {ex.rir && <Text style={s.exMeta}>RIR {ex.rir}</Text>}
+          {ex.rpe && <Text style={s.exMeta}>RPE {ex.rpe}</Text>}
         </View>
       </View>
       <Ionicons name="chevron-forward" size={16} color={COLORS.muted} />

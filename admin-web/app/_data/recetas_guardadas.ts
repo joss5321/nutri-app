@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase";
-import type { Receta } from "./recetas";
+import { saveRecetaPersonalizada, type Receta, type RecetaInput } from "./recetas";
 
 type RecetaGuardadaRow = {
   user_id: string;
@@ -39,4 +39,37 @@ export async function saveRecetasAsignadas(userId: string, recetaIds: string[]):
     const { error } = await supabase.from("recetas_guardadas").insert(rows);
     if (error) throw error;
   }
+}
+
+/**
+ * Personalizes an assigned recipe for a user:
+ * - Resolves the base recipe ID (follows receta_base_id if already a personal copy).
+ * - If user already has a personal copy → updates it in place.
+ * - If not → clones the base recipe with user_id set, and redirects recetas_guardadas to the clone.
+ */
+export async function personalizeReceta(
+  userId: string,
+  currentRecetaId: string,
+  input: RecetaInput
+): Promise<Receta> {
+  const { data: current } = await supabase
+    .from("recetas")
+    .select("receta_base_id")
+    .eq("id", currentRecetaId)
+    .single();
+
+  const baseId: string = (current?.receta_base_id as string | null) ?? currentRecetaId;
+
+  const { receta, newId } = await saveRecetaPersonalizada(userId, baseId, input);
+
+  if (newId) {
+    const { error } = await supabase
+      .from("recetas_guardadas")
+      .update({ receta_id: newId })
+      .eq("user_id", userId)
+      .eq("receta_id", currentRecetaId);
+    if (error) throw error;
+  }
+
+  return receta;
 }
