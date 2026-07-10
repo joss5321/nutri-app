@@ -708,3 +708,19 @@ alter table receta_ingredientes
 alter table rutina_ejercicios
   add column if not exists rpe            numeric,
   add column if not exists series_detalle jsonb;
+
+-- ============================================================
+-- 26. MIGRACIÓN — recetas: user_id y receta_base_id para personalización
+-- ============================================================
+alter table recetas
+  add column if not exists user_id        uuid references auth.users(id) on delete cascade,
+  add column if not exists receta_base_id uuid references recetas(id) on delete set null;
+
+-- Índice para búsquedas de copias personales por usuario
+create index if not exists idx_recetas_user_base on recetas(user_id, receta_base_id);
+
+-- Política: usuarios leen sus propias recetas personalizadas desde la app móvil
+drop policy if exists "recetas: usuario lee las suyas" on recetas;
+create policy "recetas: usuario lee las suyas"
+  on recetas for select
+  using (auth.uid() = user_id);

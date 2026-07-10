@@ -74,10 +74,12 @@ export default function RecetaModal({
   receta,
   onSave,
   onClose,
+  customSave,
 }: {
   receta?: Receta;
   onSave: (receta: Receta) => void;
   onClose: () => void;
+  customSave?: (input: RecetaInput) => Promise<Receta>;
 }) {
   const isEdit = !!receta;
 
@@ -236,7 +238,9 @@ export default function RecetaModal({
         pasos,
       };
 
-      const saved = isEdit ? await updateReceta(receta!.id, payload) : await createReceta(payload);
+      const saved = customSave
+        ? await customSave(payload)
+        : isEdit ? await updateReceta(receta!.id, payload) : await createReceta(payload);
       onSave(saved);
       onClose();
     } catch (err) {

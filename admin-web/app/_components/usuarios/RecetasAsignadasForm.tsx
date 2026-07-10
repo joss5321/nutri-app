@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
-import { fetchRecetas, type Receta } from "@/app/_data/recetas";
-import { fetchRecetasAsignadas, saveRecetasAsignadas } from "@/app/_data/recetas_guardadas";
+import { fetchRecetas, type Receta, type RecetaInput } from "@/app/_data/recetas";
+import { fetchRecetasAsignadas, saveRecetasAsignadas, personalizeReceta } from "@/app/_data/recetas_guardadas";
+import RecetaModal from "@/app/_components/recetas/RecetaModal";
 
 export default function RecetasAsignadasForm({ userId }: { userId: string }) {
   const [loading, setLoading] = useState(true);
@@ -13,6 +14,7 @@ export default function RecetasAsignadasForm({ userId }: { userId: string }) {
   const [asignadas, setAsignadas] = useState<Receta[]>([]);
   const [search, setSearch] = useState("");
   const [dragOver, setDragOver] = useState(false);
+  const [editingReceta, setEditingReceta] = useState<Receta | null>(null);
 
   const loadData = () => {
     Promise.all([fetchRecetas(), fetchRecetasAsignadas(userId)])
@@ -34,6 +36,10 @@ export default function RecetasAsignadasForm({ userId }: { userId: string }) {
     loadData();
   };
 
+  // Base IDs already covered by personal copies — exclude from catalog
+  const assignedBaseIds = new Set(
+    asignadas.map((r) => r.receta_base_id).filter(Boolean) as string[]
+  );
   const asignadasIds = new Set(asignadas.map((r) => r.id));
 
   const addReceta = (recetaId: string) => {
@@ -59,8 +65,19 @@ export default function RecetasAsignadasForm({ userId }: { userId: string }) {
     }
   };
 
+  const handleCustomSave = async (input: RecetaInput): Promise<Receta> => {
+    const saved = await personalizeReceta(userId, editingReceta!.id, input);
+    // Update local asignadas list with the returned (possibly new) personal copy
+    setAsignadas((prev) =>
+      prev.map((r) => (r.id === editingReceta!.id || r.id === saved.id) ? saved : r)
+    );
+    setEditingReceta(null);
+    return saved;
+  };
+
   const catalogoDisponible = catalogo.filter((r) => {
     if (asignadasIds.has(r.id)) return false;
+    if (assignedBaseIds.has(r.id)) return false;
     if (!search) return true;
     return r.nombre.toLowerCase().includes(search.toLowerCase());
   });
@@ -156,12 +173,26 @@ export default function RecetasAsignadasForm({ userId }: { userId: string }) {
               <div key={r.id} className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2">
                 <span className="text-xl">{r.emoji || "🍽"}</span>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-gray-800 truncate">{r.nombre}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-gray-800 truncate">{r.nombre}</p>
+                    {r.user_id !== null && (
+                      <span className="shrink-0 text-[10px] font-semibold bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full">
+                        Personalizada
+                      </span>
+                    )}
+                  </div>
                   <div className="flex items-center gap-2 text-xs text-gray-400">
                     {r.tipo && <span>{r.tipo}</span>}
                     {r.calorias && <span>🔥 {r.calorias} kcal</span>}
                   </div>
                 </div>
+                <button
+                  onClick={() => setEditingReceta(r)}
+                  className="text-gray-400 hover:text-primary text-sm px-1"
+                  title="Editar receta para este usuario"
+                >
+                  ✏
+                </button>
                 <button onClick={() => removeReceta(r.id)} className="text-gray-400 hover:text-red-500 text-sm">✕</button>
               </div>
             ))}
@@ -183,6 +214,18 @@ export default function RecetasAsignadasForm({ userId }: { userId: string }) {
           {saving ? "Guardando..." : "💾 Guardar recetas"}
         </button>
       </div>
+
+      {editingReceta && (
+        <RecetaModal
+          receta={editingReceta}
+          onClose={() => setEditingReceta(null)}
+          onSave={(saved) => {
+            setAsignadas((prev) => prev.map((r) => (r.id === saved.id ? saved : r)));
+            setEditingReceta(null);
+          }}
+          customSave={handleCustomSave}
+        />
+      )}
     </div>
   );
 }

@@ -417,8 +417,8 @@ function RecetasTab() {
 }
 
 // ─── SUPLEMENTACIÓN ───────────────────────────────────────────────────────────
-import { fetchMisSuplementos, type SuplementoAsignado } from '@/lib/api/suplementacion'
-//import * as Notifications from 'expo-notifications'
+import { fetchMisSuplementos, updateSuplementoHora, type SuplementoAsignado } from '@/lib/api/suplementacion'
+import * as Notifications from 'expo-notifications'
 
 function fmtHora(hora: string | null): string {
   if (!hora) return '—'
@@ -437,6 +437,11 @@ function SuplementacionTab() {
   const [suplementos, setSuplementos] = useState<SuplementoAsignado[]>([])
   const [checked, setChecked] = useState<Set<string>>(new Set())
   const [notificationsEnabled, setNotificationsEnabled] = useState(false)
+
+  // Hora editing state
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editHora, setEditHora] = useState('')
+  const [savingHora, setSavingHora] = useState(false)
 
   const loadData = useCallback((isRefresh = false) => {
     if (!userId) return
@@ -457,7 +462,32 @@ function SuplementacionTab() {
     })
   }
 
-/*  const handleEnableNotifications = async () => {
+  const startEditHora = (item: SuplementoAsignado) => {
+    setEditingId(item.id)
+    setEditHora(item.hora ?? '')
+  }
+
+  const handleSaveHora = async () => {
+    if (!editingId) return
+    const trimmed = editHora.trim()
+    if (!/^\d{1,2}:\d{2}$/.test(trimmed)) {
+      Alert.alert('Formato inválido', 'Ingresa la hora en formato HH:MM (ej. 08:30)')
+      return
+    }
+    setSavingHora(true)
+    try {
+      await updateSuplementoHora(editingId, trimmed)
+      setSuplementos((prev) => prev.map((s) => s.id === editingId ? { ...s, hora: trimmed } : s))
+      setEditingId(null)
+      setNotificationsEnabled(false)
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo guardar la hora.')
+    } finally {
+      setSavingHora(false)
+    }
+  }
+
+  const handleEnableNotifications = async () => {
     const { status: existing } = await Notifications.getPermissionsAsync()
     let finalStatus = existing
     if (existing !== 'granted') {
@@ -539,24 +569,68 @@ function SuplementacionTab() {
         <Text style={s.sectionTitle}>Mis suplementos</Text>
         {suplementos.map((item) => {
           const done = checked.has(item.id)
+          const isEditing = editingId === item.id
           return (
-            <TouchableOpacity key={item.id} style={[s.suppCard, done && s.suppCardDone]} onPress={() => toggleCheck(item.id)} activeOpacity={0.8}>
-              <View style={s.suppIcon}><Text style={{ fontSize: 24 }}>💊</Text></View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontWeight: '600', color: COLORS.text }}>{item.suplementos.nombre}</Text>
-                {item.dosis && <Text style={{ fontSize: 12, color: COLORS.muted }}>{item.dosis}</Text>}
-                {item.momento && <Text style={{ fontSize: 11, color: COLORS.muted }}>⏱ {item.momento}</Text>}
-                {item.suplementos.marca && (
-                  <Text style={{ fontSize: 10, color: COLORS.muted }}>{item.suplementos.marca}{item.suplementos.gramaje ? ` · ${item.suplementos.gramaje}` : ''}</Text>
-                )}
-              </View>
-              <View style={{ alignItems: 'flex-end', gap: 6 }}>
-                <Text style={{ fontSize: 12, color: COLORS.primary, fontWeight: '600' }}>{fmtHora(item.hora)}</Text>
-                <View style={[s.checkCircle, done && s.checkCircleDone]}>
-                  {done && <Ionicons name="checkmark" size={14} color={COLORS.white} />}
+            <View key={item.id}>
+              <TouchableOpacity style={[s.suppCard, done && s.suppCardDone]} onPress={() => toggleCheck(item.id)} activeOpacity={0.8}>
+                <View style={s.suppIcon}><Text style={{ fontSize: 24 }}>💊</Text></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontWeight: '600', color: COLORS.text }}>{item.suplementos.nombre}</Text>
+                  {item.dosis && <Text style={{ fontSize: 12, color: COLORS.muted }}>{item.dosis}</Text>}
+                  {item.momento && <Text style={{ fontSize: 11, color: COLORS.muted }}>⏱ {item.momento}</Text>}
+                  {item.suplementos.marca && (
+                    <Text style={{ fontSize: 10, color: COLORS.muted }}>{item.suplementos.marca}{item.suplementos.gramaje ? ` · ${item.suplementos.gramaje}` : ''}</Text>
+                  )}
                 </View>
-              </View>
-            </TouchableOpacity>
+                <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                  <TouchableOpacity
+                    onPress={() => isEditing ? setEditingId(null) : startEditHora(item)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Text style={{ fontSize: 12, color: COLORS.primary, fontWeight: '600' }}>
+                      {fmtHora(item.hora)} ✏️
+                    </Text>
+                  </TouchableOpacity>
+                  <View style={[s.checkCircle, done && s.checkCircleDone]}>
+                    {done && <Ionicons name="checkmark" size={14} color={COLORS.white} />}
+                  </View>
+                </View>
+              </TouchableOpacity>
+
+              {/* Inline hora editor */}
+              {isEditing && (
+                <View style={s.horaEditor}>
+                  <Text style={{ fontSize: 12, color: COLORS.muted, marginBottom: 6 }}>
+                    Nueva hora (formato 24h, ej. 08:30):
+                  </Text>
+                  <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                    <TextInput
+                      value={editHora}
+                      onChangeText={setEditHora}
+                      placeholder="HH:MM"
+                      placeholderTextColor={COLORS.muted}
+                      keyboardType="numeric"
+                      maxLength={5}
+                      style={s.horaInput}
+                      autoFocus
+                    />
+                    <TouchableOpacity
+                      onPress={handleSaveHora}
+                      disabled={savingHora}
+                      style={s.horaGuardarBtn}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={{ color: COLORS.white, fontWeight: '700', fontSize: 13 }}>
+                        {savingHora ? '...' : 'Guardar'}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => setEditingId(null)} style={s.horaCancelBtn}>
+                      <Ionicons name="close" size={18} color={COLORS.muted} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+            </View>
           )
         })}
 
@@ -740,6 +814,25 @@ const s = StyleSheet.create({
     backgroundColor: COLORS.primary, borderRadius: 10, height: 48, marginTop: 12,
   },
   scheduleBtnText: { color: COLORS.white, fontWeight: '700', fontSize: 15 },
+
+  horaEditor: {
+    backgroundColor: '#F0FAF5', borderRadius: 10, padding: 12,
+    marginTop: 2, marginBottom: 4,
+    borderWidth: 1, borderColor: COLORS.border,
+  },
+  horaInput: {
+    flex: 1, height: 40, borderWidth: 1, borderColor: COLORS.border,
+    borderRadius: 8, paddingHorizontal: 12, fontSize: 16, color: COLORS.text,
+    backgroundColor: COLORS.white,
+  },
+  horaGuardarBtn: {
+    height: 40, paddingHorizontal: 16, borderRadius: 8,
+    backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center',
+  },
+  horaCancelBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: COLORS.cardBg, justifyContent: 'center', alignItems: 'center',
+  },
 })
 
 // Estilos del modal de receta
