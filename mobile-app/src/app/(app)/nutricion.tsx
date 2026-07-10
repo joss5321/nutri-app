@@ -418,7 +418,7 @@ function RecetasTab() {
 
 // ─── SUPLEMENTACIÓN ───────────────────────────────────────────────────────────
 import { fetchMisSuplementos, type SuplementoAsignado } from '@/lib/api/suplementacion'
-import * as Notifications from 'expo-notifications'
+//import * as Notifications from 'expo-notifications'
 
 function fmtHora(hora: string | null): string {
   if (!hora) return '—'
@@ -457,7 +457,7 @@ function SuplementacionTab() {
     })
   }
 
-  const handleEnableNotifications = async () => {
+/*  const handleEnableNotifications = async () => {
     const { status: existing } = await Notifications.getPermissionsAsync()
     let finalStatus = existing
     if (existing !== 'granted') {
@@ -484,7 +484,7 @@ function SuplementacionTab() {
       setNotificationsEnabled(true)
     }
   }
-
+*/
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 48 }}>
@@ -563,7 +563,7 @@ function SuplementacionTab() {
         {/* Botón de notificaciones */}
         <TouchableOpacity
           style={[s.scheduleBtn, notificationsEnabled && { backgroundColor: COLORS.completed }]}
-          onPress={handleEnableNotifications}
+         // onPress={handleEnableNotifications}
           activeOpacity={0.85}
           disabled={notificationsEnabled}
         >

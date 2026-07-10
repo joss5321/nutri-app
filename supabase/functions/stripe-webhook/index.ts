@@ -1,5 +1,6 @@
 import Stripe from "npm:stripe@17"
 import { createClient } from "npm:@supabase/supabase-js@2"
+import { PRICE_ID_TO_PLAN } from "../../../mobile-app/src/constants/planes.ts"
 
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!)
 const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET")!
@@ -8,6 +9,12 @@ const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
 )
+
+const PRICE_ID_TO_PLAN: Record<string, string> = {
+  'price_1TqeAK420EpqkxR07XvpXJCo': 'basico',
+  'price_1TrPcJ420EpqkxR0lOxubTrs': 'pro',
+  'price_1Tqe9r420EpqkxR0KYROnlr4': 'premium',
+}
 
 Deno.serve(async (req) => {
   const signature = req.headers.get("Stripe-Signature")
@@ -47,38 +54,7 @@ Deno.serve(async (req) => {
 
 async function manejarActualizacionSuscripcion(subscription: Stripe.Subscription) {
   const customerId = subscription.customer as string
-
-  const { data: perfil } = await supabase
-    .from("perfiles")
-    .select("id")
-    .eq("stripe_customer_id", customerId)
-    .single()
-
-  if (!perfil) {
-    console.error("No se encontró perfil para customer:", customerId)
-    return
-  }
-
-  const esActiva = subscription.status === "active" || subscription.status === "trialing"
-
-  // Guarda/actualiza el registro de la suscripción
-  await supabase.from("suscripciones").upsert({
-    user_id: perfil.id,
-    stripe_subscription_id: subscription.id,
-    stripe_price_id: subscription.items.data[0].price.id,
-    status: subscription.status,
-    current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
-  }, { onConflict: "stripe_subscription_id" })
-
-  // Actualiza el plan en el perfil
-  await supabase
-    .from("perfiles")
-    .update({ plan_membresia: esActiva ? "premium" : "basico" })
-    .eq("id", perfil.id)
-}
-
-async function manejarCancelacion(subscription: Stripe.Subscription) {
-  const customerId = subscription.customer as string
+  const priceId = subscription.items.data[0].price.id
 
   const { data: perfil } = await supabase
     .from("perfiles")
@@ -88,13 +64,19 @@ async function manejarCancelacion(subscription: Stripe.Subscription) {
 
   if (!perfil) return
 
-  await supabase
-    .from("suscripciones")
-    .update({ status: "canceled" })
-    .eq("stripe_subscription_id", subscription.id)
+  const esActiva = subscription.status === "active" || subscription.status === "trialing"
+  const plan = PRICE_ID_TO_PLAN[priceId] ?? "basico"
+
+  await supabase.from("suscripciones").upsert({
+    user_id: perfil.id,
+    stripe_subscription_id: subscription.id,
+    stripe_price_id: priceId,
+    status: subscription.status,
+    current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+  }, { onConflict: "stripe_subscription_id" })
 
   await supabase
     .from("perfiles")
-    .update({ plan_membresia: "basico" })
+    .update({ plan_membresia: esActiva ? plan : "basico" })
     .eq("id", perfil.id)
 }

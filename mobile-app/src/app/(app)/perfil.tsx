@@ -10,6 +10,9 @@ import { supabase } from '@/lib/supabase'
 import { fetchMiPerfil, updateMiPerfil, type Perfil } from '@/lib/api/perfiles'
 import { fetchUltimaMedida, type Medida } from '@/lib/api/medidas'
 import { fetchMisCitas, updateEstadoCita, type Cita } from '@/lib/api/citas'
+import { useStripe } from '@stripe/stripe-react-native'
+import { crearCheckout } from '@/lib/api/pagos'
+import { STRIPE_PRICE_IDS, type PlanKey } from '@/constants/planes'
 
 const MONTH_SHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 
@@ -37,12 +40,16 @@ const ESTADO_COLORS: Record<string, { bg: string; text: string }> = {
 
 const PLANS = [
   {
-    key: 'basico', icon: '🌱', name: 'Plan Básico', price: '$199 MXN', period: 'al mes',
+    key: 'basico' as const, icon: '🌱', name: 'Plan Básico', price: '$199 MXN', period: 'al mes',
     features: ['Recetas saludables', 'Plan semanal básico', 'Recordatorio de agua', 'Soporte por email'],
   },
   {
-    key: 'pro', icon: '👑', name: 'Plan Pro', price: '$349 MXN', period: 'al mes',
+    key: 'pro' as const, icon: '👑', name: 'Plan Pro', price: '$349 MXN', period: 'al mes',
     features: ['Todo lo del plan Básico', 'Planes personalizados', 'Seguimiento de progreso', 'Soporte prioritario'],
+  },
+  {
+    key: 'premium' as const, icon: '💎', name: 'Plan Premium', price: '$599 MXN', period: 'al mes',
+    features: ['Todo lo del plan Pro', 'Consultas 1:1 con nutriólogo', 'Ajustes ilimitados de plan', 'Soporte 24/7'],
   },
 ]
 
@@ -53,6 +60,42 @@ export default function PerfilScreen() {
 
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+
+  const { initPaymentSheet, presentPaymentSheet } = useStripe()
+  const [payingPlan, setPayingPlan] = useState<string | null>(null)
+
+  const handleElegirPlan = async (planKey: PlanKey) => {
+    if (!userId) return
+    setPayingPlan(planKey)
+    try {
+      const priceId = STRIPE_PRICE_IDS[planKey]
+      const { paymentIntent, ephemeralKey, customerId } = await crearCheckout(priceId, userId)
+
+      const { error: initError } = await initPaymentSheet({
+        merchantDisplayName: 'MyFitTrack',
+        customerId,
+        customerEphemeralKeySecret: ephemeralKey,
+        paymentIntentClientSecret: paymentIntent,
+        allowsDelayedPaymentMethods: false,
+      })
+      if (initError) throw new Error(initError.message)
+
+      const { error: presentError } = await presentPaymentSheet()
+      if (presentError) {
+        if (presentError.code !== 'Canceled') Alert.alert('Pago no completado', presentError.message)
+        return
+      }
+
+      Alert.alert('¡Listo! 🎉', 'Tu pago fue procesado. Puede tardar unos segundos en reflejarse.')
+      setTimeout(() => loadData(true), 4000)
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo procesar el pago.')
+    } finally {
+      setPayingPlan(null)
+    }
+  }
+
+
   const [perfil, setPerfil] = useState<Perfil | null>(null)
   const [medida, setMedida] = useState<Medida | null>(null)
   const [citas, setCitas] = useState<Cita[]>([])
@@ -383,8 +426,18 @@ export default function PerfilScreen() {
                     </View>
                   ))}
                 </View>
-                <TouchableOpacity style={s.planBtn}>
-                  <Text style={s.planBtnText}>Elegir plan</Text>
+                <TouchableOpacity
+                  style={s.planBtn}
+                  onPress={() => handleElegirPlan(plan.key)}
+                  disabled={payingPlan === plan.key || perfil?.plan_membresia === plan.key}
+                >
+                  {payingPlan === plan.key ? (
+                    <ActivityIndicator size="small" color={COLORS.text} />
+                  ) : (
+                    <Text style={s.planBtnText}>
+                      {perfil?.plan_membresia === plan.key ? 'Plan actual' : 'Elegir plan'}
+                    </Text>
+                  )}
                 </TouchableOpacity>
               </View>
             ))}
