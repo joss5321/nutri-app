@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 import {
   ActivityIndicator,
+  Alert,
   Modal,
   RefreshControl,
   ScrollView,
@@ -487,34 +488,36 @@ function SuplementacionTab() {
     }
   }
 
-  const handleEnableNotifications = async () => {
-    const { status: existing } = await Notifications.getPermissionsAsync()
-    let finalStatus = existing
-    if (existing !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync()
-      finalStatus = status
-    }
-    if (finalStatus === 'granted') {
-      await Notifications.cancelAllScheduledNotificationsAsync()
-      for (const sup of suplementos) {
-        if (sup.hora) {
-          const [h, m] = sup.hora.split(':').map(Number)
-          await Notifications.scheduleNotificationAsync({
-            content: {
-              title: `💊 ${sup.suplementos.nombre}`,
-              body: sup.dosis
-                ? `${sup.dosis}${sup.momento ? ` — ${sup.momento}` : ''}`
-                : 'Es hora de tu suplemento',
-              sound: true,
-            },
-            trigger: { type: Notifications.SchedulableTriggerInputTypes.DAILY, hour: h, minute: m },
-          })
-        }
-      }
-      setNotificationsEnabled(true)
-    }
+ const handleEnableNotifications = async () => {
+  const existing = await Notifications.getPermissionsAsync()
+  let granted = (existing as { granted: boolean }).granted
+
+  if (!granted) {
+    const requested = await Notifications.requestPermissionsAsync()
+    granted = (requested as { granted: boolean }).granted
   }
-*/
+
+  if (granted) {
+    await Notifications.cancelAllScheduledNotificationsAsync()
+    for (const sup of suplementos) {
+      if (sup.hora) {
+        const [h, m] = sup.hora.split(':').map(Number)
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: `💊 ${sup.suplementos.nombre}`,
+            body: sup.dosis
+              ? `${sup.dosis}${sup.momento ? ` — ${sup.momento}` : ''}`
+              : 'Es hora de tu suplemento',
+            sound: true,
+          },
+          trigger: { type: Notifications.SchedulableTriggerInputTypes.DAILY, hour: h, minute: m },
+        })
+      }
+    }
+    setNotificationsEnabled(true)
+  }
+}
+
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 48 }}>
