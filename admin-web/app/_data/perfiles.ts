@@ -11,6 +11,7 @@ export type Perfil = {
   telefono: string | null;
   plan_membresia: string;
   rol: string;
+  nutricionista_id: string | null;
   created_at?: string;
 };
 
@@ -24,11 +25,20 @@ export async function fetchAdmins(): Promise<Perfil[]> {
   return data as Perfil[];
 }
 
+/**
+ * Returns only the patients that belong to the currently logged-in nutritionist.
+ * The RLS policy "perfiles: lectura multi-tenant" enforces this at the DB level;
+ * the explicit eq filter is defense-in-depth.
+ */
 export async function fetchPerfiles(): Promise<Perfil[]> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error("No autenticado");
+
   const { data, error } = await supabase
     .from("perfiles")
     .select("*")
     .eq("rol", "usuario")
+    .eq("nutricionista_id", session.user.id)
     .order("created_at", { ascending: false });
   if (error) throw error;
   return data as Perfil[];

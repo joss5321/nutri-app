@@ -14,6 +14,8 @@ function fmt(v: number | null): string {
   return v % 1 === 0 ? String(v) : v.toFixed(1);
 }
 
+const PAGE_SIZE = 50;
+
 export default function AlimentosPage() {
   const [alimentos, setAlimentos] = useState<Alimento[]>([]);
   const [loading, setLoading] = useState(true);
@@ -24,6 +26,7 @@ export default function AlimentosPage() {
   const [editing, setEditing] = useState<Alimento | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   const load = () => {
     setLoading(true);
@@ -40,12 +43,21 @@ export default function AlimentosPage() {
     load();
   }, []);
 
+  // Categorías únicas presentes en los datos cargados, ordenadas alfabéticamente
+  const categoriasDisponibles = [...new Set(
+    alimentos.map((a) => a.categoria).filter((c): c is string => !!c)
+  )].sort((a, b) => a.localeCompare(b, "es"));
+
   const filtered = alimentos.filter((a) => {
     const matchSearch = a.nombre.toLowerCase().includes(search.toLowerCase());
     const matchCat =
       categoriaFilter === "Todas" || a.categoria === categoriaFilter;
     return matchSearch && matchCat;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const paginated = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   const handleSaved = (a: Alimento) => {
     setAlimentos((prev) => {
@@ -92,21 +104,25 @@ export default function AlimentosPage() {
           <input
             placeholder="Buscar alimento..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             className="flex-1 text-sm focus:outline-none text-gray-700"
           />
         </div>
         <select
           value={categoriaFilter}
-          onChange={(e) => setCategoriaFilter(e.target.value)}
+          onChange={(e) => { setCategoriaFilter(e.target.value); setPage(1); }}
           className="h-11 border border-gray-200 rounded-xl px-3 text-sm bg-white shadow-sm focus:outline-none focus:border-primary"
         >
-          <option value="Todas">Todas las categorías</option>
-          {FOOD_GROUPS.map((g) => (
-            <option key={g.grupo} value={g.grupo}>
-              {g.icono} {g.grupo}
-            </option>
-          ))}
+          <option value="Todas">Todas las categorías ({alimentos.length})</option>
+          {categoriasDisponibles.map((cat) => {
+            const grupo = FOOD_GROUPS.find((g) => g.grupo === cat);
+            const count = alimentos.filter((a) => a.categoria === cat).length;
+            return (
+              <option key={cat} value={cat}>
+                {grupo ? `${grupo.icono} ` : ""}{cat} ({count})
+              </option>
+            );
+          })}
         </select>
       </div>
 
@@ -125,6 +141,7 @@ export default function AlimentosPage() {
         <>
           <p className="text-xs text-gray-400 mb-3">
             {filtered.length} alimento{filtered.length !== 1 ? "s" : ""} en el catálogo
+            {totalPages > 1 && ` · Página ${safePage} de ${totalPages}`}
           </p>
 
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
@@ -147,7 +164,7 @@ export default function AlimentosPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((a, i) => {
+                  {paginated.map((a, i) => {
                     const grupo = FOOD_GROUPS.find((g) => g.grupo === a.categoria);
                     return (
                       <tr
@@ -160,9 +177,9 @@ export default function AlimentosPage() {
                           {a.nombre}
                         </td>
                         <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
-                          {grupo ? (
+                          {a.categoria ? (
                             <span className="inline-flex items-center gap-1.5 text-xs bg-primary/8 text-primary px-2 py-0.5 rounded-full font-medium">
-                              {grupo.icono} {a.categoria}
+                              {grupo ? `${grupo.icono} ` : ""}{a.categoria}
                             </span>
                           ) : (
                             <span className="text-gray-400">—</span>
@@ -197,7 +214,7 @@ export default function AlimentosPage() {
                       </tr>
                     );
                   })}
-                  {filtered.length === 0 && (
+                  {paginated.length === 0 && (
                     <tr>
                       <td colSpan={12} className="text-center py-14 text-gray-400">
                         <span className="text-3xl block mb-2">🔍</span>
@@ -209,6 +226,72 @@ export default function AlimentosPage() {
               </table>
             </div>
           </div>
+
+          {/* Paginación */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4">
+              <p className="text-xs text-gray-400">
+                Mostrando {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, filtered.length)} de {filtered.length}
+              </p>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPage(1)}
+                  disabled={safePage === 1}
+                  className="h-8 px-2 rounded-lg border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  «
+                </button>
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={safePage === 1}
+                  className="h-8 px-3 rounded-lg border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  ‹ Anterior
+                </button>
+
+                {/* Números de página */}
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter((n) => n === 1 || n === totalPages || Math.abs(n - safePage) <= 2)
+                  .reduce<(number | "…")[]>((acc, n, idx, arr) => {
+                    if (idx > 0 && n - (arr[idx - 1] as number) > 1) acc.push("…");
+                    acc.push(n);
+                    return acc;
+                  }, [])
+                  .map((n, idx) =>
+                    n === "…" ? (
+                      <span key={`ellipsis-${idx}`} className="h-8 px-2 flex items-center text-gray-400 text-xs">…</span>
+                    ) : (
+                      <button
+                        key={n}
+                        onClick={() => setPage(n as number)}
+                        className={`h-8 w-8 rounded-lg border text-xs font-semibold transition-colors ${
+                          safePage === n
+                            ? "bg-primary border-primary text-white"
+                            : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                        }`}
+                      >
+                        {n}
+                      </button>
+                    )
+                  )}
+
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={safePage === totalPages}
+                  className="h-8 px-3 rounded-lg border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Siguiente ›
+                </button>
+                <button
+                  onClick={() => setPage(totalPages)}
+                  disabled={safePage === totalPages}
+                  className="h-8 px-2 rounded-lg border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  »
+                </button>
+              </div>
+            </div>
+          )}
         </>
       )}
 

@@ -319,6 +319,7 @@ export default function NutricionEquivalentesForm({ userId }: { userId: string }
                     <input
                       type="number" min={0} value={rac}
                       onChange={(e) => updateRaciones(gi, e.target.value)}
+                      onFocus={(e) => e.target.select()}
                       className={`w-14 h-8 text-center border-2 rounded-lg text-xs font-bold focus:outline-none mx-auto block ${
                         mismatch
                           ? "border-red-400 text-red-600 bg-red-50"
@@ -331,6 +332,7 @@ export default function NutricionEquivalentesForm({ userId }: { userId: string }
                       <input
                         type="number" min={0} value={row[key]}
                         onChange={(e) => updateMeal(gi, key, e.target.value)}
+                        onFocus={(e) => e.target.select()}
                         className="w-12 h-8 text-center border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-primary mx-auto block"
                       />
                     </td>

@@ -710,6 +710,89 @@ alter table rutina_ejercicios
   add column if not exists series_detalle jsonb;
 
 -- ============================================================
+-- 27. MIGRACIÓN — Multi-tenant: nutricionista_id en perfiles
+-- ============================================================
+
+-- 1. Agregar columna nutricionista_id a perfiles
+alter table perfiles add column if not exists nutricionista_id uuid references auth.users(id) on delete set null;
+
+-- 2. Índice para búsquedas por nutricionista
+create index if not exists idx_perfiles_nutricionista on perfiles(nutricionista_id);
+
+-- 3. Asignar todos los pacientes existentes al admin temporal (j.rym5312@gmail.com)
+--    Esta asignación es provisional; cada nuevo usuario elige su nutriólogo al registrarse.
+update perfiles p
+set nutricionista_id = au.id
+from auth.users au
+where au.email = 'j.rym5312@gmail.com'
+  and p.rol = 'usuario'
+  and p.nutricionista_id is null;
+
+-- 4. Actualizar trigger: leer nutricionista_id de metadata; si no viene, asignar al admin por defecto
+create or replace function crear_perfil_nuevo_usuario()
+returns trigger language plpgsql security definer as $$
+declare
+  v_nutricionista_id uuid;
+begin
+  v_nutricionista_id := (new.raw_user_meta_data->>'nutricionista_id')::uuid;
+
+  -- Fallback al admin temporal si no se proveyó nutricionista_id
+  if v_nutricionista_id is null then
+    select id into v_nutricionista_id
+    from auth.users
+    where email = 'j.rym5312@gmail.com'
+    limit 1;
+  end if;
+
+  insert into public.perfiles (id, nombre_completo, email, nutricionista_id)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'full_name', new.email),
+    new.email,
+    v_nutricionista_id
+  );
+  return new;
+end;
+$$;
+
+-- 5. Reemplazar políticas de perfiles por reglas multi-tenant
+drop policy if exists "perfiles: gestion para autenticados" on perfiles;
+drop policy if exists "perfiles: escritura para autenticados" on perfiles;
+drop policy if exists "perfiles: lectura para autenticados" on perfiles;
+
+-- 5a. SELECT: propio perfil / perfiles de admin (selección en app móvil) / pacientes del nutricionista
+drop policy if exists "perfiles: lectura multi-tenant" on perfiles;
+create policy "perfiles: lectura multi-tenant" on perfiles
+  for select using (
+    auth.uid() = id
+    or rol = 'admin'
+    or auth.uid() = nutricionista_id
+  );
+
+-- 5b. SELECT público para anónimos: solo perfiles de admin (para lista de nutriólogos en registro)
+drop policy if exists "perfiles: admins publicos" on perfiles;
+create policy "perfiles: admins publicos" on perfiles
+  for select to anon
+  using (rol = 'admin');
+
+-- 5c. INSERT: el trigger usa security definer; externamente solo se inserta el propio perfil
+drop policy if exists "perfiles: insercion propia" on perfiles;
+create policy "perfiles: insercion propia" on perfiles
+  for insert with check (auth.uid() = id);
+
+-- 5d. UPDATE: cada quien su perfil; nutricionista puede actualizar sus pacientes
+drop policy if exists "perfiles: actualizar multi-tenant" on perfiles;
+create policy "perfiles: actualizar multi-tenant" on perfiles
+  for update
+  using (auth.uid() = id or auth.uid() = nutricionista_id)
+  with check (auth.uid() = id or auth.uid() = nutricionista_id);
+
+-- 5e. DELETE: solo propio perfil (la FK cascade de auth.users elimina automáticamente)
+drop policy if exists "perfiles: borrar propio" on perfiles;
+create policy "perfiles: borrar propio" on perfiles
+  for delete using (auth.uid() = id);
+
+-- ============================================================
 -- 26. MIGRACIÓN — recetas: user_id y receta_base_id para personalización
 -- ============================================================
 alter table recetas
@@ -724,3 +807,62 @@ drop policy if exists "recetas: usuario lee las suyas" on recetas;
 create policy "recetas: usuario lee las suyas"
   on recetas for select
   using (auth.uid() = user_id);
+
+-- ============================================================
+-- 28. MIGRACIÓN — rutinas: unidad de peso (kg/lbs) + tipo de esfuerzo (reps/tiempo) por ejercicio
+-- ============================================================
+alter table rutinas
+  add column if not exists unidad_peso text not null default 'kg'
+    check (unidad_peso in ('kg', 'lbs'));
+
+alter table rutina_ejercicios
+  add column if not exists tipo_esfuerzo text not null default 'reps'
+    check (tipo_esfuerzo in ('reps', 'tiempo'));
+
+-- ============================================================
+-- 29. MIGRACIÓN — recetas_guardadas: tiempo de comida por receta asignada
+-- ============================================================
+alter table recetas_guardadas
+  add column if not exists tiempo_comida text not null default 'desayuno'
+  check (tiempo_comida in ('desayuno', 'colacion_1', 'comida', 'colacion_2', 'cena'));
+
+-- ============================================================
+-- 30. MIGRACIÓN — historia_clinica: datos clínicos completos por usuario
+-- ============================================================
+create table if not exists historia_clinica (
+  user_id    uuid primary key references auth.users(id) on delete cascade,
+  datos      jsonb not null default '{}',
+  updated_at timestamptz default now()
+);
+
+alter table historia_clinica enable row level security;
+
+drop policy if exists "historia_clinica: nutricionista CRUD" on historia_clinica;
+create policy "historia_clinica: nutricionista CRUD" on historia_clinica
+  for all
+  using (
+    exists (
+      select 1 from perfiles p
+      where p.id = historia_clinica.user_id
+        and p.nutricionista_id = auth.uid()
+    )
+  )
+  with check (
+    exists (
+      select 1 from perfiles p
+      where p.id = historia_clinica.user_id
+        and p.nutricionista_id = auth.uid()
+    )
+  );
+
+-- ============================================================
+-- 31. MIGRACIÓN — grupo en ingredientes, notas en suplementación
+-- ============================================================
+
+-- Grupo de alimento (SMAE) por ingrediente de receta
+alter table receta_ingredientes
+  add column if not exists grupo text;
+
+-- Notas personalizadas por suplemento asignado
+alter table plan_suplementacion
+  add column if not exists notas text;

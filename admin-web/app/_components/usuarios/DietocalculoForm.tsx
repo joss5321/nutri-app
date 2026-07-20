@@ -299,6 +299,14 @@ export default function DietocalculoForm({ userId }: { userId: string }) {
               <span className="text-red-500 font-medium">Prot <strong>{(proteGr * peso).toFixed(0)}g</strong> ({protePct.toFixed(1)}%)</span>
               <span className="text-purple-500 font-medium">Líp <strong>{(lipidosGr * peso).toFixed(0)}g</strong> ({lipidosPct.toFixed(1)}%)</span>
             </div>
+            {getAjustado != null && totalMacroKcal > getAjustado && (
+              <div className="mt-2 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                <span className="text-amber-500 shrink-0">⚠️</span>
+                <p className="text-xs text-amber-700">
+                  Los macronutrientes suman <strong>{totalMacroKcal.toFixed(0)} kcal</strong> y exceden el GET ajustado de <strong>{getAjustado.toFixed(0)} kcal</strong> en <strong>{(totalMacroKcal - getAjustado).toFixed(0)} kcal</strong>.
+                </p>
+              </div>
+            )}
           </div>
         )}
       </div>

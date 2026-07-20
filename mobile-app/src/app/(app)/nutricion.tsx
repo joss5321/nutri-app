@@ -1,7 +1,8 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Modal,
   RefreshControl,
   ScrollView,
@@ -16,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { AppHeader } from '@/components/ui/AppHeader'
 import { COLORS } from '@/constants/colors'
 import { useAuthStore } from '@/store/auth'
+import { useNewsStore } from '@/store/news'
 import { fetchMisEquivalentes, type Equivalente } from '@/lib/api/nutricion'
 
 // ─── EQUIVALENTES ─────────────────────────────────────────────────────────────
@@ -49,22 +51,42 @@ function EquivalentesTab() {
   const [refreshing, setRefreshing] = useState(false)
   const [groups, setGroups] = useState<FoodGroupRow[]>([])
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null)
+  const expandAnim = useRef(new Animated.Value(0)).current
 
-  const loadData = useCallback((isRefresh = false) => {
-    if (!userId) return
-    if (isRefresh) setRefreshing(true); else setLoading(true)
-    fetchMisEquivalentes(userId)
-      .then((result) => {
-        if (result && result.equivalentes.length > 0) {
-          setGroups(mapEquivalentesToGroups(result.equivalentes))
-          setExpandedIdx(0)
-        } else {
-          setGroups([])
-        }
-      })
-      .catch(() => {})
-      .finally(() => { setLoading(false); setRefreshing(false) })
-  }, [userId])
+  useEffect(() => {
+    if (expandedIdx !== null) {
+      expandAnim.setValue(0)
+      Animated.spring(expandAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        tension: 60,
+        friction: 8,
+      }).start()
+    }
+  }, [expandedIdx])
+
+  const loadData = useCallback(
+    (isRefresh = false) => {
+      if (!userId) return
+      if (isRefresh) setRefreshing(true)
+      else setLoading(true)
+      fetchMisEquivalentes(userId)
+        .then((result) => {
+          if (result && result.equivalentes.length > 0) {
+            setGroups(mapEquivalentesToGroups(result.equivalentes))
+            setExpandedIdx(0)
+          } else {
+            setGroups([])
+          }
+        })
+        .catch(() => {})
+        .finally(() => {
+          setLoading(false)
+          setRefreshing(false)
+        })
+    },
+    [userId],
+  )
 
   useFocusEffect(useCallback(() => { loadData() }, [loadData]))
 
@@ -93,14 +115,24 @@ function EquivalentesTab() {
   }
 
   return (
-    <ScrollView showsVerticalScrollIndicator={false}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true)} colors={[COLORS.primary]} tintColor={COLORS.primary} />}>
+    <ScrollView
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={() => loadData(true)}
+          colors={[COLORS.primary]}
+          tintColor={COLORS.primary}
+        />
+      }
+    >
       <View style={{ padding: 16, gap: 14 }}>
-        {/* Objetivo del mes */}
         <View style={s.objetivoCard}>
           <Text style={s.objetivoTitle}>Objetivo del mes</Text>
           <View style={s.objetivoRow}>
-            <View style={s.objetivoIcon}><Text style={{ fontSize: 22 }}>🎯</Text></View>
+            <View style={s.objetivoIcon}>
+              <Text style={{ fontSize: 22 }}>🎯</Text>
+            </View>
             <View style={{ flex: 1 }}>
               <Text style={{ fontWeight: '700', color: COLORS.text }}>Plan de equivalentes</Text>
               <Text style={{ fontSize: 12, color: COLORS.muted, marginTop: 2 }}>
@@ -110,7 +142,6 @@ function EquivalentesTab() {
           </View>
         </View>
 
-        {/* Grid de grupos con total */}
         <View style={s.grid}>
           {groups.map((g, i) => {
             const total = g.meals.reduce((a, b) => a + b, 0)
@@ -134,48 +165,82 @@ function EquivalentesTab() {
           })}
         </View>
 
-        {/* Tabla expandida del grupo seleccionado */}
-        {expandedIdx !== null && expandedIdx < groups.length && (() => {
-          const g = groups[expandedIdx]
-          const total = g.meals.reduce((a, b) => a + b, 0)
-          return (
-            <View style={s.expandedCard}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Text style={{ fontSize: 24 }}>{g.icon}</Text>
-                  <View>
-                    <Text style={{ fontWeight: '700', color: COLORS.text }}>
-                      {g.label.replace('\n', ' ')}
-                    </Text>
-                    <Text style={{ fontSize: 11, color: COLORS.primary, fontWeight: '600' }}>
-                      Total diario: {total} equivalente{total !== 1 ? 's' : ''}
-                    </Text>
+        {expandedIdx !== null && expandedIdx < groups.length &&
+          (() => {
+            const g = groups[expandedIdx]
+            const total = g.meals.reduce((a, b) => a + b, 0)
+            return (
+              <Animated.View
+                style={{
+                  opacity: expandAnim,
+                  transform: [
+                    {
+                      translateY: expandAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [18, 0],
+                      }),
+                    },
+                  ],
+                }}
+              >
+                <View style={s.expandedCard}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Text style={{ fontSize: 24 }}>{g.icon}</Text>
+                      <View>
+                        <Text style={{ fontWeight: '700', color: COLORS.text }}>
+                          {g.label.replace('\n', ' ')}
+                        </Text>
+                        <Text style={{ fontSize: 11, color: COLORS.primary, fontWeight: '600' }}>
+                          Total diario: {total} equivalente{total !== 1 ? 's' : ''}
+                        </Text>
+                      </View>
+                    </View>
+                    <TouchableOpacity onPress={() => setExpandedIdx(null)}>
+                      <Ionicons name="chevron-up" size={18} color={COLORS.muted} />
+                    </TouchableOpacity>
+                  </View>
+
+                  <View
+                    style={{
+                      marginTop: 12,
+                      borderRadius: 12,
+                      overflow: 'hidden',
+                      borderWidth: 1,
+                      borderColor: COLORS.border,
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', backgroundColor: '#F1F5F9', padding: 8 }}>
+                      {MEAL_LABELS.map((h) => (
+                        <Text
+                          key={h}
+                          style={{ flex: 1, fontSize: 10, fontWeight: '700', textAlign: 'center', color: COLORS.muted }}
+                        >
+                          {h}
+                        </Text>
+                      ))}
+                    </View>
+                    <View style={{ flexDirection: 'row', padding: 10 }}>
+                      {g.meals.map((v, mi) => (
+                        <Text
+                          key={mi}
+                          style={{
+                            flex: 1,
+                            textAlign: 'center',
+                            fontSize: 18,
+                            fontWeight: '800',
+                            color: v === 0 ? COLORS.border : COLORS.text,
+                          }}
+                        >
+                          {v}
+                        </Text>
+                      ))}
+                    </View>
                   </View>
                 </View>
-                <TouchableOpacity onPress={() => setExpandedIdx(null)}>
-                  <Ionicons name="chevron-up" size={18} color={COLORS.muted} />
-                </TouchableOpacity>
-              </View>
-
-              <View style={{ marginTop: 12, borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: COLORS.border }}>
-                <View style={{ flexDirection: 'row', backgroundColor: '#F0FAF5', padding: 8 }}>
-                  {MEAL_LABELS.map((h) => (
-                    <Text key={h} style={{ flex: 1, fontSize: 10, fontWeight: '700', textAlign: 'center', color: COLORS.primary }}>
-                      {h}
-                    </Text>
-                  ))}
-                </View>
-                <View style={{ flexDirection: 'row', padding: 10 }}>
-                  {g.meals.map((v, mi) => (
-                    <Text key={mi} style={{ flex: 1, textAlign: 'center', fontSize: 18, fontWeight: '800', color: v === 0 ? COLORS.border : COLORS.text }}>
-                      {v}
-                    </Text>
-                  ))}
-                </View>
-              </View>
-            </View>
-          )
-        })()}
+              </Animated.View>
+            )
+          })()}
       </View>
     </ScrollView>
   )
@@ -184,11 +249,29 @@ function EquivalentesTab() {
 // ─── RECETAS ──────────────────────────────────────────────────────────────────
 import { fetchMisRecetas, type RecetaCompleta } from '@/lib/api/recetas'
 
+type RecipeIngredient = { text: string; grupo?: string | null }
+
 type Recipe = {
-  id: string; emoji: string; name: string; tags: string
-  time: string; level: string; calories: string; servings: string
-  ingredients: string[]; steps: string[]
+  id: string
+  emoji: string
+  name: string
+  tags: string
+  time: string
+  level: string
+  calories: string
+  servings: string
+  ingredients: RecipeIngredient[]
+  steps: string[]
+  mealTime: string | null
 }
+
+const MEAL_SECTIONS = [
+  { key: 'desayuno', label: 'Desayuno', emoji: '🌅' },
+  { key: 'colacion_1', label: 'Colación 1', emoji: '🍎' },
+  { key: 'comida', label: 'Comida', emoji: '🍽️' },
+  { key: 'colacion_2', label: 'Colación PM', emoji: '🥑' },
+  { key: 'cena', label: 'Cena', emoji: '🌙' },
+]
 
 function mapReceta(r: RecetaCompleta): Recipe {
   const tiempo = r.tiempo_min ?? r.tiempo_prep_min ?? null
@@ -201,8 +284,9 @@ function mapReceta(r: RecetaCompleta): Recipe {
     level: r.nivel ?? '—',
     calories: r.calorias != null ? `${r.calorias} kcal` : '—',
     servings: r.porciones ?? '1 porción',
-    ingredients: r.ingredientes.map((i) => i.descripcion),
+    ingredients: r.ingredientes.map((i) => ({ text: i.descripcion, grupo: i.grupo ?? null })),
     steps: r.pasos.map((p) => p.descripcion),
+    mealTime: r.tiempo_comida ?? null,
   }
 }
 
@@ -214,7 +298,9 @@ function RecipeDetailModal({ recipe, onClose }: { recipe: Recipe; onClose: () =>
           <TouchableOpacity style={rm.closeBtn} onPress={onClose} activeOpacity={0.7}>
             <Ionicons name="chevron-down" size={22} color={COLORS.text} />
           </TouchableOpacity>
-          <Text style={rm.headerTitle} numberOfLines={1}>{recipe.name}</Text>
+          <Text style={rm.headerTitle} numberOfLines={1}>
+            {recipe.name}
+          </Text>
           <View style={{ width: 36 }} />
         </View>
 
@@ -259,7 +345,12 @@ function RecipeDetailModal({ recipe, onClose }: { recipe: Recipe; onClose: () =>
                 {recipe.ingredients.map((ing, i) => (
                   <View key={i} style={rm.ingredientRow}>
                     <View style={rm.bullet} />
-                    <Text style={rm.ingredientText}>{ing}</Text>
+                    <Text style={rm.ingredientText}>{ing.text}</Text>
+                    {ing.grupo ? (
+                      <View style={rm.grupoTag}>
+                        <Text style={rm.grupoTagText}>{ing.grupo}</Text>
+                      </View>
+                    ) : null}
                   </View>
                 ))}
               </View>
@@ -285,6 +376,33 @@ function RecipeDetailModal({ recipe, onClose }: { recipe: Recipe; onClose: () =>
   )
 }
 
+function RecipeCard({ recipe, onPress }: { recipe: Recipe; onPress: () => void }) {
+  return (
+    <TouchableOpacity style={s.recipeListCard} onPress={onPress} activeOpacity={0.8}>
+      <View style={s.recipeListEmoji}>
+        <Text style={{ fontSize: 36 }}>{recipe.emoji}</Text>
+      </View>
+      <View style={{ flex: 1, gap: 4 }}>
+        <Text style={{ fontWeight: '700', fontSize: 15, color: COLORS.text }}>{recipe.name}</Text>
+        {recipe.tags ? (
+          <View style={{ flexDirection: 'row', gap: 4, flexWrap: 'wrap' }}>
+            {recipe.tags.split(' • ').map((t, ti) => (
+              <View key={ti} style={s.recipeTagInline}>
+                <Text style={s.recipeTagInlineText}>{t}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+        <View style={{ flexDirection: 'row', gap: 12 }}>
+          <Text style={{ fontSize: 11, color: COLORS.muted }}>⏱ {recipe.time}</Text>
+          <Text style={{ fontSize: 11, color: COLORS.muted }}>🔥 {recipe.calories}</Text>
+        </View>
+      </View>
+      <Ionicons name="chevron-forward" size={18} color={COLORS.primary} />
+    </TouchableOpacity>
+  )
+}
+
 function RecetasTab() {
   const { user } = useAuthStore()
   const userId = user?.id ?? ''
@@ -293,28 +411,41 @@ function RecetasTab() {
   const [refreshing, setRefreshing] = useState(false)
   const [recipes, setRecipes] = useState<Recipe[]>([])
   const [search, setSearch] = useState('')
-  const [activeFilter, setActiveFilter] = useState('Todos')
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null)
 
-  const loadData = useCallback((isRefresh = false) => {
-    if (!userId) return
-    if (isRefresh) setRefreshing(true); else setLoading(true)
-    fetchMisRecetas(userId)
-      .then((data) => setRecipes(data.map(mapReceta)))
-      .catch(() => {})
-      .finally(() => { setLoading(false); setRefreshing(false) })
-  }, [userId])
-
-  useFocusEffect(useCallback(() => { loadData() }, [loadData])
+  const loadData = useCallback(
+    (isRefresh = false) => {
+      if (!userId) return
+      if (isRefresh) setRefreshing(true)
+      else setLoading(true)
+      fetchMisRecetas(userId)
+        .then((data) => setRecipes(data.map(mapReceta)))
+        .catch(() => {})
+        .finally(() => {
+          setLoading(false)
+          setRefreshing(false)
+        })
+    },
+    [userId],
   )
 
-  const filters = ['Todos', 'Cereales', 'Frutas', 'Verduras', 'Leche', 'Proteína']
+  useFocusEffect(useCallback(() => { loadData() }, [loadData]))
 
-  const filtered = recipes.filter((r) => {
-    const matchFilter = activeFilter === 'Todos' || r.tags.toLowerCase().includes(activeFilter.toLowerCase())
-    const matchSearch = search === '' || r.name.toLowerCase().includes(search.toLowerCase()) || r.tags.toLowerCase().includes(search.toLowerCase())
-    return matchFilter && matchSearch
-  })
+  const filtered = recipes.filter(
+    (r) =>
+      search === '' ||
+      r.name.toLowerCase().includes(search.toLowerCase()) ||
+      r.tags.toLowerCase().includes(search.toLowerCase()),
+  )
+
+  const sections = MEAL_SECTIONS.map((sec) => ({
+    ...sec,
+    recipes: filtered.filter((r) => r.mealTime === sec.key),
+  })).filter((sec) => sec.recipes.length > 0)
+
+  const unclassified = filtered.filter(
+    (r) => !r.mealTime || !MEAL_SECTIONS.find((sec) => sec.key === r.mealTime),
+  )
 
   if (loading) {
     return (
@@ -343,74 +474,72 @@ function RecetasTab() {
       {selectedRecipe && (
         <RecipeDetailModal recipe={selectedRecipe} onClose={() => setSelectedRecipe(null)} />
       )}
-      <ScrollView showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true)} colors={[COLORS.primary]} tintColor={COLORS.primary} />}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => loadData(true)}
+            colors={[COLORS.primary]}
+            tintColor={COLORS.primary}
+          />
+        }
+      >
         <View style={{ padding: 16, gap: 14 }}>
-          {/* Buscador */}
           <View style={s.searchBar}>
             <Ionicons name="search" size={18} color={COLORS.muted} />
             <TextInput
               style={s.searchInput}
-              placeholder="Buscar recetas o ingredientes..."
+              placeholder="Buscar recetas..."
               placeholderTextColor={COLORS.muted}
               value={search}
               onChangeText={setSearch}
             />
           </View>
 
-          {/* Filtros */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              {filters.map(f => (
-                <TouchableOpacity
-                  key={f}
-                  style={[s.filterChip, activeFilter === f && s.filterChipActive]}
-                  onPress={() => setActiveFilter(f)}
-                  activeOpacity={0.75}
-                >
-                  <Text style={[s.filterChipText, activeFilter === f && { color: COLORS.white }]}>{f}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </ScrollView>
-
-          {/* Conteo */}
           <Text style={{ fontSize: 12, color: COLORS.muted }}>
-            {filtered.length} receta{filtered.length !== 1 ? 's' : ''} disponible{filtered.length !== 1 ? 's' : ''}
+            {filtered.length} receta{filtered.length !== 1 ? 's' : ''} disponible
+            {filtered.length !== 1 ? 's' : ''}
           </Text>
 
-          {/* Lista de recetas */}
-          <View style={{ gap: 12 }}>
-            {filtered.map((r, i) => (
-              <TouchableOpacity key={i} style={s.recipeListCard} onPress={() => setSelectedRecipe(r)} activeOpacity={0.8}>
-                <View style={s.recipeListEmoji}>
-                  <Text style={{ fontSize: 36 }}>{r.emoji}</Text>
+          {sections.map((sec) => (
+            <View key={sec.key} style={{ gap: 10 }}>
+              <View style={s.mealSectionHeader}>
+                <Text style={{ fontSize: 18 }}>{sec.emoji}</Text>
+                <Text style={s.mealSectionTitle}>{sec.label}</Text>
+                <View style={s.mealCountBadge}>
+                  <Text style={s.mealCountText}>{sec.recipes.length}</Text>
                 </View>
-                <View style={{ flex: 1, gap: 4 }}>
-                  <Text style={{ fontWeight: '700', fontSize: 15, color: COLORS.text }}>{r.name}</Text>
-                  <View style={{ flexDirection: 'row', gap: 4, flexWrap: 'wrap' }}>
-                    {r.tags.split(' • ').map((t, ti) => (
-                      <View key={ti} style={s.recipeTagInline}>
-                        <Text style={s.recipeTagInlineText}>{t}</Text>
-                      </View>
-                    ))}
-                  </View>
-                  <View style={{ flexDirection: 'row', gap: 12 }}>
-                    <Text style={{ fontSize: 11, color: COLORS.muted }}>⏱ {r.time}</Text>
-                    <Text style={{ fontSize: 11, color: COLORS.muted }}>🔥 {r.calories}</Text>
-                    <Text style={{ fontSize: 11, color: COLORS.muted }}>📊 {r.level}</Text>
-                  </View>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={COLORS.primary} />
-              </TouchableOpacity>
-            ))}
-            {filtered.length === 0 && (
-              <View style={{ alignItems: 'center', paddingVertical: 32 }}>
-                <Text style={{ fontSize: 36 }}>🔍</Text>
-                <Text style={{ color: COLORS.muted, marginTop: 8 }}>Sin resultados para "{search}"</Text>
               </View>
-            )}
-          </View>
+              {sec.recipes.map((r, i) => (
+                <RecipeCard key={i} recipe={r} onPress={() => setSelectedRecipe(r)} />
+              ))}
+            </View>
+          ))}
+
+          {unclassified.length > 0 && (
+            <View style={{ gap: 10 }}>
+              <View style={s.mealSectionHeader}>
+                <Text style={{ fontSize: 18 }}>🍽️</Text>
+                <Text style={s.mealSectionTitle}>Otras recetas</Text>
+                <View style={s.mealCountBadge}>
+                  <Text style={s.mealCountText}>{unclassified.length}</Text>
+                </View>
+              </View>
+              {unclassified.map((r, i) => (
+                <RecipeCard key={i} recipe={r} onPress={() => setSelectedRecipe(r)} />
+              ))}
+            </View>
+          )}
+
+          {filtered.length === 0 && (
+            <View style={{ alignItems: 'center', paddingVertical: 32 }}>
+              <Text style={{ fontSize: 36 }}>🔍</Text>
+              <Text style={{ color: COLORS.muted, marginTop: 8 }}>
+                Sin resultados para "{search}"
+              </Text>
+            </View>
+          )}
         </View>
       </ScrollView>
     </>
@@ -418,7 +547,14 @@ function RecetasTab() {
 }
 
 // ─── SUPLEMENTACIÓN ───────────────────────────────────────────────────────────
-import { fetchMisSuplementos, updateSuplementoHora, type SuplementoAsignado } from '@/lib/api/suplementacion'
+import {
+  fetchMisSuplementos,
+  updateSuplementoHora,
+  updateSuplementoMomento,
+  updateSuplementoNotas,
+  MOMENTOS_CONSUMO,
+  type SuplementoAsignado,
+} from '@/lib/api/suplementacion'
 import * as Notifications from 'expo-notifications'
 
 function fmtHora(hora: string | null): string {
@@ -438,32 +574,49 @@ function SuplementacionTab() {
   const [suplementos, setSuplementos] = useState<SuplementoAsignado[]>([])
   const [checked, setChecked] = useState<Set<string>>(new Set())
   const [notificationsEnabled, setNotificationsEnabled] = useState(false)
+  const [showNotifPicker, setShowNotifPicker] = useState(false)
 
-  // Hora editing state
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editHora, setEditHora] = useState('')
   const [savingHora, setSavingHora] = useState(false)
 
-  const loadData = useCallback((isRefresh = false) => {
-    if (!userId) return
-    if (isRefresh) setRefreshing(true); else setLoading(true)
-    fetchMisSuplementos(userId)
-      .then(setSuplementos)
-      .catch(() => {})
-      .finally(() => { setLoading(false); setRefreshing(false) })
-  }, [userId])
+  const [momentoEditId, setMomentoEditId] = useState<string | null>(null)
+  const [savingMomento, setSavingMomento] = useState(false)
+
+  const [notasEditId, setNotasEditId] = useState<string | null>(null)
+  const [editNotas, setEditNotas] = useState('')
+  const [savingNotas, setSavingNotas] = useState(false)
+
+  const loadData = useCallback(
+    (isRefresh = false) => {
+      if (!userId) return
+      if (isRefresh) setRefreshing(true)
+      else setLoading(true)
+      fetchMisSuplementos(userId)
+        .then(setSuplementos)
+        .catch(() => {})
+        .finally(() => {
+          setLoading(false)
+          setRefreshing(false)
+        })
+    },
+    [userId],
+  )
 
   useFocusEffect(useCallback(() => { loadData() }, [loadData]))
 
   const toggleCheck = (id: string) => {
     setChecked((prev) => {
       const next = new Set(prev)
-      if (next.has(id)) next.delete(id); else next.add(id)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
       return next
     })
   }
 
   const startEditHora = (item: SuplementoAsignado) => {
+    setMomentoEditId(null)
+    setNotasEditId(null)
     setEditingId(item.id)
     setEditHora(item.hora ?? '')
   }
@@ -478,45 +631,86 @@ function SuplementacionTab() {
     setSavingHora(true)
     try {
       await updateSuplementoHora(editingId, trimmed)
-      setSuplementos((prev) => prev.map((s) => s.id === editingId ? { ...s, hora: trimmed } : s))
+      setSuplementos((prev) =>
+        prev.map((s) => (s.id === editingId ? { ...s, hora: trimmed } : s)),
+      )
       setEditingId(null)
       setNotificationsEnabled(false)
-    } catch (err) {
-      Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo guardar la hora.')
+    } catch {
+      Alert.alert('Error', 'No se pudo guardar la hora.')
     } finally {
       setSavingHora(false)
     }
   }
 
- const handleEnableNotifications = async () => {
-  const existing = await Notifications.getPermissionsAsync()
-  let granted = (existing as { granted: boolean }).granted
-
-  if (!granted) {
-    const requested = await Notifications.requestPermissionsAsync()
-    granted = (requested as { granted: boolean }).granted
-  }
-
-  if (granted) {
-    await Notifications.cancelAllScheduledNotificationsAsync()
-    for (const sup of suplementos) {
-      if (sup.hora) {
-        const [h, m] = sup.hora.split(':').map(Number)
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: `💊 ${sup.suplementos.nombre}`,
-            body: sup.dosis
-              ? `${sup.dosis}${sup.momento ? ` — ${sup.momento}` : ''}`
-              : 'Es hora de tu suplemento',
-            sound: true,
-          },
-          trigger: { type: Notifications.SchedulableTriggerInputTypes.DAILY, hour: h, minute: m },
-        })
-      }
+  const handleSaveMomento = async (id: string, momento: string) => {
+    setSavingMomento(true)
+    try {
+      await updateSuplementoMomento(id, momento)
+      setSuplementos((prev) => prev.map((s) => (s.id === id ? { ...s, momento } : s)))
+      setMomentoEditId(null)
+    } catch {
+      Alert.alert('Error', 'No se pudo guardar el momento.')
+    } finally {
+      setSavingMomento(false)
     }
-    setNotificationsEnabled(true)
   }
-}
+
+  const handleSaveNotas = async () => {
+    if (!notasEditId) return
+    setSavingNotas(true)
+    try {
+      const notas = editNotas.trim() || null
+      await updateSuplementoNotas(notasEditId, notas)
+      setSuplementos((prev) =>
+        prev.map((s) => (s.id === notasEditId ? { ...s, notas } : s)),
+      )
+      setNotasEditId(null)
+    } catch {
+      Alert.alert('Error', 'No se pudo guardar la nota.')
+    } finally {
+      setSavingNotas(false)
+    }
+  }
+
+  const handleActivateNotifications = async () => {
+    setShowNotifPicker(false)
+    const existing = await Notifications.getPermissionsAsync()
+    let granted = (existing as { granted: boolean }).granted
+    if (!granted) {
+      const requested = await Notifications.requestPermissionsAsync()
+      granted = (requested as { granted: boolean }).granted
+    }
+    if (granted) {
+      await Notifications.cancelAllScheduledNotificationsAsync()
+      for (const sup of suplementos) {
+        if (sup.hora) {
+          const [h, m] = sup.hora.split(':').map(Number)
+          await Notifications.scheduleNotificationAsync({
+            content: {
+              title: `💊 ${sup.suplementos.nombre}`,
+              body: sup.dosis
+                ? `${sup.dosis}${sup.momento ? ` — ${sup.momento}` : ''}`
+                : 'Es hora de tu suplemento',
+              sound: true,
+            },
+            trigger: {
+              type: Notifications.SchedulableTriggerInputTypes.DAILY,
+              hour: h,
+              minute: m,
+            },
+          })
+        }
+      }
+      setNotificationsEnabled(true)
+    }
+  }
+
+  const handleDeactivateNotifications = async () => {
+    setShowNotifPicker(false)
+    await Notifications.cancelAllScheduledNotificationsAsync()
+    setNotificationsEnabled(false)
+  }
 
   if (loading) {
     return (
@@ -545,10 +739,19 @@ function SuplementacionTab() {
   const pct = total > 0 ? Math.round((completados / total) * 100) : 0
 
   return (
-    <ScrollView showsVerticalScrollIndicator={false}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true)} colors={[COLORS.primary]} tintColor={COLORS.primary} />}>
+    <ScrollView
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={() => loadData(true)}
+          colors={[COLORS.primary]}
+          tintColor={COLORS.primary}
+        />
+      }
+    >
       <View style={{ padding: 16, gap: 14 }}>
-        {/* Progress card */}
+        {/* Progreso */}
         <View style={s.progressCard}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
             <View style={s.circle}>
@@ -560,51 +763,182 @@ function SuplementacionTab() {
               <Text style={{ fontWeight: '800', fontSize: 22, color: COLORS.text }}>
                 {completados} de {total}
               </Text>
-              <Text style={{ fontSize: 12, color: COLORS.muted }}>
-                suplementos tomados
-              </Text>
+              <Text style={{ fontSize: 12, color: COLORS.muted }}>suplementos tomados</Text>
             </View>
             <Text style={{ fontSize: 40 }}>💊</Text>
           </View>
         </View>
 
-        {/* Suplementos asignados */}
+        {/* Recordatorios dropdown */}
+        <View style={s.notifBar}>
+          <Text style={s.notifBarLabel}>Recordatorios</Text>
+          <TouchableOpacity
+            style={s.notifDropdown}
+            onPress={() => setShowNotifPicker((v) => !v)}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name={notificationsEnabled ? 'notifications' : 'notifications-off-outline'}
+              size={15}
+              color={notificationsEnabled ? COLORS.primary : COLORS.muted}
+            />
+            <Text style={[s.notifDropdownText, notificationsEnabled && { color: COLORS.primary }]}>
+              {notificationsEnabled ? 'Activados' : 'Desactivados'}
+            </Text>
+            <Ionicons
+              name={showNotifPicker ? 'chevron-up' : 'chevron-down'}
+              size={13}
+              color={COLORS.muted}
+            />
+          </TouchableOpacity>
+        </View>
+
+        {showNotifPicker && (
+          <View style={s.notifPickerPanel}>
+            <TouchableOpacity style={s.notifPickerOption} onPress={handleActivateNotifications}>
+              <Ionicons name="notifications" size={16} color={COLORS.primary} />
+              <Text style={s.notifPickerOptionText}>Activados</Text>
+              {notificationsEnabled && <Ionicons name="checkmark" size={14} color={COLORS.primary} />}
+            </TouchableOpacity>
+            <View style={{ height: 1, backgroundColor: COLORS.border }} />
+            <TouchableOpacity style={s.notifPickerOption} onPress={handleDeactivateNotifications}>
+              <Ionicons name="notifications-off-outline" size={16} color={COLORS.muted} />
+              <Text style={[s.notifPickerOptionText, { color: COLORS.muted }]}>Desactivados</Text>
+              {!notificationsEnabled && <Ionicons name="checkmark" size={14} color={COLORS.primary} />}
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Lista de suplementos */}
         <Text style={s.sectionTitle}>Mis suplementos</Text>
         {suplementos.map((item) => {
           const done = checked.has(item.id)
-          const isEditing = editingId === item.id
+          const isEditingHora = editingId === item.id
+          const isEditingMomento = momentoEditId === item.id
+          const isEditingNotas = notasEditId === item.id
+
           return (
             <View key={item.id}>
-              <TouchableOpacity style={[s.suppCard, done && s.suppCardDone]} onPress={() => toggleCheck(item.id)} activeOpacity={0.8}>
-                <View style={s.suppIcon}><Text style={{ fontSize: 24 }}>💊</Text></View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontWeight: '600', color: COLORS.text }}>{item.suplementos.nombre}</Text>
-                  {item.dosis && <Text style={{ fontSize: 12, color: COLORS.muted }}>{item.dosis}</Text>}
-                  {item.momento && <Text style={{ fontSize: 11, color: COLORS.muted }}>⏱ {item.momento}</Text>}
-                  {item.suplementos.marca && (
-                    <Text style={{ fontSize: 10, color: COLORS.muted }}>{item.suplementos.marca}{item.suplementos.gramaje ? ` · ${item.suplementos.gramaje}` : ''}</Text>
-                  )}
+              <View style={[s.suppCard, done && s.suppCardDone]}>
+                <View style={[s.suppIcon, done && { backgroundColor: '#DCFCE7' }]}>
+                  <Text style={{ fontSize: 24 }}>💊</Text>
                 </View>
-                <View style={{ alignItems: 'flex-end', gap: 6 }}>
-                  <TouchableOpacity
-                    onPress={() => isEditing ? setEditingId(null) : startEditHora(item)}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <Text style={{ fontSize: 12, color: COLORS.primary, fontWeight: '600' }}>
-                      {fmtHora(item.hora)} ✏️
+
+                <View style={{ flex: 1, gap: 4 }}>
+                  <Text style={{ fontWeight: '700', color: COLORS.text }}>
+                    {item.suplementos.nombre}
+                  </Text>
+                  {item.dosis ? (
+                    <Text style={{ fontSize: 12, color: COLORS.muted }}>{item.dosis}</Text>
+                  ) : null}
+                  {item.suplementos.marca ? (
+                    <Text style={{ fontSize: 10, color: COLORS.muted }}>
+                      {item.suplementos.marca}
+                      {item.suplementos.gramaje ? ` · ${item.suplementos.gramaje}` : ''}
                     </Text>
-                  </TouchableOpacity>
+                  ) : null}
+                  {item.notas ? (
+                    <Text style={{ fontSize: 11, color: '#6366F1', fontStyle: 'italic' }} numberOfLines={1}>
+                      📝 {item.notas}
+                    </Text>
+                  ) : null}
+
+                  {/* Chips */}
+                  <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+                    <TouchableOpacity
+                      style={[s.suppChip, isEditingMomento && s.suppChipActive]}
+                      onPress={() => {
+                        setEditingId(null)
+                        setNotasEditId(null)
+                        setMomentoEditId((prev) => (prev === item.id ? null : item.id))
+                      }}
+                    >
+                      <Ionicons
+                        name="time-outline"
+                        size={11}
+                        color={isEditingMomento ? COLORS.white : COLORS.muted}
+                      />
+                      <Text style={[s.suppChipText, isEditingMomento && { color: COLORS.white }]}>
+                        {item.momento ?? 'Momento'}
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[s.suppChip, isEditingHora && s.suppChipActive]}
+                      onPress={() =>
+                        isEditingHora ? setEditingId(null) : startEditHora(item)
+                      }
+                    >
+                      <Ionicons
+                        name="alarm-outline"
+                        size={11}
+                        color={isEditingHora ? COLORS.white : COLORS.muted}
+                      />
+                      <Text style={[s.suppChipText, isEditingHora && { color: COLORS.white }]}>
+                        {fmtHora(item.hora)}
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[s.suppChip, isEditingNotas && s.suppChipActive]}
+                      onPress={() => {
+                        setEditingId(null)
+                        setMomentoEditId(null)
+                        const opening = notasEditId !== item.id
+                        setNotasEditId(opening ? item.id : null)
+                        if (opening) setEditNotas(item.notas ?? '')
+                      }}
+                    >
+                      <Ionicons
+                        name="document-text-outline"
+                        size={11}
+                        color={isEditingNotas ? COLORS.white : COLORS.muted}
+                      />
+                      <Text style={[s.suppChipText, isEditingNotas && { color: COLORS.white }]}>
+                        {item.notas ? 'Nota' : 'Añadir nota'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  onPress={() => toggleCheck(item.id)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
                   <View style={[s.checkCircle, done && s.checkCircleDone]}>
                     {done && <Ionicons name="checkmark" size={14} color={COLORS.white} />}
                   </View>
-                </View>
-              </TouchableOpacity>
+                </TouchableOpacity>
+              </View>
 
-              {/* Inline hora editor */}
-              {isEditing && (
+              {/* Momento picker */}
+              {isEditingMomento && (
+                <View style={s.suppExpandPanel}>
+                  <Text style={s.suppPanelTitle}>Momento de consumo</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                    {MOMENTOS_CONSUMO.map((m) => (
+                      <TouchableOpacity
+                        key={m}
+                        style={[s.momentoOption, item.momento === m && s.momentoOptionActive]}
+                        onPress={() => handleSaveMomento(item.id, m)}
+                        disabled={savingMomento}
+                      >
+                        <Text
+                          style={[s.momentoOptionText, item.momento === m && { color: COLORS.white }]}
+                        >
+                          {m}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* Hora editor */}
+              {isEditingHora && (
                 <View style={s.horaEditor}>
                   <Text style={{ fontSize: 12, color: COLORS.muted, marginBottom: 6 }}>
-                    Nueva hora (formato 24h, ej. 08:30):
+                    Nueva hora (24h, ej. 08:30):
                   </Text>
                   <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
                     <TextInput
@@ -633,23 +967,41 @@ function SuplementacionTab() {
                   </View>
                 </View>
               )}
+
+              {/* Notas editor */}
+              {isEditingNotas && (
+                <View style={s.suppExpandPanel}>
+                  <Text style={s.suppPanelTitle}>Nota personal</Text>
+                  <TextInput
+                    value={editNotas}
+                    onChangeText={setEditNotas}
+                    placeholder="Ej. Tomar con mucha agua..."
+                    placeholderTextColor={COLORS.muted}
+                    multiline
+                    numberOfLines={3}
+                    style={s.notasInput}
+                    autoFocus
+                  />
+                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                    <TouchableOpacity
+                      onPress={handleSaveNotas}
+                      disabled={savingNotas}
+                      style={s.horaGuardarBtn}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={{ color: COLORS.white, fontWeight: '700', fontSize: 13 }}>
+                        {savingNotas ? '...' : 'Guardar'}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => setNotasEditId(null)} style={s.horaCancelBtn}>
+                      <Ionicons name="close" size={18} color={COLORS.muted} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
             </View>
           )
         })}
-
-        {/* Botón de notificaciones */}
-        <TouchableOpacity
-          style={[s.scheduleBtn, notificationsEnabled && { backgroundColor: COLORS.completed }]}
-         // onPress={handleEnableNotifications}
-          activeOpacity={0.85}
-          disabled={notificationsEnabled}
-        >
-          <Ionicons name={notificationsEnabled ? 'checkmark-circle' : 'notifications'} size={18} color={notificationsEnabled ? COLORS.completedText : COLORS.white} />
-          <Text style={[s.scheduleBtnText, notificationsEnabled && { color: COLORS.completedText }]}>
-            {notificationsEnabled ? 'Notificaciones activadas' : 'Activar notificaciones de suplementos'}
-          </Text>
-        </TouchableOpacity>
-
       </View>
     </ScrollView>
   )
@@ -660,24 +1012,58 @@ type TabKey = 'equivalentes' | 'recetas' | 'suplementacion'
 
 export default function NutricionScreen() {
   const [tab, setTab] = useState<TabKey>('equivalentes')
+  const { user } = useAuthStore()
+  const { hasNewNutricion, markNutricionViewed } = useNewsStore()
+  const [showNewBanner, setShowNewBanner] = useState(false)
+
+  useFocusEffect(
+    useCallback(() => {
+      if (hasNewNutricion && user?.id) {
+        setShowNewBanner(true)
+        markNutricionViewed(user.id)
+      }
+    }, [hasNewNutricion, user?.id]),
+  )
+
   const TABS: { key: TabKey; label: string }[] = [
-    { key: 'equivalentes',   label: 'Equivalentes' },
-    { key: 'recetas',        label: 'Recetas' },
+    { key: 'equivalentes', label: 'Equivalentes' },
+    { key: 'recetas', label: 'Recetas' },
     { key: 'suplementacion', label: 'Suplementación' },
   ]
 
   return (
     <View style={s.container}>
       <AppHeader title={'Plan\nNutricional'} />
+
+      {showNewBanner && (
+        <View style={s.newsBanner}>
+          <Ionicons name="sparkles" size={14} color="#1D4ED8" />
+          <Text style={s.newsBannerText}>Tu nutriólogo actualizó tu plan nutricional</Text>
+          <TouchableOpacity
+            onPress={() => setShowNewBanner(false)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="close" size={14} color="#1D4ED8" />
+          </TouchableOpacity>
+        </View>
+      )}
+
       <View style={s.innerTabs}>
-        {TABS.map(t => (
-          <TouchableOpacity key={t.key} style={[s.innerTab, tab === t.key && s.innerTabActive]} onPress={() => setTab(t.key)}>
-            <Text style={[s.innerTabText, tab === t.key && s.innerTabTextActive]}>{t.label}</Text>
+        {TABS.map((t) => (
+          <TouchableOpacity
+            key={t.key}
+            style={[s.innerTab, tab === t.key && s.innerTabActive]}
+            onPress={() => setTab(t.key)}
+          >
+            <Text style={[s.innerTabText, tab === t.key && s.innerTabTextActive]}>
+              {t.label}
+            </Text>
           </TouchableOpacity>
         ))}
       </View>
-      {tab === 'equivalentes'   && <EquivalentesTab />}
-      {tab === 'recetas'        && <RecetasTab />}
+
+      {tab === 'equivalentes' && <EquivalentesTab />}
+      {tab === 'recetas' && <RecetasTab />}
       {tab === 'suplementacion' && <SuplementacionTab />}
     </View>
   )
@@ -686,201 +1072,430 @@ export default function NutricionScreen() {
 // ─── Estilos ──────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  innerTabs: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: COLORS.white },
-  innerTab: { flex: 1, paddingVertical: 12, alignItems: 'center' },
+
+  newsBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#DBEAFE',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#BFDBFE',
+  },
+  newsBannerText: { flex: 1, fontSize: 13, color: '#1D4ED8', fontWeight: '500' },
+
+  innerTabs: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    backgroundColor: COLORS.white,
+  },
+  innerTab: { flex: 1, paddingVertical: 13, alignItems: 'center' },
   innerTabActive: { borderBottomWidth: 2, borderBottomColor: COLORS.primary },
-  innerTabText: { fontSize: 13, color: COLORS.muted, fontWeight: '500' },
+  innerTabText: { fontSize: 13, color: '#94A3B8', fontWeight: '500' },
   innerTabTextActive: { color: COLORS.primary, fontWeight: '700' },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text, letterSpacing: -0.2 },
 
   // Equivalentes
   objetivoCard: {
-    backgroundColor: COLORS.white, borderRadius: 14, padding: 14,
-    borderWidth: 1, borderColor: COLORS.border, gap: 10,
+    backgroundColor: COLORS.white,
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    gap: 12,
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
   },
   objetivoTitle: { fontSize: 15, fontWeight: '700', color: COLORS.text },
-  objetivoRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
+  objetivoRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
   objetivoIcon: {
-    width: 48, height: 48, borderRadius: 10,
-    backgroundColor: COLORS.cardBg, justifyContent: 'center', alignItems: 'center',
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: COLORS.primaryLight,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   gridItem: {
-    width: '30%', backgroundColor: COLORS.white, borderRadius: 12,
-    borderWidth: 1.5, borderColor: COLORS.border,
-    padding: 10, alignItems: 'center', gap: 4,
+    width: '30%',
+    backgroundColor: COLORS.white,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 12,
+    alignItems: 'center',
+    gap: 6,
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
   },
-  gridItemActive: { borderColor: COLORS.primary, backgroundColor: '#F0FAF5' },
-  gridLabel: { fontSize: 11, textAlign: 'center', color: COLORS.text, lineHeight: 15 },
+  gridItemActive: { borderColor: COLORS.primary, backgroundColor: COLORS.primaryLight },
+  gridLabel: { fontSize: 11, textAlign: 'center', color: COLORS.text, lineHeight: 15, fontWeight: '500' },
   totalBadge: {
-    backgroundColor: COLORS.border, borderRadius: 12,
-    paddingHorizontal: 8, paddingVertical: 2, marginTop: 2,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginTop: 2,
   },
   totalBadgeActive: { backgroundColor: COLORS.primary },
   totalBadgeText: { fontSize: 10, fontWeight: '700', color: COLORS.muted },
   expandedCard: {
-    backgroundColor: COLORS.white, borderRadius: 14, padding: 14,
-    borderWidth: 1.5, borderColor: COLORS.primary,
+    backgroundColor: COLORS.white,
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    shadowColor: COLORS.primary,
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
 
   // Recetas
   searchBar: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: COLORS.white, borderRadius: 30, paddingHorizontal: 16, height: 46,
-    borderWidth: 1, borderColor: COLORS.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: COLORS.white,
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    height: 48,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
   },
   searchInput: { flex: 1, fontSize: 14, color: COLORS.text },
-  filterChip: {
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
-    backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border,
+  mealSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 4,
   },
-  filterChipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  filterChipText: { fontSize: 13, color: COLORS.text },
+  mealSectionTitle: { flex: 1, fontSize: 15, fontWeight: '700', color: COLORS.text, letterSpacing: -0.2 },
+  mealCountBadge: {
+    backgroundColor: COLORS.primaryLight,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  mealCountText: { fontSize: 11, fontWeight: '700', color: COLORS.primary },
   recipeListCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: COLORS.white, borderRadius: 14, padding: 12,
-    borderWidth: 1, borderColor: COLORS.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: COLORS.white,
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
   },
   recipeListEmoji: {
-    width: 64, height: 64, borderRadius: 12,
-    backgroundColor: COLORS.cardBg, justifyContent: 'center', alignItems: 'center',
+    width: 64,
+    height: 64,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   recipeTagInline: {
-    backgroundColor: COLORS.cardBg, borderRadius: 6,
-    paddingHorizontal: 6, paddingVertical: 2,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
   },
-  recipeTagInlineText: { fontSize: 10, color: COLORS.primary },
+  recipeTagInlineText: { fontSize: 10, color: COLORS.muted, fontWeight: '500' },
 
   // Suplementación
   progressCard: {
-    backgroundColor: COLORS.cardBg, borderRadius: 16, padding: 16,
-    borderWidth: 1, borderColor: COLORS.border,
-  },
-  circle: {
-    width: 80, height: 80, borderRadius: 40,
-    borderWidth: 6, borderColor: COLORS.primary,
-    justifyContent: 'center', alignItems: 'center',
-  },
-  circleNum: { fontSize: 18, fontWeight: '800', color: COLORS.primary },
-  circleSub: { fontSize: 9, color: COLORS.muted, textAlign: 'center' },
-  suppCard: {
-    flexDirection: 'row', gap: 12, alignItems: 'flex-start',
-    backgroundColor: COLORS.white, borderRadius: 12, padding: 12,
-    borderWidth: 1, borderColor: COLORS.border,
-  },
-  suppCardDone: { backgroundColor: '#F0FAF5', borderColor: COLORS.border },
-  suppIcon: { width: 44, height: 44, borderRadius: 10, backgroundColor: COLORS.cardBg, justifyContent: 'center', alignItems: 'center' },
-  checkCircle: {
-    width: 26, height: 26, borderRadius: 13,
-    borderWidth: 2, borderColor: COLORS.border,
-    justifyContent: 'center', alignItems: 'center',
-  },
-  checkCircleDone: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  viewPlanBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: COLORS.cardBg, borderRadius: 10, padding: 12,
-  },
-  viewPlanText: { flex: 1, color: COLORS.primary, fontWeight: '600', fontSize: 13 },
-
-  // Recordatorio de agua
-  reminderCard: {
-    backgroundColor: COLORS.white, borderRadius: 14, padding: 16,
-    borderWidth: 1, borderColor: COLORS.border, gap: 0,
-  },
-  reminderHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  reminderIconBox: {
-    width: 44, height: 44, borderRadius: 10,
-    backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center',
-  },
-  reminderBody: { marginTop: 16, gap: 4 },
-  toggle: {
-    width: 48, height: 26, borderRadius: 13,
-    backgroundColor: '#D1D5DB', justifyContent: 'center', padding: 2,
-  },
-  toggleOn: { backgroundColor: COLORS.primary },
-  toggleThumb: {
-    width: 22, height: 22, borderRadius: 11, backgroundColor: COLORS.white,
-    shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 2, shadowOffset: { width: 0, height: 1 },
+    backgroundColor: COLORS.white,
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
-  toggleThumbOn: { alignSelf: 'flex-end' },
-  timePicker: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    backgroundColor: COLORS.cardBg, borderRadius: 14, padding: 12, gap: 8,
+  circle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 5,
+    borderColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  timeColumn: { alignItems: 'center', gap: 4 },
-  timeArrow: { padding: 4 },
-  timeValue: { fontSize: 36, fontWeight: '800', color: COLORS.text, minWidth: 56, textAlign: 'center' },
-  timeSep: { fontSize: 36, fontWeight: '800', color: COLORS.primary, marginTop: -8 },
-  scheduleBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: COLORS.primary, borderRadius: 10, height: 48, marginTop: 12,
+  circleNum: { fontSize: 18, fontWeight: '800', color: COLORS.primary },
+  circleSub: { fontSize: 9, color: COLORS.muted, textAlign: 'center', lineHeight: 13 },
+  notifBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  scheduleBtnText: { color: COLORS.white, fontWeight: '700', fontSize: 15 },
-
+  notifBarLabel: { fontSize: 15, fontWeight: '700', color: COLORS.text },
+  notifDropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: COLORS.white,
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  notifDropdownText: { fontSize: 13, fontWeight: '500', color: COLORS.muted },
+  notifPickerPanel: {
+    backgroundColor: COLORS.white,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    overflow: 'hidden',
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  notifPickerOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  notifPickerOptionText: { flex: 1, fontSize: 14, fontWeight: '500', color: COLORS.text },
+  suppCard: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'flex-start',
+    backgroundColor: COLORS.white,
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
+  suppCardDone: { backgroundColor: COLORS.completed, borderColor: '#BBF7D0' },
+  suppIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  suppChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  suppChipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  suppChipText: { fontSize: 11, fontWeight: '500', color: COLORS.muted },
+  suppExpandPanel: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 14,
+    marginTop: 4,
+    marginBottom: 4,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    gap: 10,
+  },
+  suppPanelTitle: { fontSize: 12, fontWeight: '700', color: COLORS.text },
+  momentoOption: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  momentoOptionActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  momentoOptionText: { fontSize: 13, fontWeight: '500', color: COLORS.text },
+  checkCircle: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 2,
+    borderColor: COLORS.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkCircleDone: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
   horaEditor: {
-    backgroundColor: '#F0FAF5', borderRadius: 10, padding: 12,
-    marginTop: 2, marginBottom: 4,
-    borderWidth: 1, borderColor: COLORS.border,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 14,
+    marginTop: 4,
+    marginBottom: 4,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
   horaInput: {
-    flex: 1, height: 40, borderWidth: 1, borderColor: COLORS.border,
-    borderRadius: 8, paddingHorizontal: 12, fontSize: 16, color: COLORS.text,
+    flex: 1,
+    height: 44,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    fontSize: 16,
+    color: COLORS.text,
     backgroundColor: COLORS.white,
   },
   horaGuardarBtn: {
-    height: 40, paddingHorizontal: 16, borderRadius: 8,
-    backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center',
+    height: 44,
+    paddingHorizontal: 18,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   horaCancelBtn: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: COLORS.cardBg, justifyContent: 'center', alignItems: 'center',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  notasInput: {
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: COLORS.text,
+    backgroundColor: COLORS.white,
+    minHeight: 80,
+    textAlignVertical: 'top',
   },
 })
 
-// Estilos del modal de receta
 const rm = StyleSheet.create({
   header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingTop: 16, paddingBottom: 12,
-    borderBottomWidth: 1, borderBottomColor: COLORS.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
     backgroundColor: COLORS.white,
   },
-  headerTitle: { flex: 1, textAlign: 'center', fontWeight: '700', fontSize: 16, color: COLORS.text },
+  headerTitle: {
+    flex: 1,
+    textAlign: 'center',
+    fontWeight: '700',
+    fontSize: 16,
+    color: COLORS.text,
+    letterSpacing: -0.2,
+  },
   closeBtn: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: COLORS.cardBg, alignItems: 'center', justifyContent: 'center',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   hero: {
-    height: 160, backgroundColor: COLORS.cardBg,
-    justifyContent: 'center', alignItems: 'center',
+    height: 160,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   infoRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   infoChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: COLORS.cardBg, borderRadius: 20,
-    paddingHorizontal: 10, paddingVertical: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
   infoChipText: { fontSize: 12, color: COLORS.text, fontWeight: '500' },
   tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   tag: {
-    backgroundColor: COLORS.completed, borderRadius: 8,
-    paddingHorizontal: 10, paddingVertical: 4,
+    backgroundColor: COLORS.completed,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
   },
   tagText: { fontSize: 12, color: COLORS.completedText, fontWeight: '600' },
   section: {
-    backgroundColor: COLORS.white, borderRadius: 14, padding: 14,
-    borderWidth: 1, borderColor: COLORS.border, gap: 10,
+    backgroundColor: COLORS.white,
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    gap: 10,
   },
-  sectionTitle: { fontSize: 16, fontWeight: '800', color: COLORS.text },
-  ingredientsList: { gap: 8 },
+  sectionTitle: { fontSize: 15, fontWeight: '700', color: COLORS.text, letterSpacing: -0.2 },
+  ingredientsList: { gap: 10 },
   ingredientRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  bullet: { width: 6, height: 6, borderRadius: 3, backgroundColor: COLORS.primary, marginTop: 6 },
+  bullet: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: COLORS.primary,
+    marginTop: 7,
+  },
   ingredientText: { flex: 1, fontSize: 14, color: COLORS.text, lineHeight: 20 },
+  grupoTag: {
+    backgroundColor: COLORS.primaryLight,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    alignSelf: 'flex-start',
+    marginTop: 2,
+  },
+  grupoTagText: { fontSize: 10, color: COLORS.primary, fontWeight: '600' },
   stepRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   stepNum: {
-    width: 28, height: 28, borderRadius: 14,
-    backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', flexShrink: 0,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexShrink: 0,
   },
   stepNumText: { color: COLORS.white, fontWeight: '700', fontSize: 13 },
   stepText: { flex: 1, fontSize: 14, color: COLORS.text, lineHeight: 21 },

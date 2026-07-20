@@ -8,6 +8,7 @@ export type Perfil = {
   altura_cm: number | null
   avatar_url: string | null
   plan_membresia: string
+  nutricionista_id: string | null
   created_at?: string
 }
 

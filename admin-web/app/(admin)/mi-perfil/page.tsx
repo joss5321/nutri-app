@@ -173,11 +173,6 @@ export default function MiPerfilPage() {
               <span className="text-xs px-3 py-0.5 rounded-full font-semibold bg-purple-100 text-purple-700">
                 🛡 Administrador
               </span>
-              <span className={`text-xs px-3 py-0.5 rounded-full font-semibold ${
-                perfil?.plan_membresia === "premium" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"
-              }`}>
-                {perfil?.plan_membresia === "premium" ? "👑 Premium" : "🔒 Básico"}
-              </span>
             </div>
           </div>
         </div>

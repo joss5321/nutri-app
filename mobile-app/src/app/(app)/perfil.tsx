@@ -10,7 +10,7 @@ import { supabase } from '@/lib/supabase'
 import { fetchMiPerfil, updateMiPerfil, type Perfil } from '@/lib/api/perfiles'
 import { fetchUltimaMedida, type Medida } from '@/lib/api/medidas'
 import { fetchMisCitas, updateEstadoCita, type Cita } from '@/lib/api/citas'
-import { useStripe } from '@stripe/stripe-react-native'
+import * as WebBrowser from 'expo-web-browser'
 import { crearCheckout } from '@/lib/api/pagos'
 import { STRIPE_PRICE_IDS, type PlanKey } from '@/constants/planes'
 
@@ -61,7 +61,6 @@ export default function PerfilScreen() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
 
-  const { initPaymentSheet, presentPaymentSheet } = useStripe()
   const [payingPlan, setPayingPlan] = useState<string | null>(null)
 
   const handleElegirPlan = async (planKey: PlanKey) => {
@@ -69,25 +68,17 @@ export default function PerfilScreen() {
     setPayingPlan(planKey)
     try {
       const priceId = STRIPE_PRICE_IDS[planKey]
-      const { paymentIntent, ephemeralKey, customerId } = await crearCheckout(priceId, userId)
+      const { url } = await crearCheckout(priceId, userId)
 
-      const { error: initError } = await initPaymentSheet({
-        merchantDisplayName: 'MyFitTrack',
-        customerId,
-        customerEphemeralKeySecret: ephemeralKey,
-        paymentIntentClientSecret: paymentIntent,
-        allowsDelayedPaymentMethods: false,
+      const result = await WebBrowser.openBrowserAsync(url, {
+        dismissButtonStyle: 'cancel',
+        presentationStyle: WebBrowser.WebBrowserPresentationStyle.FORM_SHEET,
       })
-      if (initError) throw new Error(initError.message)
 
-      const { error: presentError } = await presentPaymentSheet()
-      if (presentError) {
-        if (presentError.code !== 'Canceled') Alert.alert('Pago no completado', presentError.message)
-        return
+      // Cuando el usuario cierra el navegador, refrescar datos
+      if (result.type === 'cancel' || result.type === 'dismiss') {
+        setTimeout(() => loadData(true), 1500)
       }
-
-      Alert.alert('¡Listo! 🎉', 'Tu pago fue procesado. Puede tardar unos segundos en reflejarse.')
-      setTimeout(() => loadData(true), 4000)
     } catch (err) {
       Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo procesar el pago.')
     } finally {
@@ -457,99 +448,132 @@ export default function PerfilScreen() {
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text, letterSpacing: -0.2 },
+
+  // ── Avatar / profile card ──
   profileCard: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 12,
-    backgroundColor: COLORS.white, borderRadius: 14, padding: 14,
+    flexDirection: 'row', alignItems: 'flex-start', gap: 14,
+    backgroundColor: COLORS.white, borderRadius: 20, padding: 16,
     borderWidth: 1, borderColor: COLORS.border,
+    shadowColor: '#0F172A', shadowOpacity: 0.05, shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 }, elevation: 2,
   },
   avatarWrap: { position: 'relative' },
   avatar: {
-    width: 72, height: 72, borderRadius: 36,
-    backgroundColor: COLORS.cardBg, justifyContent: 'center', alignItems: 'center',
+    width: 74, height: 74, borderRadius: 37,
+    backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center',
     borderWidth: 2, borderColor: COLORS.border,
   },
   cameraBtn: {
     position: 'absolute', bottom: 0, right: 0,
-    backgroundColor: COLORS.primary, width: 22, height: 22,
-    borderRadius: 11, justifyContent: 'center', alignItems: 'center',
+    backgroundColor: COLORS.primary, width: 24, height: 24,
+    borderRadius: 12, justifyContent: 'center', alignItems: 'center',
   },
-  userName: { fontSize: 16, fontWeight: '700', color: COLORS.text },
+  userName: { fontSize: 16, fontWeight: '700', color: COLORS.text, letterSpacing: -0.2 },
   userEmail: { fontSize: 12, color: COLORS.muted },
-  dataCard: { backgroundColor: COLORS.white, borderRadius: 14, borderWidth: 1, borderColor: COLORS.border, overflow: 'hidden' },
-  dataRow: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14 },
-  dataRowBorder: { borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
-  dataLabel: { flex: 1, fontSize: 13, color: COLORS.text },
+
+  // ── Datos personales ──
+  dataCard: {
+    backgroundColor: COLORS.white, borderRadius: 18,
+    borderWidth: 1, borderColor: COLORS.border, overflow: 'hidden',
+    shadowColor: '#0F172A', shadowOpacity: 0.04, shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 }, elevation: 1,
+  },
+  dataRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
+  dataRowBorder: { borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  dataLabel: { flex: 1, fontSize: 13, color: COLORS.text, fontWeight: '500' },
   dataValue: { fontSize: 13, color: COLORS.muted },
+
+  // ── Empty / citas ──
   emptyCard: {
-    backgroundColor: COLORS.white, borderRadius: 14, padding: 24,
+    backgroundColor: COLORS.white, borderRadius: 18, padding: 28,
     borderWidth: 1, borderColor: COLORS.border, alignItems: 'center',
+    shadowColor: '#0F172A', shadowOpacity: 0.04, shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 }, elevation: 1,
   },
   citaCard: {
     flexDirection: 'row', gap: 12, alignItems: 'flex-start',
-    backgroundColor: COLORS.white, borderRadius: 14, padding: 12,
+    backgroundColor: COLORS.white, borderRadius: 18, padding: 14,
     borderWidth: 1, borderColor: COLORS.border,
+    shadowColor: '#0F172A', shadowOpacity: 0.04, shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 }, elevation: 1,
   },
   citaDateBadge: {
-    width: 50, backgroundColor: COLORS.primary, borderRadius: 10,
-    paddingVertical: 6, alignItems: 'center',
+    width: 52, backgroundColor: COLORS.primary, borderRadius: 12,
+    paddingVertical: 8, alignItems: 'center',
   },
+
+  // ── Membresía ──
   premiumCard: {
-    flexDirection: 'row', gap: 12, alignItems: 'flex-start',
-    backgroundColor: COLORS.white, borderRadius: 14, padding: 14,
+    flexDirection: 'row', gap: 14, alignItems: 'flex-start',
+    backgroundColor: COLORS.white, borderRadius: 18, padding: 16,
     borderWidth: 1, borderColor: COLORS.border,
+    shadowColor: '#0F172A', shadowOpacity: 0.05, shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 }, elevation: 2,
   },
   premiumIcon: {
-    width: 50, height: 50, borderRadius: 25,
-    backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center',
+    width: 52, height: 52, borderRadius: 16,
+    backgroundColor: COLORS.primaryLight, justifyContent: 'center', alignItems: 'center',
   },
-  premiumName: { fontWeight: '700', fontSize: 16, color: COLORS.text },
+  premiumName: { fontWeight: '700', fontSize: 16, color: COLORS.text, letterSpacing: -0.2 },
   currentBadge: {
-    backgroundColor: COLORS.primary, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2,
-    alignSelf: 'flex-start', marginTop: 4,
+    backgroundColor: COLORS.primary, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 3,
+    alignSelf: 'flex-start', marginTop: 5,
   },
-  currentBadgeText: { color: COLORS.white, fontSize: 11, fontWeight: '600' },
+  currentBadgeText: { color: COLORS.white, fontSize: 11, fontWeight: '700' },
+
+  // ── Plan cards ──
   planCard: {
-    backgroundColor: COLORS.white, borderRadius: 14, padding: 12,
+    backgroundColor: COLORS.white, borderRadius: 18, padding: 14,
     borderWidth: 1, borderColor: COLORS.border,
+    shadowColor: '#0F172A', shadowOpacity: 0.04, shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 }, elevation: 1,
   },
   planName: { fontWeight: '700', fontSize: 13, color: COLORS.text },
-  planPrice: { fontWeight: '800', fontSize: 16, color: COLORS.text, marginTop: 6 },
+  planPrice: { fontWeight: '800', fontSize: 17, color: COLORS.text, marginTop: 6, letterSpacing: -0.5 },
   planBtn: {
-    marginTop: 10, borderWidth: 1, borderColor: COLORS.border,
-    borderRadius: 20, paddingVertical: 8, alignItems: 'center',
+    marginTop: 12, borderWidth: 1.5, borderColor: COLORS.border,
+    borderRadius: 12, paddingVertical: 9, alignItems: 'center',
+    backgroundColor: COLORS.background,
   },
-  planBtnText: { fontSize: 12, fontWeight: '600', color: COLORS.text },
+  planBtnText: { fontSize: 12, fontWeight: '700', color: COLORS.text },
+
+  // ── Sign out ──
   signOutBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     borderWidth: 1, borderColor: '#FECACA', backgroundColor: '#FFF5F5',
-    borderRadius: 12, padding: 14, marginTop: 8,
+    borderRadius: 16, padding: 14, marginTop: 8,
   },
   signOutText: { color: '#EF4444', fontWeight: '600', fontSize: 15 },
+
+  // ── Edit mode ──
   editToggle: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     borderWidth: 1, borderColor: COLORS.border, borderRadius: 20,
-    paddingHorizontal: 10, paddingVertical: 4,
+    paddingHorizontal: 12, paddingVertical: 5, backgroundColor: COLORS.white,
   },
   editRow: { padding: 14, gap: 6 },
-  editLabel: { fontSize: 12, color: COLORS.muted, fontWeight: '500' },
+  editLabel: { fontSize: 11, color: COLORS.muted, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
   editInput: {
-    height: 40, borderWidth: 1, borderColor: COLORS.border,
-    borderRadius: 10, paddingHorizontal: 10, fontSize: 14, color: COLORS.text,
+    height: 44, borderWidth: 1, borderColor: COLORS.border,
+    borderRadius: 12, paddingHorizontal: 12, fontSize: 14, color: COLORS.text,
+    backgroundColor: COLORS.background,
   },
   sexoChip: {
-    paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20,
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
     borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.white,
   },
   sexoChipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  sexoChipText: { fontSize: 12, color: COLORS.text },
+  sexoChipText: { fontSize: 12, fontWeight: '500', color: COLORS.muted },
   sexoChipTextActive: { color: COLORS.white, fontWeight: '700' },
   cancelBtn: {
-    flex: 1, height: 44, borderRadius: 10, borderWidth: 1, borderColor: COLORS.border,
-    justifyContent: 'center', alignItems: 'center',
+    flex: 1, height: 48, borderRadius: 14, borderWidth: 1, borderColor: COLORS.border,
+    justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background,
   },
   saveBtn: {
-    flex: 1, height: 44, borderRadius: 10, backgroundColor: COLORS.primary,
+    flex: 1, height: 48, borderRadius: 14, backgroundColor: COLORS.primary,
     flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6,
+    shadowColor: COLORS.primary, shadowOpacity: 0.25, shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 }, elevation: 2,
   },
 })

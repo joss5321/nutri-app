@@ -18,6 +18,7 @@ export type RutinaEjercicio = {
   descanso_seg: number | null;
   rir: number | null;
   rpe: number | null;
+  tipo_esfuerzo: "reps" | "tiempo";
   series_detalle: SerieDetalle[] | null;
 };
 
@@ -34,6 +35,7 @@ export type Rutina = {
   id: string;
   user_id: string;
   nombre: string;
+  unidad_peso: "kg" | "lbs";
   fecha_inicio: string | null;
   fecha_fin: string | null;
   activa: boolean;
@@ -52,6 +54,7 @@ export type DiaInput = {
 
 export type RutinaInput = {
   nombre: string;
+  unidad_peso: "kg" | "lbs";
   dias: DiaInput[];
 };
 
@@ -111,12 +114,15 @@ export async function saveRutina(userId: string, input: RutinaInput, rutinaId?: 
   let id = rutinaId;
 
   if (id) {
-    const { error } = await supabase.from("rutinas").update({ nombre: input.nombre }).eq("id", id);
+    const { error } = await supabase
+      .from("rutinas")
+      .update({ nombre: input.nombre, unidad_peso: input.unidad_peso })
+      .eq("id", id);
     if (error) throw error;
   } else {
     const { data, error } = await supabase
       .from("rutinas")
-      .insert({ user_id: userId, nombre: input.nombre })
+      .insert({ user_id: userId, nombre: input.nombre, unidad_peso: input.unidad_peso })
       .select()
       .single();
     if (error) throw error;

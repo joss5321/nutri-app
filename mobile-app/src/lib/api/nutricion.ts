@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import { withCache } from '@/lib/cache'
 
 export type Equivalente = {
   id: string
@@ -15,22 +16,24 @@ export type Equivalente = {
 export async function fetchMisEquivalentes(
   userId: string
 ): Promise<{ planId: string; equivalentes: Equivalente[] } | null> {
-  const { data: plan, error: planError } = await supabase
-    .from('planes_nutricionales')
-    .select('id')
-    .eq('user_id', userId)
-    .eq('activo', true)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-  if (planError) throw planError
-  if (!plan) return null
+  return withCache(`equivalentes_${userId}`, async () => {
+    const { data: plan, error: planError } = await supabase
+      .from('planes_nutricionales')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('activo', true)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (planError) throw planError
+    if (!plan) return null
 
-  const { data: equivalentes, error: eqError } = await supabase
-    .from('plan_equivalentes')
-    .select('*')
-    .eq('plan_id', plan.id)
-  if (eqError) throw eqError
+    const { data: equivalentes, error: eqError } = await supabase
+      .from('plan_equivalentes')
+      .select('*')
+      .eq('plan_id', plan.id)
+    if (eqError) throw eqError
 
-  return { planId: plan.id as string, equivalentes: equivalentes as Equivalente[] }
+    return { planId: plan.id as string, equivalentes: equivalentes as Equivalente[] }
+  })
 }

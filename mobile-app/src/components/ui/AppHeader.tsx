@@ -1,32 +1,37 @@
-import { Text, TouchableOpacity, View } from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { Ionicons } from '@expo/vector-icons'
 import { COLORS } from '@/constants/colors'
 
 interface AppHeaderProps {
   title: string
-  onMenuPress?: () => void
-  onBellPress?: () => void
 }
 
-export function AppHeader({ title, onMenuPress, onBellPress }: AppHeaderProps) {
+export function AppHeader({ title }: AppHeaderProps) {
   return (
-    <SafeAreaView edges={['top']} style={{ backgroundColor: COLORS.background }}>
-      <View style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 20,
-        paddingVertical: 12,
-      }}>
-        <TouchableOpacity onPress={onMenuPress} style={{ width: 36, height: 36, justifyContent: 'center' }}>
-          <Ionicons name="menu" size={26} color={COLORS.primary} />
-        </TouchableOpacity>
-        <Text style={{ fontSize: 20, fontWeight: 'bold', color: COLORS.primary }}>{title}</Text>
-        <TouchableOpacity onPress={onBellPress} style={{ width: 36, height: 36, justifyContent: 'center', alignItems: 'flex-end' }}>
-          <Ionicons name="notifications-outline" size={24} color={COLORS.primary} />
-        </TouchableOpacity>
+    <SafeAreaView edges={['top']} style={styles.safeArea}>
+      <View style={styles.container}>
+        <Text style={styles.title}>{title}</Text>
       </View>
     </SafeAreaView>
   )
 }
+
+const styles = StyleSheet.create({
+  safeArea: {
+    backgroundColor: COLORS.white,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  container: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  title: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: COLORS.text,
+    letterSpacing: -0.3,
+    textAlign: 'center',
+  },
+})

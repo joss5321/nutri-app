@@ -20,6 +20,8 @@ type Assigned = {
   seriesRows: SerieRow[];
   rir: string;
   rpe: string;
+  descanso: string;
+  tipoEsfuerzo: "reps" | "tiempo";
 };
 
 const DEFAULT_SERIES = 3;
@@ -44,6 +46,7 @@ export default function RutinaBuilderModal({
   const [grupo, setGrupo] = useState("Todos");
   const [dragOver, setDragOver] = useState(false);
 
+  const [pesoUnidad, setPesoUnidad] = useState<"kg" | "lbs">("kg");
   const [rutinaId, setRutinaId] = useState<string | null>(null);
   const [nombre, setNombre] = useState(`Rutina de ${patient.name}`);
   const [loadingRutina, setLoadingRutina] = useState(true);
@@ -66,6 +69,7 @@ export default function RutinaBuilderModal({
         if (!rutina) return;
         setRutinaId(rutina.id);
         setNombre(rutina.nombre);
+        setPesoUnidad(rutina.unidad_peso ?? "kg");
         const next = buildInitialAssigned();
         for (const dia of rutina.rutina_dias) {
           const dayName = DAYS[dia.numero_dia - 1];
@@ -91,6 +95,8 @@ export default function RutinaBuilderModal({
               seriesRows,
               rir: ej.rir != null ? String(ej.rir) : "",
               rpe: ej.rpe != null ? String(ej.rpe) : "",
+              descanso: ej.descanso_seg != null ? String(ej.descanso_seg) : "",
+              tipoEsfuerzo: ej.tipo_esfuerzo ?? "reps",
             };
           });
         }
@@ -128,6 +134,8 @@ export default function RutinaBuilderModal({
           seriesRows: makeRows(DEFAULT_SERIES),
           rir: "",
           rpe: "",
+          descanso: "",
+          tipoEsfuerzo: "reps",
         },
       ],
     }));
@@ -166,11 +174,22 @@ export default function RutinaBuilderModal({
     }));
   };
 
-  const updateExerciseField = (uid: string, field: "rir" | "rpe", value: string) => {
+  const updateExerciseField = (uid: string, field: "rir" | "rpe" | "descanso", value: string) => {
     const sanitized = value.replace(/^-/, "");
     setAssigned((prev) => ({
       ...prev,
       [activeDay]: prev[activeDay].map((a) => (a.uid === uid ? { ...a, [field]: sanitized } : a)),
+    }));
+  };
+
+  const toggleTipoEsfuerzo = (uid: string) => {
+    setAssigned((prev) => ({
+      ...prev,
+      [activeDay]: prev[activeDay].map((a) =>
+        a.uid === uid
+          ? { ...a, tipoEsfuerzo: a.tipoEsfuerzo === "reps" ? "tiempo" : "reps" }
+          : a
+      ),
     }));
   };
 
@@ -184,7 +203,8 @@ export default function RutinaBuilderModal({
       (a) => !a.series.trim() || a.seriesRows.some((r) => !r.reps.trim())
     );
     if (invalid) {
-      setFeedback({ type: "error", text: `Completa Reps de todas las series (revisa ${invalid.day}).` });
+      const label = invalid.tipoEsfuerzo === "tiempo" ? "Tiempo" : "Reps";
+      setFeedback({ type: "error", text: `Completa ${label} de todas las series (revisa ${invalid.day}).` });
       return;
     }
     const negative = allExercises.find(
@@ -200,6 +220,7 @@ export default function RutinaBuilderModal({
     try {
       const input: RutinaInput = {
         nombre: nombre.trim() || `Rutina de ${patient.name}`,
+        unidad_peso: pesoUnidad,
         dias: DAYS.map((d, i) => ({
           numero_dia: i + 1,
           nombre_dia: d,
@@ -210,9 +231,10 @@ export default function RutinaBuilderModal({
             series: a.series.trim() ? Number(a.series) : null,
             repeticiones: a.seriesRows.map((r) => r.reps || "—").join(","),
             peso_sugerido_kg: a.seriesRows[0]?.peso.trim() ? Number(a.seriesRows[0].peso) : null,
-            descanso_seg: null,
+            descanso_seg: a.descanso.trim() ? Number(a.descanso) : null,
             rir: a.rir.trim() ? Number(a.rir) : null,
             rpe: a.rpe.trim() ? Number(a.rpe) : null,
+            tipo_esfuerzo: a.tipoEsfuerzo,
             series_detalle: a.seriesRows.map((r) => ({
               reps: r.reps || null,
               peso: r.peso.trim() ? Number(r.peso) : null,
@@ -329,9 +351,28 @@ export default function RutinaBuilderModal({
 
             {/* ── Rutina por día ── */}
             <div className="col-span-2 flex flex-col gap-3">
-              <p className="text-sm font-bold text-gray-800">
-                Rutina semanal · {totalAsignados} ejercicio{totalAsignados !== 1 ? "s" : ""} asignados
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-bold text-gray-800">
+                  Rutina semanal · {totalAsignados} ejercicio{totalAsignados !== 1 ? "s" : ""} asignados
+                </p>
+                {/* Toggle kg / lbs */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-gray-400">Peso:</span>
+                  <div className="flex items-center bg-gray-100 rounded-xl p-0.5">
+                    {(["kg", "lbs"] as const).map((u) => (
+                      <button
+                        key={u}
+                        onClick={() => setPesoUnidad(u)}
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                          pesoUnidad === u ? "bg-white text-gray-900 shadow-sm" : "text-gray-400 hover:text-gray-600"
+                        }`}
+                      >
+                        {u}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
 
               {/* Tabs de días */}
               <div className="flex gap-1 overflow-x-auto pb-1">
@@ -426,6 +467,19 @@ export default function RutinaBuilderModal({
                               className="w-12 h-7 text-center border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-primary text-gray-500"
                             />
                           </div>
+                          {/* Descanso */}
+                          <div className="flex flex-col items-center">
+                            <span className="text-[10px] text-gray-400 mb-0.5">Desc. (s)</span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="5"
+                              value={a.descanso}
+                              onChange={(e) => updateExerciseField(a.uid, "descanso", e.target.value)}
+                              placeholder="—"
+                              className="w-14 h-7 text-center border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-orange-400 text-gray-500"
+                            />
+                          </div>
                           <button
                             onClick={() => removeExercise(a.uid)}
                             className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
@@ -438,19 +492,38 @@ export default function RutinaBuilderModal({
                       {/* Series rows */}
                       <div className="divide-y divide-gray-50">
                         {/* Column labels */}
-                        <div className="grid grid-cols-[32px_1fr_1fr] gap-2 px-3 py-1 bg-gray-50/40">
+                        <div className="grid grid-cols-[32px_1fr_1fr] gap-2 px-3 py-1.5 bg-gray-50/40 items-center">
                           <span />
-                          <span className="text-[10px] text-gray-400 text-center font-medium">Reps</span>
-                          <span className="text-[10px] text-gray-400 text-center font-medium">Peso (kg)</span>
+                          {/* Toggle Reps / Tiempo */}
+                          <button
+                            onClick={() => toggleTipoEsfuerzo(a.uid)}
+                            className={`text-[10px] px-2 py-0.5 rounded-full font-semibold transition-colors mx-auto ${
+                              a.tipoEsfuerzo === "reps"
+                                ? "bg-primary/10 text-primary"
+                                : "bg-orange-100 text-orange-600"
+                            }`}
+                            title="Clic para cambiar entre Reps y Tiempo"
+                          >
+                            {a.tipoEsfuerzo === "reps" ? "Reps" : "Tiempo (seg)"}
+                          </button>
+                          <span className="text-[10px] text-gray-400 text-center font-medium">
+                            Peso ({pesoUnidad})
+                          </span>
                         </div>
                         {a.seriesRows.map((row, si) => (
                           <div key={si} className="grid grid-cols-[32px_1fr_1fr] gap-2 items-center px-3 py-2">
                             <span className="text-xs font-bold text-gray-400">S{si + 1}</span>
                             <input
+                              type={a.tipoEsfuerzo === "tiempo" ? "number" : "text"}
+                              min={a.tipoEsfuerzo === "tiempo" ? "0" : undefined}
                               value={row.reps}
                               onChange={(e) => updateSerieRow(a.uid, si, "reps", e.target.value)}
-                              placeholder="—"
-                              className="h-8 text-center border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary w-full"
+                              placeholder={a.tipoEsfuerzo === "tiempo" ? "seg" : "—"}
+                              className={`h-8 text-center border rounded-lg text-sm focus:outline-none w-full ${
+                                a.tipoEsfuerzo === "tiempo"
+                                  ? "border-orange-200 focus:border-orange-400"
+                                  : "border-gray-200 focus:border-primary"
+                              }`}
                             />
                             <input
                               type="number"

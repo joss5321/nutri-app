@@ -1,9 +1,7 @@
 import { supabase } from '@/lib/supabase'
 
 export type CheckoutResponse = {
-  paymentIntent: string
-  ephemeralKey: string
-  customerId: string
+  url: string
 }
 
 export async function crearCheckout(priceId: string, userId: string): Promise<CheckoutResponse> {

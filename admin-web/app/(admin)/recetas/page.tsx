@@ -324,6 +324,30 @@ export default function RecetasPage() {
                         {r.categoria_nutricional}
                       </span>
                     )}
+
+                    {/* Botones de acción */}
+                    <div className="flex items-center gap-2 mt-3" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={() => setEditing(r)}
+                        className="flex-1 flex items-center justify-center gap-1 h-9 rounded-xl border border-gray-200 text-gray-600 text-xs font-semibold hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors"
+                      >
+                        ✏ Editar
+                      </button>
+                      <button
+                        onClick={() => handleDuplicate(r)}
+                        disabled={duplicatingId === r.id}
+                        className="h-9 px-3 rounded-xl border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50"
+                      >
+                        {duplicatingId === r.id ? "..." : "📋"}
+                      </button>
+                      <button
+                        onClick={() => setConfirmDeleteId(r.id)}
+                        disabled={deletingId === r.id}
+                        className="h-9 px-3 rounded-xl border border-gray-200 text-red-500 text-xs font-semibold hover:border-red-300 hover:bg-red-50 transition-colors disabled:opacity-50"
+                      >
+                        {deletingId === r.id ? "..." : "🗑"}
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}

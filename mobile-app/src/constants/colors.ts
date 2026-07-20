@@ -1,17 +1,33 @@
 export const COLORS = {
-  primary: '#62BD9B',
-  primaryDark: '#1A6B45',
-  background: '#EAF8F0',
-  white: '#FFFFFF',
-  inputBg: '#E8E8EF',
-  text: '#111827',
-  muted: '#6B7280',
-  border: '#C5E8D8',
-  tabBar: '#1A6845',
-  error: '#EF4444',
-  cardBg: '#F5FBF8',
-  completed: '#D1FAE5',
-  completedText: '#065F46',
-  pending: '#FEF3C7',
-  pendingText: '#92400E',
-}
+  // Brand
+  primary:     '#4CAF8D',
+  primaryDark: '#2F8F73',
+  primaryLight:'#E8F7F2',
+
+  // Backgrounds
+  background:  '#F8FAFC',
+  white:       '#FFFFFF',
+  cardBg:      '#F8FAFC',
+  inputBg:     '#F1F5F9',
+
+  // Text
+  text:        '#111827',
+  muted:       '#6B7280',
+
+  // Border
+  border:      '#E5E7EB',
+
+  // Tab bar
+  tabBar:      '#FFFFFF',
+
+  // Semantic
+  error:       '#EF4444',
+
+  // Status — completed (green)
+  completed:     '#F0FDF4',
+  completedText: '#15803D',
+
+  // Status — pending (amber)
+  pending:     '#FFFBEB',
+  pendingText: '#B45309',
+} as const

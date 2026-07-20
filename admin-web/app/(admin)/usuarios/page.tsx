@@ -21,7 +21,6 @@ function CrearUsuarioModal({ onClose, onCreated }: { onClose: () => void; onCrea
   const [fechaNac, setFechaNac] = useState("");
   const [sexo, setSexo] = useState("femenino");
   const [telefono, setTelefono] = useState("");
-  const [password] = useState("Temporal123!");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,36 +32,20 @@ function CrearUsuarioModal({ onClose, onCreated }: { onClose: () => void; onCrea
     setSaving(true);
     setError(null);
     try {
-      const { data: { session: adminSession } } = await supabase.auth.getSession();
-
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-        email: correo.trim().toLowerCase(),
-        password,
-        options: { data: { full_name: nombre.trim() } },
-      });
-      if (signUpError) throw signUpError;
-
-      if (adminSession) {
-        await supabase.auth.setSession({
-          access_token: adminSession.access_token,
-          refresh_token: adminSession.refresh_token,
-        });
-      }
-
-      if (signUpData.user) {
-        await supabase.from("perfiles").update({
-          nombre_completo: nombre.trim(),
+      const { error: fnError } = await supabase.functions.invoke("invitar-usuario", {
+        body: {
           email: correo.trim().toLowerCase(),
-          sexo,
+          nombre_completo: nombre.trim(),
           fecha_nacimiento: fechaNac || null,
+          sexo,
           telefono: telefono.trim() || null,
-        }).eq("id", signUpData.user.id);
-      }
-
+        },
+      });
+      if (fnError) throw fnError;
       onCreated();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo crear el usuario.");
+      setError(err instanceof Error ? err.message : "No se pudo enviar la invitación.");
     } finally {
       setSaving(false);
     }
@@ -107,11 +90,11 @@ function CrearUsuarioModal({ onClose, onCreated }: { onClose: () => void; onCrea
             <input value={telefono} onChange={(e) => setTelefono(e.target.value)} placeholder="Ej. 55 1234 5678"
               className="w-full h-10 border border-gray-200 rounded-xl px-3 text-sm focus:outline-none focus:border-primary" />
           </div>
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
-            <p className="text-xs text-amber-700">
-              <span className="font-semibold">Contraseña temporal:</span> {password}
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+            <p className="text-xs text-blue-700 font-semibold mb-0.5">✉ Se enviará una invitación por correo</p>
+            <p className="text-xs text-blue-600">
+              El usuario recibirá un correo para activar su cuenta y establecer su contraseña.
             </p>
-            <p className="text-xs text-amber-600 mt-1">El usuario deberá cambiarla al iniciar sesión por primera vez.</p>
           </div>
 
           {error && <p className="text-sm text-red-600">{error}</p>}
@@ -120,7 +103,7 @@ function CrearUsuarioModal({ onClose, onCreated }: { onClose: () => void; onCrea
           <button onClick={onClose} className="px-4 h-10 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50">Cancelar</button>
           <button onClick={handleCreate} disabled={saving}
             className="px-5 h-10 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-dark disabled:opacity-50">
-            {saving ? "Creando..." : "✓ Crear usuario"}
+            {saving ? "Enviando invitación..." : "✉ Invitar usuario"}
           </button>
         </div>
       </div>

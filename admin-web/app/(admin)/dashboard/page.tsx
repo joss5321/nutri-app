@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { fetchTodasCitasPendientes, type CitaPendiente } from "@/app/_data/citas";
 
 type Stats = {
   totalUsuarios: number;
@@ -18,6 +19,111 @@ type RecentUser = {
   created_at: string;
 };
 
+function CitasPendientesModal({ onClose }: { onClose: () => void }) {
+  const [citas, setCitas] = useState<CitaPendiente[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchTodasCitasPendientes()
+      .then(setCitas)
+      .catch((err) => setError(err instanceof Error ? err.message : "No se pudieron cargar las citas."))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const TIPO_LABELS: Record<string, string> = {
+    consulta:   "📋 Consulta",
+    seguimiento: "📊 Seguimiento",
+    control:    "⚖️ Control",
+    valoracion: "📝 Valoración",
+  };
+
+  const MOD_LABELS: Record<string, string> = {
+    presencial: "🏥 Presencial",
+    videollamada: "💻 Videollamada",
+  };
+
+  function formatFecha(f: string) {
+    const [y, m, d] = f.split("-").map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString("es-MX", { weekday: "short", day: "numeric", month: "short" });
+  }
+
+  function formatHora(h: string) {
+    const [hh, mm] = h.split(":");
+    const hour = Number(hh);
+    return `${hour % 12 || 12}:${mm} ${hour < 12 ? "AM" : "PM"}`;
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+          <div>
+            <h2 className="font-bold text-gray-900 text-lg">Citas pendientes próximas</h2>
+            {!loading && (
+              <p className="text-xs text-gray-400 mt-0.5">
+                {citas.length} cita{citas.length !== 1 ? "s" : ""} por confirmar
+              </p>
+            )}
+          </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 text-xl"
+          >
+            ×
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="overflow-y-auto flex-1">
+          {loading ? (
+            <p className="text-sm text-gray-400 text-center py-12">Cargando citas...</p>
+          ) : error ? (
+            <p className="text-sm text-red-500 text-center py-12">{error}</p>
+          ) : citas.length === 0 ? (
+            <div className="text-center py-14">
+              <span className="text-4xl block mb-2">🎉</span>
+              <p className="text-gray-500 text-sm">No hay citas pendientes próximas.</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-50">
+              {citas.map((c) => {
+                const nombre = c.perfiles?.nombre_completo || c.perfiles?.email || "Usuario";
+                const initials = nombre.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
+                return (
+                  <div key={c.id} className="flex items-center gap-4 px-6 py-4 hover:bg-gray-50/50">
+                    {/* Avatar */}
+                    <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 text-sm font-bold shrink-0">
+                      {initials}
+                    </div>
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 truncate">{nombre}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {TIPO_LABELS[c.tipo] ?? c.tipo}
+                        {c.modalidad ? ` · ${MOD_LABELS[c.modalidad] ?? c.modalidad}` : ""}
+                      </p>
+                    </div>
+                    {/* Fecha y hora */}
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-semibold text-gray-800">{formatFecha(c.fecha)}</p>
+                      <p className="text-xs text-purple-600 font-medium mt-0.5">{formatHora(c.hora)}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<Stats>({
@@ -25,6 +131,7 @@ export default function DashboardPage() {
     totalRutinas: 0, totalRecetas: 0, totalCitas: 0,
   });
   const [recentUsers, setRecentUsers] = useState<RecentUser[]>([]);
+  const [showCitasModal, setShowCitasModal] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -42,7 +149,8 @@ export default function DashboardPage() {
         supabase.from("perfiles").select("*", { count: "exact", head: true }).eq("plan_membresia", "basico").eq("rol", "usuario"),
         supabase.from("rutinas").select("*", { count: "exact", head: true }).eq("activa", true),
         supabase.from("recetas").select("*", { count: "exact", head: true }),
-        supabase.from("citas").select("*", { count: "exact", head: true }).eq("estado", "pendiente"),
+        supabase.from("citas").select("*", { count: "exact", head: true }).eq("estado", "pendiente")
+          .gte("fecha", new Date().toISOString().split("T")[0]),
         supabase.from("perfiles").select("id, nombre_completo, plan_membresia, created_at")
           .eq("rol", "usuario").order("created_at", { ascending: false }).limit(5),
       ]);
@@ -65,10 +173,10 @@ export default function DashboardPage() {
   const pctBasico = Math.round((stats.totalBasico / total) * 100);
 
   const kpis = [
-    { label: "Usuarios registrados", value: String(stats.totalUsuarios), icon: "👥", sub: `${stats.totalPremium} premium, ${stats.totalBasico} básico`, color: "bg-blue-50 text-blue-600" },
-    { label: "Rutinas activas",      value: String(stats.totalRutinas),  icon: "🏋️", sub: "Asignadas a usuarios",     color: "bg-green-50 text-green-600" },
-    { label: "Recetas en catálogo",  value: String(stats.totalRecetas),  icon: "🥗", sub: "Disponibles para asignar", color: "bg-orange-50 text-orange-600" },
-    { label: "Citas pendientes",     value: String(stats.totalCitas),    icon: "📅", sub: "Por confirmar",             color: "bg-purple-50 text-purple-600" },
+    { label: "Usuarios registrados", value: String(stats.totalUsuarios), icon: "👥", sub: `${stats.totalPremium} premium, ${stats.totalBasico} básico`, color: "bg-blue-50 text-blue-600",   clickable: false },
+    { label: "Rutinas activas",      value: String(stats.totalRutinas),  icon: "🏋️", sub: "Asignadas a usuarios",     color: "bg-green-50 text-green-600",  clickable: false },
+    { label: "Recetas en catálogo",  value: String(stats.totalRecetas),  icon: "🥗", sub: "Disponibles para asignar", color: "bg-orange-50 text-orange-600", clickable: false },
+    { label: "Citas pendientes",     value: String(stats.totalCitas),    icon: "📅", sub: "Haz clic para ver todas",  color: "bg-purple-50 text-purple-600", clickable: true  },
   ];
 
   function timeAgo(dateStr: string) {
@@ -100,18 +208,31 @@ export default function DashboardPage() {
 
       {/* KPI cards */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-5 mb-8">
-        {kpis.map((s) => (
-          <div key={s.label} className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
-            <div className="flex items-start justify-between mb-3">
-              <span className="text-sm text-gray-500 font-medium">{s.label}</span>
-              <span className={`w-9 h-9 rounded-xl flex items-center justify-center text-lg ${s.color}`}>
-                {s.icon}
-              </span>
-            </div>
-            <p className="text-3xl font-extrabold text-gray-900">{s.value}</p>
-            <p className="text-xs text-primary font-medium mt-1">{s.sub}</p>
-          </div>
-        ))}
+        {kpis.map((s) => {
+          const Tag = s.clickable ? "button" : "div";
+          return (
+            <Tag
+              key={s.label}
+              onClick={s.clickable ? () => setShowCitasModal(true) : undefined}
+              className={`bg-white rounded-2xl border border-gray-200 p-5 shadow-sm text-left w-full ${
+                s.clickable
+                  ? "cursor-pointer hover:border-purple-300 hover:shadow-md transition-all group"
+                  : ""
+              }`}
+            >
+              <div className="flex items-start justify-between mb-3">
+                <span className="text-sm text-gray-500 font-medium">{s.label}</span>
+                <span className={`w-9 h-9 rounded-xl flex items-center justify-center text-lg ${s.color}`}>
+                  {s.icon}
+                </span>
+              </div>
+              <p className="text-3xl font-extrabold text-gray-900">{s.value}</p>
+              <p className={`text-xs font-medium mt-1 ${s.clickable ? "text-purple-600 group-hover:underline" : "text-primary"}`}>
+                {s.sub}
+              </p>
+            </Tag>
+          );
+        })}
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
@@ -170,7 +291,6 @@ export default function DashboardPage() {
                 </div>
               </div>
             ))}
-
             <div className="mt-4 p-4 bg-primary/5 rounded-xl border border-primary/20">
               <p className="text-sm font-semibold text-gray-700">Total usuarios</p>
               <p className="text-2xl font-extrabold text-primary mt-1">{stats.totalUsuarios}</p>
@@ -178,6 +298,8 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {showCitasModal && <CitasPendientesModal onClose={() => setShowCitasModal(false)} />}
     </div>
   );
 }

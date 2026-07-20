@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import { withCache } from '@/lib/cache'
 
 export type EjercicioInfo = {
   id: string
@@ -51,23 +52,25 @@ export type RutinaCompleta = {
 const SELECT = '*, rutina_dias(*, rutina_ejercicios(*, ejercicios(id, nombre, emoji, grupo_muscular, grupos_secundarios, descripcion, video_url)))'
 
 export async function fetchMiRutina(userId: string): Promise<RutinaCompleta | null> {
-  const { data, error } = await supabase
-    .from('rutinas')
-    .select(SELECT)
-    .eq('user_id', userId)
-    .eq('activa', true)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-  if (error) throw error
-  if (!data) return null
+  return withCache(`rutina_${userId}`, async () => {
+    const { data, error } = await supabase
+      .from('rutinas')
+      .select(SELECT)
+      .eq('user_id', userId)
+      .eq('activa', true)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (error) throw error
+    if (!data) return null
 
-  const rutina = data as RutinaCompleta
-  rutina.rutina_dias = [...(rutina.rutina_dias ?? [])]
-    .sort((a, b) => a.numero_dia - b.numero_dia)
-    .map((dia) => ({
-      ...dia,
-      rutina_ejercicios: [...(dia.rutina_ejercicios ?? [])].sort((a, b) => a.orden - b.orden),
-    }))
-  return rutina
+    const rutina = data as RutinaCompleta
+    rutina.rutina_dias = [...(rutina.rutina_dias ?? [])]
+      .sort((a, b) => a.numero_dia - b.numero_dia)
+      .map((dia) => ({
+        ...dia,
+        rutina_ejercicios: [...(dia.rutina_ejercicios ?? [])].sort((a, b) => a.orden - b.orden),
+      }))
+    return rutina
+  })
 }

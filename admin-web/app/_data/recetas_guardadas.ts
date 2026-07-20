@@ -1,19 +1,24 @@
 import { supabase } from "@/lib/supabase";
 import { saveRecetaPersonalizada, type Receta, type RecetaInput } from "./recetas";
 
+export type MealKey = "desayuno" | "colacion_1" | "comida" | "colacion_2" | "cena";
+
 type RecetaGuardadaRow = {
   user_id: string;
   receta_id: string;
+  tiempo_comida: MealKey;
   recetas: Receta & {
     receta_ingredientes: Receta["ingredientes"] | null;
     receta_pasos: Receta["pasos"] | null;
   };
 };
 
-export async function fetchRecetasAsignadas(userId: string): Promise<Receta[]> {
+export type RecetaAsignada = Receta & { tiempo_comida: MealKey };
+
+export async function fetchRecetasAsignadas(userId: string): Promise<RecetaAsignada[]> {
   const { data, error } = await supabase
     .from("recetas_guardadas")
-    .select("receta_id, recetas(*, receta_ingredientes(*), receta_pasos(*))")
+    .select("receta_id, tiempo_comida, recetas(*, receta_ingredientes(*), receta_pasos(*))")
     .eq("user_id", userId);
   if (error) throw error;
 
@@ -23,19 +28,27 @@ export async function fetchRecetasAsignadas(userId: string): Promise<Receta[]> {
       ...rest,
       ingredientes: [...(receta_ingredientes ?? [])].sort((a, b) => a.orden - b.orden),
       pasos: [...(receta_pasos ?? [])].sort((a, b) => a.numero - b.numero),
+      tiempo_comida: row.tiempo_comida ?? "desayuno",
     };
   });
 }
 
-export async function saveRecetasAsignadas(userId: string, recetaIds: string[]): Promise<void> {
+export async function saveRecetasAsignadas(
+  userId: string,
+  asignadas: { receta_id: string; tiempo_comida: MealKey }[]
+): Promise<void> {
   const { error: deleteError } = await supabase
     .from("recetas_guardadas")
     .delete()
     .eq("user_id", userId);
   if (deleteError) throw deleteError;
 
-  if (recetaIds.length > 0) {
-    const rows = recetaIds.map((receta_id) => ({ user_id: userId, receta_id }));
+  if (asignadas.length > 0) {
+    const rows = asignadas.map(({ receta_id, tiempo_comida }) => ({
+      user_id: userId,
+      receta_id,
+      tiempo_comida,
+    }));
     const { error } = await supabase.from("recetas_guardadas").insert(rows);
     if (error) throw error;
   }

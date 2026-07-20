@@ -31,12 +31,22 @@ export type Alimento = {
 export type AlimentoInput = Omit<Alimento, "id" | "created_at">;
 
 export async function fetchAlimentos(): Promise<Alimento[]> {
-  const { data, error } = await supabase
-    .from("alimentos")
-    .select("*")
-    .order("nombre", { ascending: true });
-  if (error) throw error;
-  return data as Alimento[];
+  const PAGE = 1000;
+  let all: Alimento[] = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await supabase
+      .from("alimentos")
+      .select("*")
+      .order("nombre", { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    all = [...all, ...(data as Alimento[])];
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
+  return all;
 }
 
 export async function createAlimento(input: AlimentoInput): Promise<Alimento> {

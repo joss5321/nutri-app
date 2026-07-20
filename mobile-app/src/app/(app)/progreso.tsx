@@ -345,8 +345,8 @@ export default function ProgresoScreen() {
                   ))}
                 </View>
                 {(showAllRows ? tableData : tableData.slice(-3)).map((row, i) => (
-                  <View key={i} style={[s.tableRow, i % 2 === 0 && { backgroundColor: '#F0FAF5' }]}>
-                    <Text style={[s.td, { color: COLORS.primary, fontWeight: '700' }]}>{row.fecha}</Text>
+                  <View key={i} style={[s.tableRow, i % 2 === 0 && { backgroundColor: '#F8FAFC' }]}>
+                    <Text style={[s.td, { color: COLORS.primaryDark, fontWeight: '700' }]}>{row.fecha}</Text>
                     <Text style={s.td}>{row.peso}</Text>
                     <Text style={s.td}>{row.altura}</Text>
                     <Text style={s.td}>{row.cintura}</Text>
@@ -454,76 +454,86 @@ export default function ProgresoScreen() {
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
 
+  // ── Formulario inicial ──
   card: {
-    backgroundColor: COLORS.white,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    padding: 16,
-    gap: 12,
+    backgroundColor: COLORS.white, borderRadius: 20,
+    borderWidth: 1, borderColor: COLORS.border, padding: 20, gap: 16,
     marginHorizontal: 16,
+    shadowColor: '#0F172A', shadowOpacity: 0.05, shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 }, elevation: 2,
   },
-  cardNote: { color: COLORS.primary, textAlign: 'center', fontSize: 13, lineHeight: 20 },
+  cardNote: { color: COLORS.muted, textAlign: 'center', fontSize: 13, lineHeight: 20 },
 
-  row: { flexDirection: 'row', gap: 8 },
+  row: { flexDirection: 'row', gap: 10 },
 
-  fieldLabel: { fontSize: 11, color: COLORS.text, marginBottom: 4 },
+  fieldLabel: { fontSize: 11, fontWeight: '600', color: COLORS.muted, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
   fieldInput: {
-    height: 40, borderWidth: 1.5, borderColor: COLORS.border,
-    borderRadius: 8, paddingHorizontal: 8, fontSize: 14, color: COLORS.text,
+    height: 44, borderWidth: 1, borderColor: COLORS.border,
+    borderRadius: 12, paddingHorizontal: 12, fontSize: 14, color: COLORS.text,
+    backgroundColor: COLORS.background,
   },
 
   sexoBtn: {
-    flex: 1, height: 40, borderRadius: 8, borderWidth: 1.5, borderColor: COLORS.border,
+    flex: 1, height: 42, borderRadius: 12, borderWidth: 1, borderColor: COLORS.border,
     justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.white,
   },
   sexoBtnActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  sexoBtnText: { fontSize: 13, color: COLORS.text },
+  sexoBtnText: { fontSize: 13, fontWeight: '500', color: COLORS.muted },
   sexoBtnTextActive: { color: COLORS.white, fontWeight: '700' },
 
   sendBtn: {
-    backgroundColor: COLORS.primary, borderRadius: 50,
-    height: 50, justifyContent: 'center', alignItems: 'center', marginTop: 8,
+    backgroundColor: COLORS.primary, borderRadius: 16,
+    height: 52, justifyContent: 'center', alignItems: 'center', marginTop: 4,
+    shadowColor: COLORS.primary, shadowOpacity: 0.3, shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 }, elevation: 3,
   },
   sendBtnText: { color: COLORS.white, fontWeight: '700', fontSize: 16 },
 
+  // ── Tabla ──
   tableNote: {
     color: COLORS.muted, textAlign: 'center', fontSize: 13,
-    marginTop: 12, marginBottom: 8, paddingHorizontal: 16,
+    marginTop: 16, marginBottom: 12, paddingHorizontal: 16, lineHeight: 20,
   },
   tableHeader: {
-    flexDirection: 'row', backgroundColor: COLORS.primary,
+    flexDirection: 'row', backgroundColor: '#F1F5F9',
     paddingVertical: 10, paddingHorizontal: 4,
+    borderTopLeftRadius: 12, borderTopRightRadius: 12,
   },
-  th: { width: 100, textAlign: 'center', color: COLORS.white, fontWeight: '700', fontSize: 11 },
+  th: { width: 100, textAlign: 'center', color: COLORS.muted, fontWeight: '700', fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
   tableRow: { flexDirection: 'row', paddingVertical: 12, paddingHorizontal: 4 },
   td: { width: 100, textAlign: 'center', fontSize: 13, color: COLORS.text },
 
+  // ── Card motivacional ──
   motivCard: {
     flexDirection: 'row', gap: 12, alignItems: 'flex-start',
-    backgroundColor: '#F0FAF5', borderRadius: 12, padding: 14,
+    backgroundColor: COLORS.white, borderRadius: 16, padding: 14,
     marginHorizontal: 16, marginTop: 16,
+    borderWidth: 1, borderColor: COLORS.border,
+    shadowColor: '#0F172A', shadowOpacity: 0.04, shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 }, elevation: 1,
   },
 
-  chartTitle: { fontWeight: '800', fontSize: 15, color: COLORS.text },
+  // ── Gráfica ──
+  chartTitle: { fontWeight: '700', fontSize: 16, color: COLORS.text, letterSpacing: -0.3 },
 
   metricRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   metricPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingHorizontal: 12, paddingVertical: 6,
-    borderRadius: 20, borderWidth: 1.5, borderColor: COLORS.border,
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 12, paddingVertical: 7,
+    borderRadius: 20, borderWidth: 1, borderColor: COLORS.border,
     backgroundColor: COLORS.white,
   },
   metricDot: { width: 8, height: 8, borderRadius: 4 },
-  metricLabel: { fontSize: 12, color: COLORS.text },
+  metricLabel: { fontSize: 12, fontWeight: '500', color: COLORS.text },
 
   summaryRow: {
-    flexDirection: 'row', backgroundColor: COLORS.cardBg,
-    borderRadius: 12, padding: 12,
+    flexDirection: 'row', backgroundColor: '#F8FAFC',
+    borderRadius: 14, padding: 14,
+    borderWidth: 1, borderColor: COLORS.border,
   },
-  summaryItem: { flex: 1, alignItems: 'center', gap: 2 },
-  summaryValue: { fontSize: 18, fontWeight: '800', color: COLORS.text },
-  summaryLabel: { fontSize: 10, color: COLORS.muted, textAlign: 'center' },
+  summaryItem: { flex: 1, alignItems: 'center', gap: 3 },
+  summaryValue: { fontSize: 20, fontWeight: '800', color: COLORS.text },
+  summaryLabel: { fontSize: 10, color: COLORS.muted, textAlign: 'center', fontWeight: '500' },
   summaryDivider: { width: 1, backgroundColor: COLORS.border, marginVertical: 4 },
 
   chartArea: { minHeight: 150 },

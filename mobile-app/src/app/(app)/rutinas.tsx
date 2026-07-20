@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useFocusEffect } from '@react-navigation/native'
 import { COLORS } from '@/constants/colors'
 import { useAuthStore } from '@/store/auth'
+import { useNewsStore } from '@/store/news'
 import { fetchMiRutina, type RutinaCompleta, type SerieDetalle } from '@/lib/api/rutinas'
 import { fetchEjercicioLogs, fetchAllEjercicioLogs, createEjercicioLog, type EjercicioLog } from '@/lib/api/ejercicio_logs'
 
@@ -326,43 +327,46 @@ const ed = StyleSheet.create({
     paddingHorizontal: 16, paddingTop: 16, paddingBottom: 12,
     borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: COLORS.white,
   },
-  headerTitle: { flex: 1, textAlign: 'center', fontWeight: '700', fontSize: 16, color: COLORS.text },
+  headerTitle: { flex: 1, textAlign: 'center', fontWeight: '700', fontSize: 16, color: COLORS.text, letterSpacing: -0.2 },
   closeBtn: {
     width: 36, height: 36, borderRadius: 18,
-    backgroundColor: COLORS.cardBg, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center',
   },
   noVideo: {
-    height: 180, backgroundColor: COLORS.cardBg, justifyContent: 'center', alignItems: 'center',
+    height: 180, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center',
   },
   emojiBox: {
-    width: 52, height: 52, borderRadius: 14, backgroundColor: COLORS.cardBg,
+    width: 52, height: 52, borderRadius: 16, backgroundColor: '#F1F5F9',
     justifyContent: 'center', alignItems: 'center',
   },
   secBadge: {
-    backgroundColor: COLORS.cardBg, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4,
+    backgroundColor: '#F1F5F9', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4,
   },
   secBadgeText: { fontSize: 12, color: COLORS.muted, fontWeight: '500' },
   detailCard: {
-    backgroundColor: COLORS.white, borderRadius: 14, padding: 14,
+    backgroundColor: COLORS.white, borderRadius: 18, padding: 16,
     borderWidth: 1, borderColor: COLORS.border,
+    shadowColor: '#0F172A', shadowOpacity: 0.04, shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 }, elevation: 1,
   },
-  detailTitle: { fontWeight: '700', color: COLORS.text, marginBottom: 10 },
+  detailTitle: { fontWeight: '700', fontSize: 14, color: COLORS.text, marginBottom: 12 },
   detailGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   detailItem: {
-    width: '30%', backgroundColor: COLORS.cardBg, borderRadius: 10, padding: 10, alignItems: 'center', gap: 2,
+    width: '30%', backgroundColor: '#F8FAFC', borderRadius: 12, padding: 10, alignItems: 'center', gap: 4,
+    borderWidth: 1, borderColor: COLORS.border,
   },
-  detailValue: { fontWeight: '800', fontSize: 14, color: COLORS.text },
-  detailLabel: { fontSize: 10, color: COLORS.muted },
+  detailValue: { fontWeight: '800', fontSize: 15, color: COLORS.text },
+  detailLabel: { fontSize: 10, color: COLORS.muted, fontWeight: '500' },
   descCard: {
-    backgroundColor: COLORS.white, borderRadius: 14, padding: 14,
+    backgroundColor: COLORS.white, borderRadius: 18, padding: 16,
     borderWidth: 1, borderColor: COLORS.border,
   },
   serieHeader: {
-    flexDirection: 'row', backgroundColor: '#F0FAF5',
-    paddingVertical: 8, paddingHorizontal: 4, borderRadius: 8, marginBottom: 4,
+    flexDirection: 'row', backgroundColor: '#F1F5F9',
+    paddingVertical: 8, paddingHorizontal: 4, borderRadius: 10, marginBottom: 4,
   },
-  serieHeaderCell: { flex: 1, textAlign: 'center', fontSize: 11, fontWeight: '700', color: COLORS.primary },
-  serieRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, borderRadius: 6 },
+  serieHeaderCell: { flex: 1, textAlign: 'center', fontSize: 11, fontWeight: '700', color: COLORS.muted },
+  serieRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderRadius: 8 },
   serieCell: { flex: 1, textAlign: 'center', fontSize: 13, color: COLORS.text },
   serieBadge: {
     width: 28, height: 28, borderRadius: 14,
@@ -370,9 +374,9 @@ const ed = StyleSheet.create({
   },
   serieBadgeText: { color: COLORS.white, fontSize: 11, fontWeight: '700' },
   serieInput: {
-    height: 36, borderWidth: 1, borderColor: COLORS.border,
-    borderRadius: 8, paddingHorizontal: 8, fontSize: 14, color: COLORS.text,
-    textAlign: 'center',
+    height: 38, borderWidth: 1.5, borderColor: COLORS.border,
+    borderRadius: 10, paddingHorizontal: 8, fontSize: 14, color: COLORS.text,
+    textAlign: 'center', backgroundColor: '#F8FAFC',
   },
 })
 
@@ -471,6 +475,18 @@ export default function RutinasScreen() {
 
   useFocusEffect(useCallback(() => { loadData() }, [loadData]))
 
+  const { hasNewRutinas, markRutinasViewed } = useNewsStore()
+  const [showNewBanner, setShowNewBanner] = useState(false)
+
+  useFocusEffect(
+    useCallback(() => {
+      if (hasNewRutinas && userId) {
+        setShowNewBanner(true)
+        markRutinasViewed(userId)
+      }
+    }, [hasNewRutinas, userId]),
+  )
+
   const toggleDay = (num: number) =>
     setExpanded((prev) => prev.includes(num) ? prev.filter((d) => d !== num) : [...prev, num])
 
@@ -482,10 +498,17 @@ export default function RutinasScreen() {
       {/* Header */}
       <View style={s.header}>
         <View style={s.headerContent}>
-          <TouchableOpacity><Ionicons name="menu" size={26} color={COLORS.white} /></TouchableOpacity>
           <Text style={s.headerTitle}>Rutinas</Text>
-          <TouchableOpacity><Ionicons name="notifications-outline" size={24} color={COLORS.white} /></TouchableOpacity>
         </View>
+        {showNewBanner && (
+          <View style={s.newsBanner}>
+            <Ionicons name="sparkles" size={14} color="#1D4ED8" />
+            <Text style={s.newsBannerText}>Tu nutriólogo actualizó tu rutina</Text>
+            <TouchableOpacity onPress={() => setShowNewBanner(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close" size={14} color="#1D4ED8" />
+            </TouchableOpacity>
+          </View>
+        )}
         <View style={s.tabs}>
           {(['rutinas', 'progreso'] as const).map((tab) => (
             <TouchableOpacity key={tab} style={[s.tab, activeTab === tab && s.tabActive]} onPress={() => setActiveTab(tab)}>
@@ -677,107 +700,138 @@ export default function RutinasScreen() {
 // ─── Estilos ────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  header: { backgroundColor: COLORS.primary },
-  headerContent: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16,
+
+  // ── Header (blanco, borde inferior sutil) ──
+  header: {
+    backgroundColor: COLORS.white,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
   },
-  headerTitle: { fontSize: 22, fontWeight: '800', color: COLORS.white },
-  tabs: { flexDirection: 'row', backgroundColor: COLORS.white, width: '100%', borderRadius: 0, padding: 3, marginBottom: 0 },
-  tab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 6 },
+  headerContent: {
+    alignItems: 'center',
+    paddingHorizontal: 20, paddingTop: 56, paddingBottom: 12,
+  },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: COLORS.text, letterSpacing: -0.3 },
+  newsBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#DBEAFE',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#BFDBFE',
+  },
+  newsBannerText: { flex: 1, fontSize: 13, color: '#1D4ED8', fontWeight: '500' },
+
+  // ── Tabs ──
+  tabs: {
+    flexDirection: 'row', backgroundColor: COLORS.white,
+    width: '100%', paddingHorizontal: 16, paddingBottom: 0,
+  },
+  tab: { flex: 1, paddingVertical: 12, alignItems: 'center' },
   tabActive: { borderBottomWidth: 2, borderBottomColor: COLORS.primary },
-  tabText: { fontSize: 14, color: COLORS.muted, fontWeight: '600' },
+  tabText: { fontSize: 14, color: '#94A3B8', fontWeight: '600' },
   tabTextActive: { color: COLORS.primary },
   body: { flex: 1, backgroundColor: COLORS.background },
 
+  // ── Info banner ──
   infoBanner: {
     flexDirection: 'row', gap: 10, alignItems: 'flex-start',
-    backgroundColor: COLORS.cardBg, borderRadius: 10, padding: 12,
+    backgroundColor: COLORS.primaryLight, borderRadius: 12, padding: 12,
+    borderWidth: 1, borderColor: '#C8EDE3',
   },
 
+  // ── Tarjeta de día ──
   dayCard: {
-    backgroundColor: COLORS.white, borderRadius: 14, padding: 14,
-    borderWidth: 1, borderColor: '#E5E7EB',
-    shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4,
+    backgroundColor: COLORS.white, borderRadius: 18, padding: 16,
+    borderWidth: 1, borderColor: COLORS.border,
+    shadowColor: '#0F172A', shadowOpacity: 0.05, shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 }, elevation: 2,
   },
   dayHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
 
+  // ── Badges de estado ──
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
   badgeCompleted: { backgroundColor: COLORS.completed },
-  badgePending: { backgroundColor: COLORS.pending },
-  badgeRest: { backgroundColor: '#F3F4F6' },
+  badgePending:   { backgroundColor: COLORS.pending },
+  badgeRest:      { backgroundColor: '#F1F5F9' },
   badgeText: { fontSize: 11, fontWeight: '600' },
 
+  // ── Tarjeta de ejercicio ──
   exerciseCard: {
     flexDirection: 'row', gap: 12, alignItems: 'flex-start',
-    backgroundColor: COLORS.cardBg, borderRadius: 10, padding: 10,
+    backgroundColor: COLORS.background, borderRadius: 12, padding: 12,
+    borderWidth: 1, borderColor: COLORS.border,
   },
   exerciseImg: {
-    width: 56, height: 56, backgroundColor: '#E5E7EB', borderRadius: 10,
+    width: 52, height: 52, backgroundColor: '#F1F5F9', borderRadius: 12,
     justifyContent: 'center', alignItems: 'center',
   },
   exName: { fontWeight: '700', fontSize: 14, color: COLORS.text, flexShrink: 1 },
   exTagsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginBottom: 2 },
-  exTag: {
-    paddingHorizontal: 8, paddingVertical: 2, borderRadius: 20,
-    backgroundColor: '#E5E7EB',
-  },
+  exTag: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20, backgroundColor: '#F1F5F9' },
   exTagWeight: { backgroundColor: COLORS.completed },
-  exTagText: { fontSize: 10, color: COLORS.text, fontWeight: '500' },
+  exTagText: { fontSize: 10, color: '#374151', fontWeight: '600' },
   exMeta: { fontSize: 11, color: COLORS.muted },
 
   numBadge: {
-    width: 20, height: 20, borderRadius: 10,
+    width: 22, height: 22, borderRadius: 11,
     backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center',
   },
   numBadgeText: { color: COLORS.white, fontSize: 10, fontWeight: '700' },
 
   completeBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: COLORS.primary, borderRadius: 10, height: 48, marginTop: 4,
+    backgroundColor: COLORS.primary, borderRadius: 16, height: 52, marginTop: 8,
+    shadowColor: COLORS.primary, shadowOpacity: 0.3, shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 }, elevation: 3,
   },
   doneNote: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: COLORS.completed, borderRadius: 10, padding: 12, justifyContent: 'center',
+    backgroundColor: COLORS.completed, borderRadius: 12, padding: 12, justifyContent: 'center',
+    borderWidth: 1, borderColor: '#BBF7D0',
   },
 
+  // ── Progreso tab ──
   progressCard: {
-    backgroundColor: COLORS.white, borderRadius: 14, padding: 14,
-    borderWidth: 1, borderColor: '#E5E7EB', marginBottom: 12,
-    elevation: 2, shadowColor: '#000', shadowOpacity: 0.04,
-    shadowRadius: 4, shadowOffset: { width: 0, height: 2 },
+    backgroundColor: COLORS.white, borderRadius: 18, padding: 16,
+    borderWidth: 1, borderColor: COLORS.border, marginBottom: 12,
+    shadowColor: '#0F172A', shadowOpacity: 0.05, shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 }, elevation: 2,
   },
   progressImg: {
-    width: 48, height: 48, backgroundColor: COLORS.completed, borderRadius: 10,
+    width: 48, height: 48, backgroundColor: '#F1F5F9', borderRadius: 12,
     justifyContent: 'center', alignItems: 'center',
   },
   progressBadge: { alignItems: 'flex-end' },
   historyRow: {
     flexDirection: 'row', alignItems: 'flex-end', height: 64,
-    backgroundColor: COLORS.cardBg, borderRadius: 8, paddingHorizontal: 8, paddingBottom: 8,
+    backgroundColor: COLORS.background, borderRadius: 10, paddingHorizontal: 8, paddingBottom: 8,
   },
   progressFooter: {
     flexDirection: 'row', justifyContent: 'space-between',
-    borderTopWidth: 1, borderTopColor: '#F3F4F6', paddingTop: 10, marginTop: 10,
+    borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 10, marginTop: 10,
   },
 })
 
 const pb = StyleSheet.create({
   wrapper: {
-    backgroundColor: COLORS.white, borderRadius: 14, padding: 14,
-    borderWidth: 1, borderColor: COLORS.border, gap: 8,
+    backgroundColor: COLORS.white, borderRadius: 18, padding: 16,
+    borderWidth: 1, borderColor: COLORS.border, gap: 10,
+    shadowColor: '#0F172A', shadowOpacity: 0.05, shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 }, elevation: 2,
   },
   topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  label: { fontSize: 13, fontWeight: '700', color: COLORS.text },
+  label: { fontSize: 14, fontWeight: '700', color: COLORS.text },
   fraction: { fontSize: 13, color: COLORS.muted },
   fractionBold: { color: COLORS.primary, fontWeight: '800' },
-  track: { height: 10, backgroundColor: '#E5E7EB', borderRadius: 10, overflow: 'hidden' },
+  track: { height: 8, backgroundColor: '#F1F5F9', borderRadius: 10, overflow: 'hidden' },
   fill: { height: '100%', backgroundColor: COLORS.primary, borderRadius: 10 },
-  daysRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 4 },
-  dayDot: { alignItems: 'center', gap: 3 },
-  dot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#E5E7EB' },
+  daysRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 2 },
+  dayDot: { alignItems: 'center', gap: 4 },
+  dot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#E2E8F0' },
   dotDone: { backgroundColor: COLORS.primary },
-  dotRest: { backgroundColor: '#D1D5DB' },
-  dayLetter: { fontSize: 9, color: COLORS.muted },
+  dotRest: { backgroundColor: '#CBD5E1' },
+  dayLetter: { fontSize: 9, color: COLORS.muted, fontWeight: '500' },
 })
