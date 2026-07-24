@@ -19,10 +19,17 @@ export async function fetchAdmins(): Promise<Perfil[]> {
   const { data, error } = await supabase
     .from("perfiles")
     .select("*")
-    .eq("rol", "admin")
+    .in("rol", ["admin", "superadmin"])
     .order("created_at", { ascending: false });
   if (error) throw error;
   return data as Perfil[];
+}
+
+export async function fetchCurrentUserRol(): Promise<string | null> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data } = await supabase.from("perfiles").select("rol").eq("id", user.id).single();
+  return data?.rol ?? null;
 }
 
 /**

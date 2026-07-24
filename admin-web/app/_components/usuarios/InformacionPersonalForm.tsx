@@ -431,6 +431,20 @@ export default function InformacionPersonalForm({
           <Ck label="Colitis"       checked={hist.ap_colitis}       onChange={sh("ap_colitis")} />
         </div>
 
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Enfermedades</p>
+        <div className="grid grid-cols-3 gap-3">
+          <Ck label="Obesidad"               checked={hist.ap_obesidad}             onChange={sh("ap_obesidad")} />
+          <Ck label="Diabetes"               checked={hist.ap_diabetes}             onChange={sh("ap_diabetes")} />
+          <Ck label="HTA (Hipertensión)"     checked={hist.ap_hta}                  onChange={sh("ap_hta")} />
+          <Ck label="Cáncer"                 checked={hist.ap_cancer}               onChange={sh("ap_cancer")} />
+          <Ck label="Hipercolesterolemia"    checked={hist.ap_hipercolesterolemia}  onChange={sh("ap_hipercolesterolemia")} />
+          <Ck label="Hipertrigliceridemia"   checked={hist.ap_hipertrigliceridemia} onChange={sh("ap_hipertrigliceridemia")} />
+          <Ck label="Trastornos mentales"    checked={hist.ap_trastornos_mentales}  onChange={sh("ap_trastornos_mentales")} />
+          <Ck label="Enfermedad Renal"       checked={hist.ap_enfermedad_renal}     onChange={sh("ap_enfermedad_renal")} />
+          <Ck label="Enfermedad Cardíaca"    checked={hist.ap_enfermedad_cardiaca}  onChange={sh("ap_enfermedad_cardiaca")} />
+          <Ck label="Tiroides (Hipo/Hiper)"  checked={hist.ap_tiroides}             onChange={sh("ap_tiroides")} />
+        </div>
+
         <div>
           <label className={LB}>Enfermedad diagnosticada (dx)</label>
           <input value={hist.ap_enfermedad_dx}
@@ -499,6 +513,11 @@ export default function InformacionPersonalForm({
           <Ck label="Realiza ejercicio" checked={hist.ev_hace_ejercicio} onChange={sh("ev_hace_ejercicio")} />
           {hist.ev_hace_ejercicio && (
             <div className="grid grid-cols-3 gap-3 pl-4 border-l-2 border-primary/20">
+              <div className="col-span-3">
+                <label className={LB}>Tipo de ejercicio</label>
+                <input type="text" value={hist.ev_tipo_ejercicio}
+                  onChange={(e) => sh("ev_tipo_ejercicio")(e.target.value)} className={IC} placeholder="Ej. Musculación, cardio, yoga..." />
+              </div>
               <div>
                 <label className={LB}>Frecuencia (días/semana)</label>
                 <input type="number" min={1} max={7} value={hist.ev_frecuencia}
@@ -841,14 +860,14 @@ export default function InformacionPersonalForm({
               ["Cambios notados",                   "cambios_notados"],
               ["¿Qué le pareció el menú?",          "menu_parecio"],
               ["Síntomas GI",                       "sintomas_gi"],
-              ["¿Intentó jugo verde?",              "intento_jugo_verde"],
+
               ["Estrés",                            "estres"],
               ["Ciclos menstruales",                "ciclos_menstruales"],
               ["¿Utilizó equivalentes?",            "utilizo_equivalentes"],
               ["Rutina",                            "rutina"],
               ["Suplementos / medicamentos",        "suplementos_medicamentos"],
               ["¿Consumo de agua?",                 "consumo_agua"],
-              ["¿Seguir con 4 tiempos de comida?",  "seguir_4_tiempos"],
+              ["Tiempos de comida",                  "seguir_4_tiempos"],
               ["Alimentos por quitar",              "alimentos_quitar"],
               ["Alimentos por incluir",             "alimentos_incluir"],
             ] as [string, keyof Seguimiento][]).map(([lbl, key]) => (
@@ -873,7 +892,7 @@ export default function InformacionPersonalForm({
               ["¿Qué tal sintió la rutina?",   "rutina_sintio"],
               ["¿Logró progresar?",            "logro_progresar"],
               ["¿Dolor muscular?",             "dolor_muscular"],
-              ["¿Continuar con 5 días?",       "continuar_5_dias"],
+              ["¿Días de entrenamiento?",       "continuar_5_dias"],
               ["¿Realizó cardio?",             "realizo_cardio"],
             ] as [string, keyof Seguimiento][]).map(([lbl, key]) => (
               <div key={key}>
@@ -930,20 +949,20 @@ export default function InformacionPersonalForm({
                       ["¿Qué le pareció el menú?",           seg.menu_parecio],
                       ["Síntomas GI",                        seg.sintomas_gi],
                       ["Propuesta de intervención",          seg.propuesta_intervencion],
-                      ["¿Intentó jugo verde?",               seg.intento_jugo_verde],
+
                       ["Estrés",                             seg.estres],
                       ["Ciclos menstruales",                 seg.ciclos_menstruales],
                       ["¿Utilizó equivalentes?",             seg.utilizo_equivalentes],
                       ["Rutina",                             seg.rutina],
                       ["Suplementos / medicamentos",         seg.suplementos_medicamentos],
                       ["¿Consumo de agua?",                  seg.consumo_agua],
-                      ["¿Seguir con 4 tiempos de comida?",   seg.seguir_4_tiempos],
+                      ["Tiempos de comida",                   seg.seguir_4_tiempos],
                       ["Alimentos por quitar",               seg.alimentos_quitar],
                       ["Alimentos por incluir",              seg.alimentos_incluir],
                       ["¿Qué tal sintió la rutina?",         seg.rutina_sintio],
                       ["¿Logró progresar?",                  seg.logro_progresar],
                       ["¿Dolor muscular?",                   seg.dolor_muscular],
-                      ["¿Continuar con 5 días?",             seg.continuar_5_dias],
+                      ["¿Días de entrenamiento?",            seg.continuar_5_dias],
                       ["¿Realizó cardio?",                   seg.realizo_cardio],
                       ["Intervención",                       seg.intervencion],
                     ].filter(([, v]) => v).map(([label, value]) => (

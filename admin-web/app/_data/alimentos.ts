@@ -25,10 +25,11 @@ export type Alimento = {
   lipidos_g: number | null;
   hco_g: number | null;
   fibra_g: number | null;
+  created_by: string | null;
   created_at?: string;
 };
 
-export type AlimentoInput = Omit<Alimento, "id" | "created_at">;
+export type AlimentoInput = Omit<Alimento, "id" | "created_by" | "created_at">;
 
 export async function fetchAlimentos(): Promise<Alimento[]> {
   const PAGE = 1000;

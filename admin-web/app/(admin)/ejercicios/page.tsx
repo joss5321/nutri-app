@@ -3,8 +3,10 @@ import { useEffect, useState } from "react";
 import EjercicioModal from "@/app/_components/ejercicios/EjercicioModal";
 import { MUSCLE_GROUPS, type Exercise } from "@/app/_data/exercises";
 import { deleteEjercicio, fetchEjercicios } from "@/app/_data/ejercicios";
+import { fetchCurrentUserRol } from "@/app/_data/perfiles";
 import { getYouTubeEmbedId, isYouTubeShort } from "@/app/_components/ejercicios/VideoPlayer";
 import ConfirmModal from "@/app/_components/ConfirmModal";
+import { supabase } from "@/lib/supabase";
 
 export default function EjerciciosPage() {
   const [exercises, setExercises] = useState<Exercise[]>([]);
@@ -15,6 +17,8 @@ export default function EjerciciosPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [editing, setEditing]     = useState<Exercise | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentRol, setCurrentRol] = useState<string | null>(null);
 
   const loadExercises = () => {
     fetchEjercicios()
@@ -25,6 +29,10 @@ export default function EjerciciosPage() {
 
   useEffect(() => {
     loadExercises();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) setCurrentUserId(user.id);
+    });
+    fetchCurrentUserRol().then((rol) => setCurrentRol(rol));
   }, []);
 
   const load = () => {
@@ -44,6 +52,12 @@ export default function EjerciciosPage() {
       const exists = prev.some((e) => e.id === ex.id);
       return exists ? prev.map((e) => (e.id === ex.id ? ex : e)) : [ex, ...prev];
     });
+  };
+
+  const canEdit = (ex: Exercise): boolean => {
+    if (!currentUserId || !currentRol) return false;
+    if (currentRol === "superadmin") return ex.created_by === null || ex.created_by === currentUserId;
+    return ex.created_by === currentUserId;
   };
 
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -155,19 +169,25 @@ export default function EjerciciosPage() {
                   ))}
                 </div>
                 <div className="flex items-center gap-2 mt-3">
-                  <button
-                    onClick={() => setEditing(ex)}
-                    className="flex-1 flex items-center justify-center gap-2 h-9 rounded-xl border border-gray-200 text-gray-600 text-sm font-semibold hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors"
-                  >
-                    ✏ Editar
-                  </button>
-                  <button
-                    onClick={() => setConfirmDeleteId(ex.id)}
-                    disabled={deletingId === ex.id}
-                    className="h-9 px-3 rounded-xl border border-gray-200 text-red-500 text-sm font-semibold hover:border-red-300 hover:bg-red-50 transition-colors disabled:opacity-50"
-                  >
-                    {deletingId === ex.id ? "..." : "🗑"}
-                  </button>
+                  {canEdit(ex) ? (
+                    <>
+                      <button
+                        onClick={() => setEditing(ex)}
+                        className="flex-1 flex items-center justify-center gap-2 h-9 rounded-xl border border-gray-200 text-gray-600 text-sm font-semibold hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors"
+                      >
+                        ✏ Editar
+                      </button>
+                      <button
+                        onClick={() => setConfirmDeleteId(ex.id)}
+                        disabled={deletingId === ex.id}
+                        className="h-9 px-3 rounded-xl border border-gray-200 text-red-500 text-sm font-semibold hover:border-red-300 hover:bg-red-50 transition-colors disabled:opacity-50"
+                      >
+                        {deletingId === ex.id ? "..." : "🗑"}
+                      </button>
+                    </>
+                  ) : (
+                    <span className="text-xs text-gray-400 italic">Solo lectura</span>
+                  )}
                 </div>
               </div>
             ))}

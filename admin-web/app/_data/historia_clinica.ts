@@ -35,6 +35,9 @@ export type HistoriaClinicaDatos = {
   // Antecedentes personales
   ap_diarrea: boolean; ap_vomito: boolean; ap_nauseas: boolean;
   ap_reflujo: boolean; ap_gastritis: boolean; ap_estrenimiento: boolean; ap_colitis: boolean;
+  ap_obesidad: boolean; ap_diabetes: boolean; ap_hta: boolean; ap_cancer: boolean;
+  ap_hipercolesterolemia: boolean; ap_hipertrigliceridemia: boolean; ap_trastornos_mentales: boolean;
+  ap_enfermedad_renal: boolean; ap_enfermedad_cardiaca: boolean; ap_tiroides: boolean;
   ap_enfermedad_dx: string;
   ap_toma_medicamento: boolean;
   ap_medicamento_cual: string; ap_medicamento_dosis: string; ap_medicamento_desde: string;
@@ -47,6 +50,7 @@ export type HistoriaClinicaDatos = {
   nota_antecedentes_familiares: string;
   // Estilo de vida
   ev_hace_ejercicio: boolean;
+  ev_tipo_ejercicio: string;
   ev_frecuencia: string; ev_duracion: string; ev_intensidad: string;
   ev_rutina_semanal: string; ev_habitos_sueno: string;
   ev_alcohol: string; ev_tabaco: string; ev_cafe: string; ev_drogas: string;
@@ -82,13 +86,17 @@ export function emptyHistoria(): HistoriaClinicaDatos {
     ocupacion: "", nacionalidad: "", motivo_consulta: "", nota_datos_personales: "",
     ap_diarrea: false, ap_vomito: false, ap_nauseas: false, ap_reflujo: false,
     ap_gastritis: false, ap_estrenimiento: false, ap_colitis: false,
+    ap_obesidad: false, ap_diabetes: false, ap_hta: false, ap_cancer: false,
+    ap_hipercolesterolemia: false, ap_hipertrigliceridemia: false,
+    ap_trastornos_mentales: false, ap_enfermedad_renal: false,
+    ap_enfermedad_cardiaca: false, ap_tiroides: false,
     ap_enfermedad_dx: "", ap_toma_medicamento: false,
     ap_medicamento_cual: "", ap_medicamento_dosis: "", ap_medicamento_desde: "",
     ap_ciclos_menstruales: "", nota_antecedentes_personales: "",
     af_obesidad: false, af_diabetes: false, af_hta: false, af_cancer: false,
     af_hipercolesterolemia: false, af_hipertrigliceridemia: false,
     af_trastornos_mentales: false, af_otros: "", nota_antecedentes_familiares: "",
-    ev_hace_ejercicio: false, ev_frecuencia: "", ev_duracion: "", ev_intensidad: "",
+    ev_hace_ejercicio: false, ev_tipo_ejercicio: "", ev_frecuencia: "", ev_duracion: "", ev_intensidad: "",
     ev_rutina_semanal: "", ev_habitos_sueno: "",
     ev_alcohol: "", ev_tabaco: "", ev_cafe: "", ev_drogas: "",
     ev_vasos_agua: "", ev_vasos_bebidas: "", nota_estilo_vida: "",

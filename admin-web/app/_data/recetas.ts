@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabase";
 
-export const TIPOS_RECETA = ["Desayuno", "Almuerzo", "Cena", "Colación"] as const;
+export const TIPOS_RECETA = ["Desayuno", "Almuerzo", "Cena", "Colación", "Comida"] as const;
 export const NIVELES_RECETA = ["Fácil", "Medio", "Difícil"] as const;
 export const CATEGORIAS_NUTRICIONALES = [
   "Alta en proteína",
@@ -50,12 +50,13 @@ export type Receta = {
   grasas_g: number | null;
   user_id: string | null;
   receta_base_id: string | null;
+  created_by: string | null;
   created_at?: string;
   ingredientes: RecetaIngrediente[];
   pasos: RecetaPaso[];
 };
 
-export type RecetaInput = Omit<Receta, "id" | "created_at" | "user_id" | "receta_base_id" | "ingredientes" | "pasos"> & {
+export type RecetaInput = Omit<Receta, "id" | "created_at" | "user_id" | "receta_base_id" | "created_by" | "ingredientes" | "pasos"> & {
   ingredientes: RecetaIngredienteInput[];
   pasos: string[];
 };
@@ -172,8 +173,8 @@ export async function deleteReceta(id: string): Promise<void> {
 }
 
 export async function duplicateReceta(receta: Receta): Promise<Receta> {
-  const { id, created_at, user_id, receta_base_id, ingredientes, pasos, ...rest } = receta;
-  void id; void created_at; void user_id; void receta_base_id;
+  const { id, created_at, user_id, receta_base_id, created_by, ingredientes, pasos, ...rest } = receta;
+  void id; void created_at; void user_id; void receta_base_id; void created_by;
 
   return createReceta({
     ...rest,
@@ -212,7 +213,7 @@ export async function saveRecetaPersonalizada(
     return { receta, newId: null };
   }
 
-  // Create a brand-new personal copy
+  // Create a brand-new personal copy — omit created_by so DB uses DEFAULT auth.uid()
   const { ingredientes, pasos, ...recetaData } = input;
   const { data: clone, error } = await supabase
     .from("recetas")

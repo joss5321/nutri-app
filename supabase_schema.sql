@@ -866,3 +866,201 @@ alter table receta_ingredientes
 -- Notas personalizadas por suplemento asignado
 alter table plan_suplementacion
   add column if not exists notas text;
+
+-- ============================================================
+-- 32. MIGRACIÓN — Rol SuperAdmin + propietario en catálogos
+-- ============================================================
+
+-- Ampliar constraint del rol para incluir 'superadmin'
+alter table perfiles drop constraint if exists perfiles_rol_check;
+alter table perfiles add constraint perfiles_rol_check
+  check (rol in ('usuario', 'admin', 'superadmin'));
+
+-- Asignar SuperAdmin al usuario designado
+update perfiles set rol = 'superadmin'
+  where email = 'j.rym5312@gmail.com';
+
+-- Columna created_by en catálogos (null = legacy/superadmin; DEFAULT auto-seteado por Supabase)
+alter table ejercicios
+  add column if not exists created_by uuid references auth.users(id) on delete set null;
+
+alter table recetas
+  add column if not exists created_by uuid references auth.users(id) on delete set null;
+
+alter table alimentos
+  add column if not exists created_by uuid references auth.users(id) on delete set null;
+
+-- ============================================================
+-- 33. MIGRACIÓN — Unidad de peso por ejercicio en rutinas
+-- ============================================================
+
+alter table rutina_ejercicios
+  add column if not exists unidad_peso text default 'kg'
+  check (unidad_peso in ('kg', 'lbs'));
+
+-- ============================================================
+-- 34. MIGRACIÓN — Recetas: ampliar tipo para incluir 'Comida'
+-- ============================================================
+
+alter table recetas drop constraint if exists recetas_tipo_check;
+alter table recetas add constraint recetas_tipo_check
+  check (tipo in ('Desayuno', 'Almuerzo', 'Cena', 'Colación', 'Comida'));
+
+-- ============================================================
+-- 35. MIGRACIÓN — Helper de rol + RLS por propiedad en catálogos
+-- ============================================================
+
+-- Función helper: devuelve el rol del usuario autenticado actual
+create or replace function public.get_user_rol()
+returns text language sql security definer stable as $$
+  select rol from perfiles where id = auth.uid()
+$$;
+
+-- ── Ejercicios ──────────────────────────────────────────────
+-- Eliminar políticas anteriores (si existían abiertas)
+drop policy if exists "ejercicios: lectura publica autenticados" on ejercicios;
+drop policy if exists "ejercicios: escritura autenticados" on ejercicios;
+drop policy if exists "ejercicios: todos autenticados" on ejercicios;
+
+-- SELECT: superadmin ve null/superadmin; admin ve null/superadmin + propios
+create policy "ejercicios_select" on ejercicios
+for select to authenticated using (
+  (public.get_user_rol() = 'superadmin' and (
+    created_by is null or
+    exists (select 1 from perfiles where id = ejercicios.created_by and rol = 'superadmin')
+  ))
+  or
+  (public.get_user_rol() = 'admin' and (
+    created_by is null or
+    exists (select 1 from perfiles where id = ejercicios.created_by and rol = 'superadmin') or
+    created_by = auth.uid()
+  ))
+);
+
+-- INSERT: cualquier admin/superadmin puede crear (created_by se auto-asigna vía DEFAULT auth.uid())
+create policy "ejercicios_insert" on ejercicios
+for insert to authenticated with check (
+  public.get_user_rol() in ('admin', 'superadmin')
+);
+
+-- UPDATE: superadmin modifica los suyos (null o superadmin); admin solo los propios
+create policy "ejercicios_update" on ejercicios
+for update to authenticated using (
+  (public.get_user_rol() = 'superadmin' and (
+    created_by is null or
+    exists (select 1 from perfiles where id = ejercicios.created_by and rol = 'superadmin')
+  ))
+  or
+  (public.get_user_rol() = 'admin' and created_by = auth.uid())
+);
+
+-- DELETE: igual que UPDATE
+create policy "ejercicios_delete" on ejercicios
+for delete to authenticated using (
+  (public.get_user_rol() = 'superadmin' and (
+    created_by is null or
+    exists (select 1 from perfiles where id = ejercicios.created_by and rol = 'superadmin')
+  ))
+  or
+  (public.get_user_rol() = 'admin' and created_by = auth.uid())
+);
+
+-- ── Recetas (catálogo) ──────────────────────────────────────
+drop policy if exists "recetas: lectura publica autenticados" on recetas;
+drop policy if exists "recetas: escritura autenticados" on recetas;
+drop policy if exists "recetas: todos autenticados" on recetas;
+
+-- SELECT: catálogo (user_id null) visible para todos; personalizadas para el nutricionista del paciente
+create policy "recetas_select" on recetas
+for select to authenticated using (
+  (user_id is null and public.get_user_rol() in ('admin', 'superadmin'))
+  or
+  (user_id is not null and exists (
+    select 1 from perfiles p
+    where p.id = recetas.user_id
+    and p.nutricionista_id = auth.uid()
+  ))
+);
+
+-- INSERT: admins/superadmins crean recetas de catálogo; nutricionistas crean copias personalizadas
+create policy "recetas_insert" on recetas
+for insert to authenticated with check (
+  public.get_user_rol() in ('admin', 'superadmin')
+  or exists (
+    select 1 from perfiles p
+    where p.id = recetas.user_id
+    and p.nutricionista_id = auth.uid()
+  )
+);
+
+-- UPDATE: superadmin modifica cualquier catálogo; admin modifica las propias; nutricionista las personalizadas de sus pacientes
+create policy "recetas_update" on recetas
+for update to authenticated using (
+  (user_id is null and public.get_user_rol() = 'superadmin')
+  or (user_id is null and public.get_user_rol() = 'admin' and created_by = auth.uid())
+  or (user_id is not null and exists (
+    select 1 from perfiles p
+    where p.id = recetas.user_id
+    and p.nutricionista_id = auth.uid()
+  ))
+);
+
+-- DELETE: igual que UPDATE
+create policy "recetas_delete" on recetas
+for delete to authenticated using (
+  (user_id is null and public.get_user_rol() = 'superadmin')
+  or (user_id is null and public.get_user_rol() = 'admin' and created_by = auth.uid())
+  or (user_id is not null and exists (
+    select 1 from perfiles p
+    where p.id = recetas.user_id
+    and p.nutricionista_id = auth.uid()
+  ))
+);
+
+-- ── Alimentos ────────────────────────────────────────────────
+drop policy if exists "alimentos: lectura publica autenticados" on alimentos;
+drop policy if exists "alimentos: escritura autenticados" on alimentos;
+drop policy if exists "alimentos: todos autenticados" on alimentos;
+
+-- SELECT: superadmin ve null/superadmin; admin ve null/superadmin + propios (no ve los de otros admins)
+create policy "alimentos_select" on alimentos
+for select to authenticated using (
+  (public.get_user_rol() = 'superadmin' and (
+    created_by is null or
+    exists (select 1 from perfiles where id = alimentos.created_by and rol = 'superadmin')
+  ))
+  or
+  (public.get_user_rol() = 'admin' and (
+    created_by is null or
+    exists (select 1 from perfiles where id = alimentos.created_by and rol = 'superadmin') or
+    created_by = auth.uid()
+  ))
+);
+
+-- INSERT: cualquier admin/superadmin puede crear
+create policy "alimentos_insert" on alimentos
+for insert to authenticated with check (
+  public.get_user_rol() in ('admin', 'superadmin')
+);
+
+-- UPDATE: superadmin modifica null/superadmin; admin solo los propios
+create policy "alimentos_update" on alimentos
+for update to authenticated using (
+  (public.get_user_rol() = 'superadmin' and (
+    created_by is null or
+    exists (select 1 from perfiles where id = alimentos.created_by and rol = 'superadmin')
+  ))
+  or
+  (public.get_user_rol() = 'admin' and created_by = auth.uid())
+);
+
+-- DELETE: igual que UPDATE
+create policy "alimentos_delete" on alimentos
+for delete to authenticated using (
+  (public.get_user_rol() = 'superadmin' and (
+    created_by is null or
+    exists (select 1 from perfiles where id = alimentos.created_by and rol = 'superadmin')
+  ))
+  or
+  (public.get_user_rol() = 'admin' and created_by = auth.uid())
+);

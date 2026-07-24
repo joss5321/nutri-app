@@ -20,6 +20,7 @@ export type RutinaEjercicio = {
   rpe: number | null;
   tipo_esfuerzo: "reps" | "tiempo";
   series_detalle: SerieDetalle[] | null;
+  unidad_peso: "kg" | "lbs" | null;
 };
 
 export type RutinaDia = {

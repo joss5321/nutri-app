@@ -11,6 +11,8 @@ import {
   fetchRecetas,
   type Receta,
 } from "@/app/_data/recetas";
+import { fetchCurrentUserRol } from "@/app/_data/perfiles";
+import { supabase } from "@/lib/supabase";
 
 function RecipeDetail({
   receta,
@@ -20,6 +22,7 @@ function RecipeDetail({
   onDelete,
   duplicating,
   deleting,
+  canEdit,
 }: {
   receta: Receta;
   onClose: () => void;
@@ -28,6 +31,7 @@ function RecipeDetail({
   onDelete: () => void;
   duplicating: boolean;
   deleting: boolean;
+  canEdit: boolean;
 }) {
   const [tab, setTab] = useState<"ing" | "prep" | "info">("ing");
 
@@ -58,15 +62,19 @@ function RecipeDetail({
 
       {/* Actions */}
       <div className="flex gap-2 px-4 py-3 border-b border-gray-100">
-        <button onClick={onEdit} className="flex-1 flex items-center justify-center gap-1 h-9 rounded-xl border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50">
-          ✏️ Editar
-        </button>
+        {canEdit && (
+          <button onClick={onEdit} className="flex-1 flex items-center justify-center gap-1 h-9 rounded-xl border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50">
+            ✏️ Editar
+          </button>
+        )}
         <button onClick={onDuplicate} disabled={duplicating} className="flex-1 flex items-center justify-center gap-1 h-9 rounded-xl border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50 disabled:opacity-50">
           📋 {duplicating ? "Duplicando..." : "Duplicar"}
         </button>
-        <button onClick={onDelete} disabled={deleting} className="flex-1 flex items-center justify-center gap-1 h-9 rounded-xl border border-red-200 text-red-600 text-xs font-semibold hover:bg-red-50 disabled:opacity-50">
-          🗑 {deleting ? "Eliminando..." : "Eliminar"}
-        </button>
+        {canEdit && (
+          <button onClick={onDelete} disabled={deleting} className="flex-1 flex items-center justify-center gap-1 h-9 rounded-xl border border-red-200 text-red-600 text-xs font-semibold hover:bg-red-50 disabled:opacity-50">
+            🗑 {deleting ? "Eliminando..." : "Eliminar"}
+          </button>
+        )}
       </div>
 
       {/* Tabs */}
@@ -172,6 +180,8 @@ export default function RecetasPage() {
   const [editing, setEditing] = useState<Receta | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentRol, setCurrentRol] = useState<string | null>(null);
 
   const loadRecetas = () => {
     fetchRecetas()
@@ -182,7 +192,17 @@ export default function RecetasPage() {
 
   useEffect(() => {
     loadRecetas();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) setCurrentUserId(user.id);
+    });
+    fetchCurrentUserRol().then((rol) => setCurrentRol(rol));
   }, []);
+
+  const canEdit = (r: Receta): boolean => {
+    if (!currentUserId || !currentRol) return false;
+    if (currentRol === "superadmin") return true;
+    return r.created_by === currentUserId;
+  };
 
   const load = () => {
     setLoading(true);
@@ -327,12 +347,14 @@ export default function RecetasPage() {
 
                     {/* Botones de acción */}
                     <div className="flex items-center gap-2 mt-3" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        onClick={() => setEditing(r)}
-                        className="flex-1 flex items-center justify-center gap-1 h-9 rounded-xl border border-gray-200 text-gray-600 text-xs font-semibold hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors"
-                      >
-                        ✏ Editar
-                      </button>
+                      {canEdit(r) && (
+                        <button
+                          onClick={() => setEditing(r)}
+                          className="flex-1 flex items-center justify-center gap-1 h-9 rounded-xl border border-gray-200 text-gray-600 text-xs font-semibold hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors"
+                        >
+                          ✏ Editar
+                        </button>
+                      )}
                       <button
                         onClick={() => handleDuplicate(r)}
                         disabled={duplicatingId === r.id}
@@ -340,13 +362,15 @@ export default function RecetasPage() {
                       >
                         {duplicatingId === r.id ? "..." : "📋"}
                       </button>
-                      <button
-                        onClick={() => setConfirmDeleteId(r.id)}
-                        disabled={deletingId === r.id}
-                        className="h-9 px-3 rounded-xl border border-gray-200 text-red-500 text-xs font-semibold hover:border-red-300 hover:bg-red-50 transition-colors disabled:opacity-50"
-                      >
-                        {deletingId === r.id ? "..." : "🗑"}
-                      </button>
+                      {canEdit(r) && (
+                        <button
+                          onClick={() => setConfirmDeleteId(r.id)}
+                          disabled={deletingId === r.id}
+                          className="h-9 px-3 rounded-xl border border-gray-200 text-red-500 text-xs font-semibold hover:border-red-300 hover:bg-red-50 transition-colors disabled:opacity-50"
+                        >
+                          {deletingId === r.id ? "..." : "🗑"}
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -373,6 +397,7 @@ export default function RecetasPage() {
           onDelete={() => setConfirmDeleteId(selected.id)}
           duplicating={duplicatingId === selected.id}
           deleting={deletingId === selected.id}
+          canEdit={canEdit(selected)}
         />
       )}
 

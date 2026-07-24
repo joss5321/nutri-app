@@ -8,6 +8,8 @@ import {
   fetchAlimentos,
   type Alimento,
 } from "@/app/_data/alimentos";
+import { fetchCurrentUserRol } from "@/app/_data/perfiles";
+import { supabase } from "@/lib/supabase";
 
 function fmt(v: number | null): string {
   if (v === null || v === undefined) return "—";
@@ -27,6 +29,14 @@ export default function AlimentosPage() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentRol, setCurrentRol] = useState<string | null>(null);
+
+  const canEdit = (a: Alimento): boolean => {
+    if (!currentUserId || !currentRol) return false;
+    if (currentRol === "superadmin") return a.created_by === null || a.created_by === currentUserId;
+    return a.created_by === currentUserId;
+  };
 
   const load = () => {
     setLoading(true);
@@ -41,6 +51,10 @@ export default function AlimentosPage() {
 
   useEffect(() => {
     load();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) setCurrentUserId(user.id);
+    });
+    fetchCurrentUserRol().then((rol) => setCurrentRol(rol));
   }, []);
 
   // Categorías únicas presentes en los datos cargados, ordenadas alfabéticamente
@@ -196,19 +210,25 @@ export default function AlimentosPage() {
                         <td className="px-4 py-3 text-right text-green-600">{fmt(a.fibra_g)}</td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1.5 justify-end">
-                            <button
-                              onClick={() => setEditing(a)}
-                              className="h-8 px-3 rounded-lg border border-gray-200 text-gray-600 text-xs font-semibold hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors"
-                            >
-                              ✏ Editar
-                            </button>
-                            <button
-                              onClick={() => setConfirmDeleteId(a.id)}
-                              disabled={deletingId === a.id}
-                              className="h-8 px-2 rounded-lg border border-gray-200 text-red-500 text-xs font-semibold hover:border-red-300 hover:bg-red-50 transition-colors disabled:opacity-50"
-                            >
-                              {deletingId === a.id ? "..." : "🗑"}
-                            </button>
+                            {canEdit(a) ? (
+                              <>
+                                <button
+                                  onClick={() => setEditing(a)}
+                                  className="h-8 px-3 rounded-lg border border-gray-200 text-gray-600 text-xs font-semibold hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors"
+                                >
+                                  ✏ Editar
+                                </button>
+                                <button
+                                  onClick={() => setConfirmDeleteId(a.id)}
+                                  disabled={deletingId === a.id}
+                                  className="h-8 px-2 rounded-lg border border-gray-200 text-red-500 text-xs font-semibold hover:border-red-300 hover:bg-red-50 transition-colors disabled:opacity-50"
+                                >
+                                  {deletingId === a.id ? "..." : "🗑"}
+                                </button>
+                              </>
+                            ) : (
+                              <span className="text-xs text-gray-400 italic">Solo lectura</span>
+                            )}
                           </div>
                         </td>
                       </tr>

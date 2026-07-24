@@ -285,6 +285,9 @@ export default function AdministradoresPage() {
                           {isSelf && (
                             <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-semibold">Tú</span>
                           )}
+                          {a.rol === "superadmin" && (
+                            <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-semibold">SuperAdmin</span>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -297,8 +300,8 @@ export default function AdministradoresPage() {
                           className="w-9 h-9 rounded-xl border border-gray-200 hover:border-primary hover:bg-primary/5 flex items-center justify-center transition-colors" title="Editar">
                           ✏️
                         </button>
-                        {!isSelf && (
-                          <button onClick={() => a.id === currentUserId ? setFeedback({ type: "error", text: "No puedes eliminarte a ti mismo como administrador." }) : setConfirmRemove(a)}
+                        {!isSelf && a.rol !== "superadmin" && (
+                          <button onClick={() => setConfirmRemove(a)}
                             className="w-9 h-9 rounded-xl border border-red-200 hover:border-red-400 hover:bg-red-50 flex items-center justify-center transition-colors" title="Quitar acceso">
                             🗑️
                           </button>

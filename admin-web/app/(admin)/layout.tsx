@@ -19,7 +19,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         .select("rol")
         .eq("id", session.user.id)
         .single();
-      if (!perfil || perfil.rol !== "admin") {
+      if (!perfil || !["admin", "superadmin"].includes(perfil.rol)) {
         await supabase.auth.signOut();
         router.replace("/login");
         return;

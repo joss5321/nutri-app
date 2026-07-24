@@ -8,6 +8,7 @@ export type PlanSuplemento = {
   dosis: string | null;
   hora: string | null;
   momento: string | null;
+  notas: string | null;
   suplementos: Suplemento;
 };
 
@@ -16,6 +17,7 @@ export type PlanSuplementoInput = {
   dosis: string | null;
   hora: string | null;
   momento: string | null;
+  notas: string | null;
 };
 
 export async function fetchPlanSuplementacion(userId: string): Promise<PlanSuplemento[]> {

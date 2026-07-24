@@ -22,6 +22,7 @@ type Assigned = {
   rpe: string;
   descanso: string;
   tipoEsfuerzo: "reps" | "tiempo";
+  unidadPeso: "kg" | "lbs";
 };
 
 const DEFAULT_SERIES = 3;
@@ -97,6 +98,7 @@ export default function RutinaBuilderModal({
               rpe: ej.rpe != null ? String(ej.rpe) : "",
               descanso: ej.descanso_seg != null ? String(ej.descanso_seg) : "",
               tipoEsfuerzo: ej.tipo_esfuerzo ?? "reps",
+              unidadPeso: ej.unidad_peso ?? rutina.unidad_peso ?? "kg",
             };
           });
         }
@@ -136,8 +138,16 @@ export default function RutinaBuilderModal({
           rpe: "",
           descanso: "",
           tipoEsfuerzo: "reps",
+          unidadPeso: pesoUnidad,
         },
       ],
+    }));
+  };
+
+  const updateExerciseUnit = (uid: string, unit: "kg" | "lbs") => {
+    setAssigned((prev) => ({
+      ...prev,
+      [activeDay]: prev[activeDay].map((a) => (a.uid === uid ? { ...a, unidadPeso: unit } : a)),
     }));
   };
 
@@ -235,6 +245,7 @@ export default function RutinaBuilderModal({
             rir: a.rir.trim() ? Number(a.rir) : null,
             rpe: a.rpe.trim() ? Number(a.rpe) : null,
             tipo_esfuerzo: a.tipoEsfuerzo,
+            unidad_peso: a.unidadPeso,
             series_detalle: a.seriesRows.map((r) => ({
               reps: r.reps || null,
               peso: r.peso.trim() ? Number(r.peso) : null,
@@ -355,9 +366,9 @@ export default function RutinaBuilderModal({
                 <p className="text-sm font-bold text-gray-800">
                   Rutina semanal · {totalAsignados} ejercicio{totalAsignados !== 1 ? "s" : ""} asignados
                 </p>
-                {/* Toggle kg / lbs */}
+                {/* Unidad por defecto para nuevos ejercicios */}
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-gray-400">Peso:</span>
+                  <span className="text-xs text-gray-400">Unidad por defecto:</span>
                   <div className="flex items-center bg-gray-100 rounded-xl p-0.5">
                     {(["kg", "lbs"] as const).map((u) => (
                       <button
@@ -506,9 +517,22 @@ export default function RutinaBuilderModal({
                           >
                             {a.tipoEsfuerzo === "reps" ? "Reps" : "Tiempo (seg)"}
                           </button>
-                          <span className="text-[10px] text-gray-400 text-center font-medium">
-                            Peso ({pesoUnidad})
-                          </span>
+                          <div className="flex items-center justify-center gap-1">
+                            <span className="text-[10px] text-gray-400 font-medium">Peso</span>
+                            <div className="flex items-center bg-gray-100 rounded-md p-0.5">
+                              {(["kg", "lbs"] as const).map((u) => (
+                                <button
+                                  key={u}
+                                  onClick={() => updateExerciseUnit(a.uid, u)}
+                                  className={`px-1.5 py-0.5 rounded text-[9px] font-semibold transition-colors ${
+                                    a.unidadPeso === u ? "bg-white text-gray-900 shadow-sm" : "text-gray-400"
+                                  }`}
+                                >
+                                  {u}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
                         </div>
                         {a.seriesRows.map((row, si) => (
                           <div key={si} className="grid grid-cols-[32px_1fr_1fr] gap-2 items-center px-3 py-2">

@@ -12,6 +12,7 @@ type AsignadoRow = {
   dosis: string;
   hora: string;
   momento: string;
+  notas: string;
 };
 
 const MOMENTOS = ["Con el desayuno", "Post entrenamiento", "Durante entrenamiento", "Con la comida", "Antes de dormir"];
@@ -37,6 +38,7 @@ export default function SuplementosAsignadosForm({ userId }: { userId: string })
             dosis: p.dosis ?? "",
             hora: p.hora ?? "",
             momento: p.momento ?? "",
+            notas: p.notas ?? "",
           }))
         );
       })
@@ -59,14 +61,14 @@ export default function SuplementosAsignadosForm({ userId }: { userId: string })
   const addSuplemento = (suplementoId: string) => {
     if (asignadosIds.has(suplementoId)) return;
     const sup = catalogo.find((s) => s.id === suplementoId);
-    if (sup) setAsignados((prev) => [...prev, { suplemento: sup, dosis: "", hora: "", momento: "" }]);
+    if (sup) setAsignados((prev) => [...prev, { suplemento: sup, dosis: "", hora: "", momento: "", notas: "" }]);
   };
 
   const removeSuplemento = (suplementoId: string) => {
     setAsignados((prev) => prev.filter((a) => a.suplemento.id !== suplementoId));
   };
 
-  const updateRow = (suplementoId: string, field: "dosis" | "hora" | "momento", value: string) => {
+  const updateRow = (suplementoId: string, field: "dosis" | "hora" | "momento" | "notas", value: string) => {
     setAsignados((prev) =>
       prev.map((a) => (a.suplemento.id === suplementoId ? { ...a, [field]: value } : a))
     );
@@ -81,6 +83,7 @@ export default function SuplementosAsignadosForm({ userId }: { userId: string })
         dosis: a.dosis.trim() || null,
         hora: a.hora || null,
         momento: a.momento || null,
+        notas: a.notas.trim() || null,
       }));
       await savePlanSuplementacion(userId, items);
       setFeedback({ type: "success", text: "Suplementación guardada correctamente." });
@@ -209,6 +212,12 @@ export default function SuplementosAsignadosForm({ userId }: { userId: string })
                       {MOMENTOS.map((m) => <option key={m}>{m}</option>)}
                     </select>
                   </div>
+                </div>
+                <div className="mt-2">
+                  <label className="text-[10px] text-gray-400 block mb-0.5">Notas</label>
+                  <input value={a.notas} onChange={(e) => updateRow(a.suplemento.id, "notas", e.target.value)}
+                    placeholder="Ej. Tomar con agua fría, evitar con cafeína..."
+                    className="w-full h-8 border border-gray-200 rounded-lg px-2 text-xs focus:outline-none focus:border-primary" />
                 </div>
               </div>
             ))}

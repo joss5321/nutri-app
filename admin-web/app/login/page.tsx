@@ -40,7 +40,7 @@ export default function LoginPage() {
         .select("rol")
         .eq("id", userId)
         .single();
-      if (!perfil || perfil.rol !== "admin") {
+      if (!perfil || !["admin", "superadmin"].includes(perfil.rol)) {
         await supabase.auth.signOut();
         setLoading(false);
         setError("No tienes permisos para acceder al panel de administración.");
