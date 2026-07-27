@@ -1,77 +1,127 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import {
+  LayoutDashboard,
+  Users,
+  Utensils,
+  CalendarDays,
+  Pill,
+  Apple,
+  ChefHat,
+  Dumbbell,
+  Scale,
+  ShieldCheck,
+  Settings,
+  LogOut,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 
-type NavItem = { href: string; label: string; icon: string };
-type NavGroup = { label: string; icon: string; children: NavItem[] };
-type NavEntry = NavItem | NavGroup;
+type LucideIcon = React.ComponentType<{
+  size?: number;
+  className?: string;
+  strokeWidth?: number;
+}>;
 
-function isGroup(entry: NavEntry): entry is NavGroup {
-  return "children" in entry;
-}
+type NavItem = { href: string; label: string; icon: LucideIcon };
+type NavSection = { label: string; items: NavItem[] };
 
-const NAV: NavEntry[] = [
-  { href: "/dashboard", label: "Dashboard", icon: "📊" },
-  { href: "/usuarios", label: "Usuarios", icon: "👥" },
+const NAV_SECTIONS: NavSection[] = [
   {
-    label: "Asignación de planes", icon: "📋",
-    children: [
-      { href: "/rutinas", label: "Rutinas", icon: "🏋️" },
-      { href: "/nutricion", label: "Nutrición", icon: "🥗" },
+    label: "GENERAL",
+    items: [
+      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/usuarios", label: "Pacientes", icon: Users },
     ],
   },
   {
-    label: "Catálogos", icon: "📂",
-    children: [
-      { href: "/ejercicios", label: "Ejercicios", icon: "💪" },
-      { href: "/recetas", label: "Recetas", icon: "🍽" },
-      { href: "/suplementos", label: "Suplementos", icon: "💊" },
-      { href: "/alimentos", label: "Alimentos", icon: "🥗" },
+    label: "PLANES",
+    items: [
+      { href: "/nutricion", label: "Nutrición", icon: Utensils },
+      { href: "/rutinas", label: "Rutinas", icon: CalendarDays },
+      { href: "/suplementos", label: "Suplementos", icon: Pill },
     ],
   },
   {
-    label: "Configuración", icon: "⚙️",
-    children: [
-      { href: "/administradores", label: "Admins", icon: "🛡️" },
-      { href: "/mi-perfil", label: "Mi Perfil", icon: "👤" },
+    label: "CATÁLOGOS",
+    items: [
+      { href: "/alimentos", label: "Alimentos", icon: Apple },
+      { href: "/recetas", label: "Recetas", icon: ChefHat },
+      { href: "/ejercicios", label: "Ejercicios", icon: Dumbbell },
+      { href: "/equivalentes", label: "Equivalentes", icon: Scale },
+    ],
+  },
+  {
+    label: "ADMINISTRACIÓN",
+    items: [
+      { href: "/administradores", label: "Administradores", icon: ShieldCheck },
+      { href: "/mi-perfil", label: "Configuración", icon: Settings },
     ],
   },
 ];
+
+/* ── Tooltip para estado colapsado ───────────────────────────────────── */
+function Tooltip({ label }: { label: string }) {
+  return (
+    <div
+      className="
+        absolute left-full top-1/2 -translate-y-1/2 ml-2 z-50
+        px-2.5 py-1.5 rounded-md bg-gray-900/95 text-white text-xs font-medium
+        whitespace-nowrap shadow-xl pointer-events-none
+        opacity-0 group-hover:opacity-100 transition-opacity duration-150
+      "
+      role="tooltip"
+    >
+      {label}
+      {/* Caret apuntando hacia la izquierda (hacia el ícono) */}
+      <span className="absolute right-full top-1/2 -translate-y-1/2 w-0 h-0 border-4 border-transparent border-r-gray-900" />
+    </div>
+  );
+}
 
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [name, setName] = useState("Coach Admin");
-  const [email, setEmail] = useState("");
+  const [rol, setRol] = useState<string>("admin");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
-    const initial: Record<string, boolean> = {};
-    for (const entry of NAV) {
-      if (isGroup(entry) && entry.children.some((c) => pathname.startsWith(c.href))) {
-        initial[entry.label] = true;
-      }
+
+  // Seguro: el Sidebar solo monta en el cliente (el AdminLayout muestra
+  // un spinner hasta resolver la autenticación), por lo que leer
+  // localStorage en el inicializador de estado no causa hydration mismatch.
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("sidebar-collapsed") === "true";
+    } catch {
+      return false;
     }
-    return initial;
   });
-  const toggleGroup = (label: string) =>
-    setOpenGroups((prev) => ({ ...prev, [label]: !prev[label] }));
+
+  const toggleCollapsed = () => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try { localStorage.setItem("sidebar-collapsed", String(next)); } catch { /* noop */ }
+      return next;
+    });
+  };
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) return;
       setName(user.user_metadata?.full_name || user.email || "Coach Admin");
-      setEmail(user.email ?? "");
       const { data: perfil } = await supabase
         .from("perfiles")
-        .select("avatar_url, nombre_completo")
+        .select("avatar_url, nombre_completo, rol")
         .eq("id", user.id)
         .single();
       if (perfil) {
         if (perfil.nombre_completo) setName(perfil.nombre_completo);
         if (perfil.avatar_url) setAvatarUrl(perfil.avatar_url);
+        if (perfil.rol) setRol(perfil.rol);
       }
     });
   }, []);
@@ -81,99 +131,225 @@ export default function Sidebar() {
     router.push("/login");
   };
 
-  return (
-    <aside className="flex flex-col w-60 shrink-0 bg-sidebar h-full">
-      {/* Logo */}
-      <div className="flex items-center justify-center px-6 py-6 border-b border-white/10">
-        <Image
-          src="/logo-icon.png"
-          alt="MyFitTrack"
-          width={140}
-          height={140}
-          className="rounded-xl object-contain"
-        />
-      </div>
+  const initials = name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
+  const rolLabel = rol === "superadmin" ? "SuperAdmin" : "Administrador";
 
-      {/* Coach avatar */}
-      <div className="flex flex-col items-center py-6 border-b border-white/10 gap-2">
-        {avatarUrl ? (
-          <Image src={avatarUrl} alt="" width={80} height={80} className="w-20 h-20 rounded-full object-cover border-2 border-primary" />
+  // Ref al <nav> para manipular su clase directamente desde los eventos
+  // del <aside> sin provocar re-renders de React.
+  const navRef = useRef<HTMLElement>(null);
+  const showScrollbar = () => navRef.current?.classList.add("sidebar-scrollbar-visible");
+  const hideScrollbar = () => navRef.current?.classList.remove("sidebar-scrollbar-visible");
+
+  return (
+    <aside
+      onMouseEnter={showScrollbar}
+      onMouseLeave={hideScrollbar}
+      className={`
+        flex flex-col shrink-0 h-full bg-sidebar overflow-hidden
+        transition-[width] duration-200 ease-in-out
+        ${collapsed ? "w-16" : "w-56"}
+      `}
+    >
+      {/* ── Logo / Header ─────────────────────────────────────────── */}
+      <div
+        className={`
+          flex items-center shrink-0 h-14 border-b border-white/8
+          ${collapsed ? "justify-center px-2" : "px-4"}
+        `}
+      >
+        {collapsed ? (
+          <div className="relative w-9 h-9 rounded-lg overflow-hidden shrink-0">
+            <Image
+              src="/myFitTrackLogo.PNG"
+              alt="MyFitTrack"
+              fill
+              className="object-cover object-left"
+            />
+          </div>
         ) : (
-          <div className="w-20 h-20 rounded-full bg-primary/30 border-2 border-primary flex items-center justify-center text-white font-bold text-2xl">
-            {name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
+          <div className="flex items-center gap-3 min-w-0">
+            <Image
+              src="/myFitTrackLogo.PNG"
+              alt="MyFitTrack"
+              width={160}
+              height={40}
+              style={{ height: 34, width: "auto" }}
+              className="object-contain shrink-0"
+            />
+            <div className="min-w-0 overflow-hidden">
+              <p className="text-white font-bold text-sm leading-tight tracking-tight">
+                MyFitTrack
+              </p>
+              <p className="text-white/35 text-[10px] leading-tight tracking-[0.18em] uppercase">
+                Fitness Management
+              </p>
+            </div>
           </div>
         )}
-        <span className="text-white font-semibold text-sm">{name}</span>
-        {email && <span className="text-white/50 text-xs">{email}</span>}
       </div>
 
-      {/* Nav */}
-      <nav className="flex-1 flex flex-col gap-1 px-3 py-4">
-        {NAV.map((entry) => {
-          if (isGroup(entry)) {
-            const groupActive = entry.children.some((c) => pathname.startsWith(c.href));
-            return (
-              <div key={entry.label}>
-                <button
-                  onClick={() => toggleGroup(entry.label)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-colors ${
-                    groupActive ? "bg-white/15 text-white" : "text-white/60 hover:bg-white/10 hover:text-white"
-                  }`}
-                >
-                  <span className="text-base">{entry.icon}</span>
-                  {entry.label}
-                  <span className={`ml-auto text-xs transition-transform ${openGroups[entry.label] ? "rotate-180" : ""}`}>▾</span>
-                </button>
-                {openGroups[entry.label] && (
-                  <div className="flex flex-col gap-0.5 mt-0.5 ml-4 pl-3 border-l border-white/10">
-                    {entry.children.map((child) => {
-                      const active = pathname.startsWith(child.href);
-                      return (
-                        <Link
-                          key={child.href}
-                          href={child.href}
-                          className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors ${
-                            active ? "bg-white/15 text-white" : "text-white/60 hover:bg-white/10 hover:text-white"
-                          }`}
-                        >
-                          <span className="text-base">{child.icon}</span>
-                          {child.label}
-                          {active && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />}
-                        </Link>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          }
+      {/* ── Perfil de usuario ──────────────────────────────────────── */}
+      <div
+        className={`
+          flex items-center shrink-0 h-14 border-b border-white/8
+          ${collapsed ? "justify-center" : "px-4 gap-3"}
+        `}
+      >
+        {avatarUrl ? (
+          <Image
+            src={avatarUrl}
+            alt={name}
+            width={34}
+            height={34}
+            className="w-[34px] h-[34px] rounded-full object-cover border border-white/20 shrink-0"
+          />
+        ) : (
+          <div className="w-[34px] h-[34px] rounded-full bg-green-500/20 border border-green-500/30 flex items-center justify-center text-green-300 font-semibold text-xs shrink-0 select-none">
+            {initials}
+          </div>
+        )}
+        {!collapsed && (
+          <div className="min-w-0 flex-1 overflow-hidden">
+            <p className="text-white text-sm font-semibold leading-tight truncate">
+              {name}
+            </p>
+            <p className="text-white/40 text-xs leading-tight">{rolLabel}</p>
+          </div>
+        )}
+      </div>
 
-          const active = pathname.startsWith(entry.href);
-          return (
-            <Link
-              key={entry.href}
-              href={entry.href}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-colors ${
-                active ? "bg-white/15 text-white" : "text-white/60 hover:bg-white/10 hover:text-white"
-              }`}
-            >
-              <span className="text-base">{entry.icon}</span>
-              {entry.label}
-              {active && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />}
-            </Link>
-          );
-        })}
+      {/* ── Navegación (scrollable) ────────────────────────────────── */}
+      <nav ref={navRef} className="sidebar-nav flex-1 overflow-y-auto overflow-x-hidden py-2 flex flex-col">
+        {NAV_SECTIONS.map((section, si) => (
+          <div key={section.label} className={si > 0 ? "mt-4" : ""}>
+
+            {/* Etiqueta de sección */}
+            {!collapsed ? (
+              <p className="px-4 mb-1 text-[10px] font-semibold tracking-widest text-white/28 uppercase select-none">
+                {section.label}
+              </p>
+            ) : (
+              si > 0 && (
+                <div className="mx-auto mb-2.5 w-5 h-px bg-white/10" />
+              )
+            )}
+
+            {/* Items */}
+            <div className={`flex flex-col gap-0.5 ${collapsed ? "items-center px-2" : "px-2"}`}>
+              {section.items.map((item) => {
+                const isActive = pathname.startsWith(item.href);
+                const Icon = item.icon;
+
+                return (
+                  <div key={item.href} className="relative group w-full">
+
+                    {/* Barra vertical activa (estilo Notion/Linear) — solo en modo expandido */}
+                    {isActive && !collapsed && (
+                      <span
+                        className="absolute left-0 top-[18%] bottom-[18%] w-[3px] bg-green-400 rounded-r-full pointer-events-none z-10"
+                        aria-hidden
+                      />
+                    )}
+
+                    <Link
+                      href={item.href}
+                      aria-current={isActive ? "page" : undefined}
+                      className={`
+                        flex items-center rounded-lg outline-none
+                        transition-colors duration-150
+                        focus-visible:ring-2 focus-visible:ring-green-400 focus-visible:ring-offset-1
+                        ${collapsed
+                          ? "justify-center w-10 h-10 mx-auto"
+                          : "gap-3 px-3 py-1.5 w-full"
+                        }
+                        ${isActive
+                          ? "bg-green-500/15 text-white"
+                          : "text-white/55 hover:bg-sidebar-hover hover:text-white"
+                        }
+                      `}
+                    >
+                      <Icon
+                        size={16}
+                        strokeWidth={isActive ? 2.5 : 2}
+                        className={`shrink-0 transition-colors duration-150 ${
+                          isActive ? "text-green-400" : ""
+                        }`}
+                      />
+                      {!collapsed && (
+                        <>
+                          <span className="text-sm font-medium flex-1 truncate">
+                            {item.label}
+                          </span>
+                          {isActive && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0" />
+                          )}
+                        </>
+                      )}
+                    </Link>
+
+                    {/* Tooltip (solo en modo colapsado) */}
+                    {collapsed && <Tooltip label={item.label} />}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
 
-      {/* Cerrar sesión */}
-      <div className="px-3 pb-6">
-        <button
-          onClick={handleLogout}
-          className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-white/60 hover:bg-white/10 hover:text-white text-sm font-semibold transition-colors"
-        >
-          <span>🚪</span>
-          Cerrar sesión
-        </button>
+      {/* ── Acciones inferiores (fijo) ─────────────────────────────── */}
+      <div className="shrink-0 border-t border-white/8 px-2 py-2">
+
+        {/* Toggle contraer/expandir */}
+        <div className="relative group">
+          <button
+            onClick={toggleCollapsed}
+            aria-label={collapsed ? "Expandir menú" : "Contraer menú"}
+            className={`
+              flex items-center rounded-lg text-white/35
+              hover:text-white/70 hover:bg-white/6
+              transition-colors duration-150 w-full outline-none
+              focus-visible:ring-2 focus-visible:ring-green-400
+              ${collapsed
+                ? "justify-center w-10 h-9 mx-auto"
+                : "gap-2.5 px-3 py-1.5"
+              }
+            `}
+          >
+            {collapsed ? (
+              <ChevronRight size={15} strokeWidth={2} />
+            ) : (
+              <>
+                <ChevronLeft size={15} strokeWidth={2} />
+                <span className="text-xs font-medium">Contraer menú</span>
+              </>
+            )}
+          </button>
+          {collapsed && <Tooltip label="Expandir menú" />}
+        </div>
+
+        {/* Cerrar sesión */}
+        <div className="relative group mt-0.5">
+          <button
+            onClick={handleLogout}
+            className={`
+              flex items-center rounded-lg text-white/35
+              hover:text-red-400 hover:bg-red-500/8
+              transition-colors duration-150 w-full outline-none
+              focus-visible:ring-2 focus-visible:ring-red-400
+              ${collapsed
+                ? "justify-center w-10 h-9 mx-auto"
+                : "gap-2.5 px-3 py-1.5"
+              }
+            `}
+          >
+            <LogOut size={15} strokeWidth={2} className="shrink-0" />
+            {!collapsed && (
+              <span className="text-xs font-medium">Cerrar sesión</span>
+            )}
+          </button>
+          {collapsed && <Tooltip label="Cerrar sesión" />}
+        </div>
       </div>
     </aside>
   );

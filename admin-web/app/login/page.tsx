@@ -1,11 +1,20 @@
 "use client";
-import { useState } from "react";
+import { Suspense, useState, useEffect } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import PasswordInput from "./PasswordInput";
 import { useSearchParams } from "next/navigation";
-import { useEffect } from "react";
+
+function SearchParamsHandler({ onError }: { onError: (msg: string) => void }) {
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    if (searchParams.get("error") === "no_admin") {
+      onError("No tienes permisos para acceder al panel de administración.");
+    }
+  }, [searchParams, onError]);
+  return null;
+}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -64,15 +73,11 @@ export default function LoginPage() {
       if (error) setError(error.message);
     };
 
-  const searchParams = useSearchParams();
-    useEffect(() => {
-      if (searchParams.get("error") === "no_admin") {
-        setError("No tienes permisos para acceder al panel de administración.");
-      }
-    }, [searchParams]
-  );
-
   return (
+    <>
+      <Suspense fallback={null}>
+        <SearchParamsHandler onError={setError} />
+      </Suspense>
     <div className="flex h-screen w-screen overflow-hidden">
       {/* ── Panel izquierdo ── */}
       <div className="relative hidden lg:flex lg:w-1/2 flex-col justify-between overflow-hidden">
@@ -197,5 +202,6 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+    </>
   );
 }

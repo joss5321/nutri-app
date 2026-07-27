@@ -4,7 +4,8 @@
   --color-primary: #2EBD8C;
   --color-primary-dark: #1A6B45;
   --color-primary-light: #EAF8F0;
-  --color-sidebar: #1A6845;
+  --color-sidebar: #14532D;
+  --color-sidebar-hover: #166534;
   --color-border: #E5E7EB;
 }
 
@@ -17,4 +18,39 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+/* ── Sidebar scrollbar ─────────────────────────────────────────────────
+   3 niveles de opacidad:
+   1. Reposo (cursor fuera del sidebar): casi invisible — 4%
+   2. Cursor sobre el sidebar completo:  visible suave  — 18%
+   3. Cursor directamente sobre el thumb: más brillante — 30%
+
+   El nivel 2 se activa desde JS (aside onMouseEnter) agregando la clase
+   .sidebar-scrollbar-visible al <nav>, sin causar re-renders de React.
+──────────────────────────────────────────────────────────────────────── */
+.sidebar-nav::-webkit-scrollbar {
+  width: 4px;
+}
+.sidebar-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sidebar-nav::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 9999px;
+  transition: background 0.3s ease;
+}
+.sidebar-nav.sidebar-scrollbar-visible::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+}
+.sidebar-nav::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.30) !important;
+}
+/* Firefox */
+.sidebar-nav {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.04) transparent;
+}
+.sidebar-nav.sidebar-scrollbar-visible {
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
 }
