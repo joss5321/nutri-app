@@ -84,7 +84,7 @@ export default function RutinaBuilderModal({
             const n = ej.series ?? DEFAULT_SERIES;
             let seriesRows: SerieRow[];
             if (ej.series_detalle && Array.isArray(ej.series_detalle) && ej.series_detalle.length > 0) {
-              seriesRows = ej.series_detalle.map((s: { reps?: string; peso?: number | null }) => ({
+              seriesRows = ej.series_detalle.map((s) => ({
                 reps: s.reps ?? "",
                 peso: s.peso != null ? String(s.peso) : "",
               }));
