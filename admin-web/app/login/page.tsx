@@ -62,17 +62,6 @@ export default function LoginPage() {
     router.refresh();
   };
 
-  const handleGoogleLogin = async () => {
-      setError(null);
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
-      });
-      if (error) setError(error.message);
-    };
-
   return (
     <>
       <Suspense fallback={null}>
@@ -171,34 +160,6 @@ export default function LoginPage() {
             </a>
           </form>
 
-          {/* Registro */}
-          <div className="flex items-center justify-center gap-1 mt-4">
-            <span className="text-gray-500 text-sm">¿No tienes cuenta?</span>
-            <a href="/register" className="text-primary text-sm font-semibold hover:underline">
-              Regístrate
-            </a>
-          </div>
-
-          {/* Divider */}
-          <div className="flex items-center gap-4 my-6">
-            <div className="flex-1 h-px bg-gray-200" />
-            <span className="text-primary text-sm font-semibold">Ingresar con</span>
-            <div className="flex-1 h-px bg-gray-200" />
-          </div>
-
-          {/* Social */}
-          <div className="flex flex-col gap-3">
-            <button 
-              onClick={handleGoogleLogin}
-              className="flex items-center justify-center gap-3 h-14 rounded-2xl border border-gray-200 hover:bg-gray-50 transition-colors font-semibold text-gray-700 text-sm">
-              <span className="text-xl font-bold text-[#4285F4]">G</span>
-              Continue with Google
-            </button>
-            <button className="flex items-center justify-center gap-3 h-14 rounded-2xl border border-gray-200 hover:bg-gray-50 transition-colors font-semibold text-gray-700 text-sm">
-              <span className="text-xl">🍎</span>
-              Continue with Apple
-            </button>
-          </div>
         </div>
       </div>
     </div>

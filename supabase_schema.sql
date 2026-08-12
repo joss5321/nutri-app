@@ -1064,3 +1064,265 @@ for delete to authenticated using (
   or
   (public.get_user_rol() = 'admin' and created_by = auth.uid())
 );
+
+-- ============================================================
+-- 36. MIGRACIÓN — is_active: habilitar / deshabilitar pacientes
+-- ============================================================
+
+-- 1. Columna is_active en perfiles (default true = habilitado)
+alter table perfiles add column if not exists is_active boolean not null default true;
+
+-- 2. Helper: ¿está activo el usuario que hace la petición?
+create or replace function public.get_current_user_is_active()
+returns boolean language sql security definer stable as $$
+  select coalesce(is_active, true) from perfiles where id = auth.uid()
+$$;
+
+-- 3. Proteger INSERT en tablas de planes:
+--    Solo se puede asignar un plan/rutina/suplemento a un paciente activo.
+--    Las políticas "for all" existentes se dividen en operaciones separadas.
+--    SELECT / UPDATE / DELETE permanecen sin restricción extra (conservar historial).
+
+-- ── Rutinas ──────────────────────────────────────────────────────────────────
+drop policy if exists "rutinas: gestion para autenticados"      on rutinas;
+create policy "rutinas: select autenticados"    on rutinas for select using (auth.role() = 'authenticated');
+create policy "rutinas: update autenticados"    on rutinas for update using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+create policy "rutinas: delete autenticados"    on rutinas for delete using (auth.role() = 'authenticated');
+create policy "rutinas: insert paciente activo" on rutinas for insert with check (
+  auth.role() = 'authenticated' and
+  exists (select 1 from perfiles where id = rutinas.user_id and is_active = true)
+);
+
+-- ── Planes nutricionales ──────────────────────────────────────────────────────
+drop policy if exists "planes: gestion para autenticados"       on planes_nutricionales;
+create policy "planes: select autenticados"    on planes_nutricionales for select using (auth.role() = 'authenticated');
+create policy "planes: update autenticados"    on planes_nutricionales for update using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+create policy "planes: delete autenticados"    on planes_nutricionales for delete using (auth.role() = 'authenticated');
+create policy "planes: insert paciente activo" on planes_nutricionales for insert with check (
+  auth.role() = 'authenticated' and
+  exists (select 1 from perfiles where id = planes_nutricionales.user_id and is_active = true)
+);
+
+-- ── Plan suplementación ───────────────────────────────────────────────────────
+drop policy if exists "plan_supp: gestion para autenticados"    on plan_suplementacion;
+create policy "plan_supp: select autenticados"    on plan_suplementacion for select using (auth.role() = 'authenticated');
+create policy "plan_supp: update autenticados"    on plan_suplementacion for update using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+create policy "plan_supp: delete autenticados"    on plan_suplementacion for delete using (auth.role() = 'authenticated');
+create policy "plan_supp: insert paciente activo" on plan_suplementacion for insert with check (
+  auth.role() = 'authenticated' and
+  exists (select 1 from perfiles where id = plan_suplementacion.user_id and is_active = true)
+);
+
+-- ── Citas ─────────────────────────────────────────────────────────────────────
+drop policy if exists "citas: gestion para autenticados"        on citas;
+create policy "citas: select autenticados"    on citas for select using (auth.role() = 'authenticated');
+create policy "citas: update autenticados"    on citas for update using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+create policy "citas: delete autenticados"    on citas for delete using (auth.role() = 'authenticated');
+create policy "citas: insert paciente activo" on citas for insert with check (
+  auth.role() = 'authenticated' and
+  exists (select 1 from perfiles where id = citas.user_id and is_active = true)
+);
+
+-- ============================================================
+-- 37. MIGRACIÓN — CHECK constraints: valores numéricos >= 0
+-- ============================================================
+
+-- perfiles: altura no puede ser negativa
+alter table perfiles
+  add constraint perfiles_altura_cm_non_neg  check (altura_cm  >= 0);
+
+-- medidas: todas las medidas corporales deben ser >= 0
+alter table medidas
+  add constraint medidas_peso_kg_non_neg       check (peso_kg           >= 0),
+  add constraint medidas_cintura_cm_non_neg    check (cintura_cm        >= 0),
+  add constraint medidas_cadera_cm_non_neg     check (cadera_cm         >= 0),
+  add constraint medidas_masa_musc_non_neg     check (masa_muscular_pct >= 0),
+  add constraint medidas_grasa_pct_non_neg     check (grasa_pct         >= 0),
+  add constraint medidas_brazo_cm_non_neg      check (brazo_cm          >= 0),
+  add constraint medidas_pantorrilla_non_neg   check (pantorrilla_cm    >= 0),
+  add constraint medidas_imc_non_neg           check (imc               >= 0);
+
+-- alimentos: valores nutricionales >= 0
+alter table alimentos
+  add constraint alimentos_cantidad_non_neg    check (cantidad     >= 0),
+  add constraint alimentos_peso_bruto_non_neg  check (peso_bruto_g >= 0),
+  add constraint alimentos_peso_neto_non_neg   check (peso_neto_g  >= 0),
+  add constraint alimentos_kcal_non_neg        check (kcal         >= 0),
+  add constraint alimentos_proteinas_non_neg   check (proteinas_g  >= 0),
+  add constraint alimentos_lipidos_non_neg     check (lipidos_g    >= 0),
+  add constraint alimentos_hco_non_neg         check (hco_g        >= 0),
+  add constraint alimentos_fibra_non_neg       check (fibra_g      >= 0);
+
+-- rutina_ejercicios: parámetros de entrenamiento >= 0 (series ya tiene CHECK >= 1 implícito por min en UI)
+alter table rutina_ejercicios
+  add constraint rutina_ej_peso_non_neg     check (peso_sugerido_kg >= 0),
+  add constraint rutina_ej_descanso_non_neg check (descanso_seg     >= 0),
+  add constraint rutina_ej_rir_non_neg      check (rir              >= 0),
+  add constraint rutina_ej_rpe_non_neg      check (rpe              >= 0);
+
+-- plan_equivalentes: raciones por tiempo de comida >= 0
+alter table plan_equivalentes
+  add constraint plan_eq_desayuno_non_neg   check (desayuno   >= 0),
+  add constraint plan_eq_colacion1_non_neg  check (colacion_1 >= 0),
+  add constraint plan_eq_comida_non_neg     check (comida     >= 0),
+  add constraint plan_eq_colacion2_non_neg  check (colacion_2 >= 0),
+  add constraint plan_eq_cena_non_neg       check (cena       >= 0);
+
+-- receta_ingredientes: cantidad >= 0
+alter table receta_ingredientes
+  add constraint receta_ing_cantidad_non_neg check (cantidad >= 0);
+
+-- ============================================================
+-- 38. MIGRACIÓN — estatus de pacientes: pendiente / aprobado / rechazado
+-- ============================================================
+
+-- 1. Columna estatus en perfiles (default 'pendiente' para nuevos registros)
+alter table perfiles
+  add column if not exists estatus text not null default 'pendiente'
+  check (estatus in ('pendiente', 'aprobado', 'rechazado'));
+
+-- 2. Usuarios existentes activos (is_active = true) → aprobado
+update perfiles
+  set estatus = 'aprobado'
+  where is_active = true;
+
+-- 3. Usuarios existentes deshabilitados (is_active = false) y rol usuario → rechazado
+update perfiles
+  set estatus = 'rechazado'
+  where is_active = false and rol = 'usuario' and estatus = 'pendiente';
+
+-- 4. Admin y superadmin siempre aprobados (independientemente de is_active)
+update perfiles
+  set estatus = 'aprobado'
+  where rol in ('admin', 'superadmin');
+
+-- 5. Actualizar trigger: nuevos registros desde móvil inician como pendiente + is_active = false
+create or replace function crear_perfil_nuevo_usuario()
+returns trigger language plpgsql security definer as $$
+declare
+  v_nutricionista_id uuid;
+begin
+  v_nutricionista_id := (new.raw_user_meta_data->>'nutricionista_id')::uuid;
+
+  if v_nutricionista_id is null then
+    select id into v_nutricionista_id
+    from auth.users
+    where email = 'j.rym5312@gmail.com'
+    limit 1;
+  end if;
+
+  insert into public.perfiles (id, nombre_completo, email, nutricionista_id, is_active, estatus)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'full_name', new.email),
+    new.email,
+    v_nutricionista_id,
+    false,        -- bloqueado hasta que el nutriólogo apruebe
+    'pendiente'
+  );
+  return new;
+end;
+$$;
+
+-- 6. Ampliar política UPDATE de perfiles: superadmin puede actualizar cualquier perfil
+drop policy if exists "perfiles: actualizar multi-tenant" on perfiles;
+create policy "perfiles: actualizar multi-tenant" on perfiles
+  for update
+  using (
+    auth.uid() = id
+    or auth.uid() = nutricionista_id
+    or public.get_user_rol() = 'superadmin'
+  )
+  with check (
+    auth.uid() = id
+    or auth.uid() = nutricionista_id
+    or public.get_user_rol() = 'superadmin'
+  );
+
+-- 7. Actualizar políticas INSERT de tablas de asignación:
+--    solo pacientes aprobados Y activos pueden recibir planes/rutinas/suplementos/citas.
+
+drop policy if exists "rutinas: insert paciente activo" on rutinas;
+create policy "rutinas: insert paciente activo" on rutinas for insert with check (
+  auth.role() = 'authenticated' and
+  exists (
+    select 1 from perfiles
+    where id = rutinas.user_id
+      and is_active = true
+      and estatus = 'aprobado'
+  )
+);
+
+drop policy if exists "planes: insert paciente activo" on planes_nutricionales;
+create policy "planes: insert paciente activo" on planes_nutricionales for insert with check (
+  auth.role() = 'authenticated' and
+  exists (
+    select 1 from perfiles
+    where id = planes_nutricionales.user_id
+      and is_active = true
+      and estatus = 'aprobado'
+  )
+);
+
+drop policy if exists "plan_supp: insert paciente activo" on plan_suplementacion;
+create policy "plan_supp: insert paciente activo" on plan_suplementacion for insert with check (
+  auth.role() = 'authenticated' and
+  exists (
+    select 1 from perfiles
+    where id = plan_suplementacion.user_id
+      and is_active = true
+      and estatus = 'aprobado'
+  )
+);
+
+drop policy if exists "citas: insert paciente activo" on citas;
+create policy "citas: insert paciente activo" on citas for insert with check (
+  auth.role() = 'authenticated' and
+  exists (
+    select 1 from perfiles
+    where id = citas.user_id
+      and is_active = true
+      and estatus = 'aprobado'
+  )
+);
+
+-- ============================================================
+-- 39. MIGRACIÓN — ejercicio_logs: numero_serie + sesion_id
+-- ============================================================
+-- Cada serie de un ejercicio queda como fila separada.
+-- sesion_id agrupa todas las series de una misma sesión de entrenamiento.
+-- numero_serie indica el ordinal de la serie dentro de la sesión (1, 2, 3…).
+-- Los registros anteriores quedan con numero_serie = 1 y sesion_id propio.
+
+alter table ejercicio_logs
+  add column if not exists numero_serie int not null default 1,
+  add column if not exists sesion_id    uuid not null default gen_random_uuid();
+
+create index if not exists ejercicio_logs_sesion_idx
+  on ejercicio_logs (sesion_id);
+
+-- ============================================================
+-- 40. MIGRACIÓN — ejercicios: created_by DEFAULT auth.uid()
+-- ============================================================
+-- La columna created_by fue añadida en la sección 32 sin DEFAULT,
+-- por lo que cada INSERT dejaba created_by = NULL, haciéndolo visible
+-- para todos los admins como si fuera un ejercicio global.
+-- Este DEFAULT corrige eso: al insertar sin especificar created_by,
+-- el valor queda automáticamente en el UUID del usuario autenticado.
+--
+-- La política ejercicios_insert también se refuerza para que un admin
+-- no pueda crear un ejercicio con created_by ajeno o nulo.
+
+alter table ejercicios
+  alter column created_by set default auth.uid();
+
+-- Reforzar la política de INSERT: admin solo puede crear con created_by = auth.uid()
+drop policy if exists "ejercicios_insert" on ejercicios;
+create policy "ejercicios_insert" on ejercicios
+for insert to authenticated with check (
+  public.get_user_rol() in ('admin', 'superadmin')
+  and (
+    public.get_user_rol() = 'superadmin'   -- superadmin puede crear globales (null) o propios
+    or created_by = auth.uid()             -- admin solo puede crear los suyos
+  )
+);

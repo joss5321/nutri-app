@@ -1,19 +1,84 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import RecetaModal from "@/app/_components/recetas/RecetaModal";
 import ConfirmModal from "@/app/_components/ConfirmModal";
 import {
-  CATEGORIAS_NUTRICIONALES,
-  NIVELES_RECETA,
   TIPOS_RECETA,
   deleteReceta,
   duplicateReceta,
-  fetchRecetas,
+  fetchRecetasPaginated,
   type Receta,
 } from "@/app/_data/recetas";
 import { fetchCurrentUserRol } from "@/app/_data/perfiles";
 import { supabase } from "@/lib/supabase";
 
+const PAGE_SIZE = 20;
+
+// ── Pagination control ───────────────────────────────────────────────────────
+function Pagination({
+  page,
+  totalPages,
+  onChange,
+}: {
+  page: number;
+  totalPages: number;
+  onChange: (p: number) => void;
+}) {
+  if (totalPages <= 1) return null;
+
+  const pages: (number | "...")[] = [];
+  if (totalPages <= 7) {
+    for (let i = 1; i <= totalPages; i++) pages.push(i);
+  } else {
+    pages.push(1);
+    if (page > 3) pages.push("...");
+    for (let i = Math.max(2, page - 1); i <= Math.min(totalPages - 1, page + 1); i++) {
+      pages.push(i);
+    }
+    if (page < totalPages - 2) pages.push("...");
+    pages.push(totalPages);
+  }
+
+  return (
+    <div className="flex items-center justify-center gap-1 mt-8">
+      <button
+        onClick={() => onChange(page - 1)}
+        disabled={page === 1}
+        className="h-9 px-3 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+      >
+        ← Anterior
+      </button>
+      {pages.map((p, i) =>
+        p === "..." ? (
+          <span key={`e${i}`} className="px-1 text-gray-400 text-sm select-none">
+            …
+          </span>
+        ) : (
+          <button
+            key={p}
+            onClick={() => onChange(p as number)}
+            className={`h-9 w-9 rounded-xl text-sm font-semibold border transition-colors ${
+              p === page
+                ? "bg-primary text-white border-primary"
+                : "border-gray-200 text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            {p}
+          </button>
+        )
+      )}
+      <button
+        onClick={() => onChange(page + 1)}
+        disabled={page === totalPages}
+        className="h-9 px-3 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+      >
+        Siguiente →
+      </button>
+    </div>
+  );
+}
+
+// ── Recipe detail panel ──────────────────────────────────────────────────────
 function RecipeDetail({
   receta,
   onClose,
@@ -42,10 +107,17 @@ function RecipeDetail({
         <div className="flex-1 min-w-0">
           <p className="font-bold text-gray-900 text-base leading-snug">{receta.nombre}</p>
           {receta.tipo && (
-            <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium inline-block mt-1">{receta.tipo}</span>
+            <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium inline-block mt-1">
+              {receta.tipo}
+            </span>
           )}
         </div>
-        <button onClick={onClose} className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 shrink-0 text-lg">×</button>
+        <button
+          onClick={onClose}
+          className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 shrink-0 text-lg"
+        >
+          ×
+        </button>
       </div>
 
       {/* Hero */}
@@ -63,15 +135,26 @@ function RecipeDetail({
       {/* Actions */}
       <div className="flex gap-2 px-4 py-3 border-b border-gray-100">
         {canEdit && (
-          <button onClick={onEdit} className="flex-1 flex items-center justify-center gap-1 h-9 rounded-xl border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50">
+          <button
+            onClick={onEdit}
+            className="flex-1 flex items-center justify-center gap-1 h-9 rounded-xl border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50"
+          >
             ✏️ Editar
           </button>
         )}
-        <button onClick={onDuplicate} disabled={duplicating} className="flex-1 flex items-center justify-center gap-1 h-9 rounded-xl border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50 disabled:opacity-50">
+        <button
+          onClick={onDuplicate}
+          disabled={duplicating}
+          className="flex-1 flex items-center justify-center gap-1 h-9 rounded-xl border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50 disabled:opacity-50"
+        >
           📋 {duplicating ? "Duplicando..." : "Duplicar"}
         </button>
         {canEdit && (
-          <button onClick={onDelete} disabled={deleting} className="flex-1 flex items-center justify-center gap-1 h-9 rounded-xl border border-red-200 text-red-600 text-xs font-semibold hover:bg-red-50 disabled:opacity-50">
+          <button
+            onClick={onDelete}
+            disabled={deleting}
+            className="flex-1 flex items-center justify-center gap-1 h-9 rounded-xl border border-red-200 text-red-600 text-xs font-semibold hover:bg-red-50 disabled:opacity-50"
+          >
             🗑 {deleting ? "Eliminando..." : "Eliminar"}
           </button>
         )}
@@ -79,11 +162,22 @@ function RecipeDetail({
 
       {/* Tabs */}
       <div className="flex border-b border-gray-100 px-4">
-        {([["ing", "Ingredientes"], ["prep", "Preparación"], ["info", "Info nutricional"]] as const).map(([key, label]) => (
-          <button key={key} onClick={() => setTab(key)}
+        {(
+          [
+            ["ing", "Ingredientes"],
+            ["prep", "Preparación"],
+            ["info", "Info nutricional"],
+          ] as const
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
             className={`py-3 px-2 text-xs font-semibold border-b-2 transition-colors ${
-              tab === key ? "border-primary text-primary" : "border-transparent text-gray-500 hover:text-gray-700"
-            }`}>
+              tab === key
+                ? "border-primary text-primary"
+                : "border-transparent text-gray-500 hover:text-gray-700"
+            }`}
+          >
             {label}
           </button>
         ))}
@@ -99,7 +193,10 @@ function RecipeDetail({
             {receta.ingredientes.length > 0 ? (
               <div className="flex flex-col gap-2">
                 {receta.ingredientes.map((ing) => (
-                  <div key={ing.id} className="flex items-center gap-2 py-2 border-b border-gray-50 last:border-0">
+                  <div
+                    key={ing.id}
+                    className="flex items-center gap-2 py-2 border-b border-gray-50 last:border-0"
+                  >
                     <input type="checkbox" className="accent-primary" />
                     <span className="text-sm text-gray-700">{ing.descripcion}</span>
                   </div>
@@ -118,7 +215,9 @@ function RecipeDetail({
               <div className="flex flex-col gap-3">
                 {receta.pasos.map((paso) => (
                   <div key={paso.id} className="flex gap-3">
-                    <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold shrink-0 mt-0.5">{paso.numero}</div>
+                    <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold shrink-0 mt-0.5">
+                      {paso.numero}
+                    </div>
                     <p className="text-sm text-gray-700 leading-relaxed">{paso.descripcion}</p>
                   </div>
                 ))}
@@ -141,7 +240,10 @@ function RecipeDetail({
                 <div key={m.label} className="flex items-center gap-2 mb-2">
                   <span className={`w-2 h-2 rounded-full ${m.color} shrink-0`} />
                   <span className="text-sm text-gray-700 flex-1">{m.label}</span>
-                  <span className="text-sm font-bold text-gray-900">{m.value}{m.unit}</span>
+                  <span className="text-sm font-bold text-gray-900">
+                    {m.value}
+                    {m.unit}
+                  </span>
                 </div>
               ))}
             </div>
@@ -154,7 +256,10 @@ function RecipeDetail({
                 { label: "Tipo de comida",        value: receta.tipo ?? "—" },
                 { label: "Categoría",             value: receta.categoria_nutricional ?? "—" },
               ].map((r) => (
-                <div key={r.label} className="flex justify-between text-xs py-1 border-b border-gray-100 last:border-0">
+                <div
+                  key={r.label}
+                  className="flex justify-between text-xs py-1 border-b border-gray-100 last:border-0"
+                >
                   <span className="text-gray-500">{r.label}</span>
                   <span className="font-medium text-gray-800">{r.value}</span>
                 </div>
@@ -167,74 +272,127 @@ function RecipeDetail({
   );
 }
 
+// ── Main page ────────────────────────────────────────────────────────────────
 export default function RecetasPage() {
-  const [recetas, setRecetas] = useState<Receta[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState<string | null>(null);
-  const [search, setSearch]   = useState("");
-  const [categoria, setCategoria] = useState("Todas");
-  const [tipo, setTipo]       = useState("Todas");
-  const [nivel, setNivel]     = useState("Todas");
-  const [selected, setSelected] = useState<Receta | null>(null);
-  const [showCreate, setShowCreate] = useState(false);
-  const [editing, setEditing] = useState<Receta | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [recetas, setRecetas]       = useState<Receta[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState<string | null>(null);
+
+  const [search, setSearch]               = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [tipo, setTipo]                   = useState("Todas");
+  const [page, setPage]                   = useState(1);
+
+  const [selected, setSelected]           = useState<Receta | null>(null);
+  const [showCreate, setShowCreate]       = useState(false);
+  const [editing, setEditing]             = useState<Receta | null>(null);
+  const [deletingId, setDeletingId]       = useState<string | null>(null);
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [currentRol, setCurrentRol] = useState<string | null>(null);
+  const [currentRol, setCurrentRol]       = useState<string | null>(null);
 
-  const loadRecetas = () => {
-    fetchRecetas()
-      .then(setRecetas)
-      .catch((err) => setError(err instanceof Error ? err.message : "No se pudieron cargar las recetas."))
-      .finally(() => setLoading(false));
-  };
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const rangeFrom  = totalCount === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const rangeTo    = Math.min(page * PAGE_SIZE, totalCount);
 
+  // Refs so mutation handlers always read current filter state
+  const pageRef   = useRef(page);
+  const searchRef = useRef(debouncedSearch);
+  const tipoRef   = useRef(tipo);
+  useEffect(() => { pageRef.current   = page;           }, [page]);
+  useEffect(() => { searchRef.current = debouncedSearch; }, [debouncedSearch]);
+  useEffect(() => { tipoRef.current   = tipo;           }, [tipo]);
+
+  // ── Core load ──────────────────────────────────────────────────────────────
+  const loadPage = useCallback(async (p: number, q: string, t: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await fetchRecetasPaginated({ page: p, pageSize: PAGE_SIZE, search: q, tipo: t });
+      setRecetas(result.data);
+      setTotalCount(result.count);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudieron cargar las recetas.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const reload = useCallback(() => {
+    loadPage(pageRef.current, searchRef.current, tipoRef.current);
+  }, [loadPage]);
+
+  // Debounce search → reset to page 1 when query changes
   useEffect(() => {
-    loadRecetas();
+    const t = setTimeout(() => {
+      setPage(1);
+      setDebouncedSearch(search);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Load data whenever page, debounced search, or tipo changes
+  useEffect(() => {
+    loadPage(page, debouncedSearch, tipo);
+  }, [page, debouncedSearch, tipo, loadPage]);
+
+  // Clear detail panel when filters change (not on page change)
+  useEffect(() => {
+    setSelected(null);
+  }, [debouncedSearch, tipo]);
+
+  // Auth
+  useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) setCurrentUserId(user.id);
     });
     fetchCurrentUserRol().then((rol) => setCurrentRol(rol));
   }, []);
 
+  // ── Permissions ────────────────────────────────────────────────────────────
   const canEdit = (r: Receta): boolean => {
     if (!currentUserId || !currentRol) return false;
     if (currentRol === "superadmin") return true;
     return r.created_by === currentUserId;
   };
 
-  const load = () => {
-    setLoading(true);
-    setError(null);
-    loadRecetas();
+  // ── Filter handlers ────────────────────────────────────────────────────────
+  const handleTipoChange = (value: string) => {
+    setTipo(value);
+    setPage(1);
   };
 
-  const filtered = recetas.filter((r) => {
-    const matchSearch = search === "" || r.nombre.toLowerCase().includes(search.toLowerCase());
-    const matchCat    = categoria === "Todas" || r.categoria_nutricional === categoria;
-    const matchTipo   = tipo === "Todas" || r.tipo === tipo;
-    const matchNivel  = nivel === "Todas" || r.nivel === nivel;
-    return matchSearch && matchCat && matchTipo && matchNivel;
-  });
-
+  // ── Mutation handlers ──────────────────────────────────────────────────────
   const handleSaved = (receta: Receta) => {
-    setRecetas((prev) => {
-      const exists = prev.some((r) => r.id === receta.id);
-      return exists ? prev.map((r) => (r.id === receta.id ? receta : r)) : [receta, ...prev];
-    });
+    const isEdit = recetas.some((r) => r.id === receta.id);
     setSelected((prev) => (prev?.id === receta.id ? receta : prev));
+    if (isEdit) {
+      reload();
+    } else {
+      // New recipe lands at the top (ordered by created_at DESC) → go to page 1
+      if (page !== 1) {
+        setPage(1);
+      } else {
+        loadPage(1, debouncedSearch, tipo);
+      }
+    }
   };
-
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const handleDelete = async (id: string) => {
     setConfirmDeleteId(null);
     setDeletingId(id);
     try {
       await deleteReceta(id);
-      setRecetas((prev) => prev.filter((r) => r.id !== id));
       setSelected((prev) => (prev?.id === id ? null : prev));
+      // If this was the last card on a page > 1, go back one page
+      if (recetas.length === 1 && page > 1) {
+        setPage((p) => p - 1);
+      } else {
+        reload();
+      }
     } catch (err) {
       alert(err instanceof Error ? err.message : "No se pudo eliminar la receta.");
     } finally {
@@ -246,8 +404,13 @@ export default function RecetasPage() {
     setDuplicatingId(receta.id);
     try {
       const copia = await duplicateReceta(receta);
-      setRecetas((prev) => [copia, ...prev]);
       setSelected(copia);
+      // Duplicate has the newest created_at → appears first on page 1
+      if (page !== 1) {
+        setPage(1);
+      } else {
+        loadPage(1, debouncedSearch, tipo);
+      }
     } catch (err) {
       alert(err instanceof Error ? err.message : "No se pudo duplicar la receta.");
     } finally {
@@ -255,6 +418,7 @@ export default function RecetasPage() {
     }
   };
 
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="flex h-full">
       {/* Main content */}
@@ -263,43 +427,52 @@ export default function RecetasPage() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Recetas</h1>
-            <p className="text-gray-500 text-sm mt-1">Gestiona y crea recetas saludables para tus planes nutricionales.</p>
+            <p className="text-gray-500 text-sm mt-1">
+              Gestiona y crea recetas saludables para tus planes nutricionales.
+            </p>
           </div>
-          <button onClick={() => setShowCreate(true)} className="flex items-center gap-2 h-10 px-4 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary-dark transition-colors">
+          <button
+            onClick={() => setShowCreate(true)}
+            className="flex items-center gap-2 h-10 px-4 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary-dark transition-colors"
+          >
             + Nueva receta
           </button>
         </div>
 
-        {/* Filters */}
+        {/* Filters — Categoría and Dificultad removed; search + tipo remain */}
         <div className="flex flex-wrap items-end gap-3 mb-6">
           <div>
             <label className="text-xs text-gray-400 font-medium mb-0.5 ml-1 block">&nbsp;</label>
             <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 h-10 shadow-sm">
               <span className="text-gray-400 text-sm">🔍</span>
-              <input placeholder="Buscar recetas..."
-                value={search} onChange={(e) => setSearch(e.target.value)}
-                className="w-40 text-sm focus:outline-none text-gray-700" />
+              <input
+                placeholder="Buscar recetas..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-40 text-sm focus:outline-none text-gray-700"
+              />
             </div>
           </div>
-          {[
-            { label: "Categoría",  value: categoria, set: setCategoria, options: ["Todas", ...CATEGORIAS_NUTRICIONALES] },
-            { label: "Tipo",       value: tipo,      set: setTipo,      options: ["Todas", ...TIPOS_RECETA] },
-            { label: "Dificultad", value: nivel,     set: setNivel,     options: ["Todas", ...NIVELES_RECETA] },
-          ].map((f) => (
-            <div key={f.label}>
-              <label className="text-xs text-gray-400 font-medium mb-0.5 ml-1 block">{f.label}</label>
-              <select value={f.value} onChange={(e) => f.set(e.target.value)}
-                className="h-10 border border-gray-200 rounded-xl px-3 text-sm focus:outline-none focus:border-primary bg-white shadow-sm">
-                {f.options.map((o) => <option key={o}>{o}</option>)}
-              </select>
-            </div>
-          ))}
+          <div>
+            <label className="text-xs text-gray-400 font-medium mb-0.5 ml-1 block">Tipo</label>
+            <select
+              value={tipo}
+              onChange={(e) => handleTipoChange(e.target.value)}
+              className="h-10 border border-gray-200 rounded-xl px-3 text-sm focus:outline-none focus:border-primary bg-white shadow-sm"
+            >
+              {["Todas", ...TIPOS_RECETA].map((o) => (
+                <option key={o}>{o}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {error && (
           <div className="mb-4 flex items-center justify-between bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl px-4 py-3">
             <span>{error}</span>
-            <button onClick={load} className="font-semibold hover:underline">Reintentar</button>
+            <button onClick={reload} className="font-semibold hover:underline">
+              Reintentar
+            </button>
           </div>
         )}
 
@@ -309,12 +482,26 @@ export default function RecetasPage() {
           <>
             {/* Counter */}
             <p className="text-sm text-gray-500 mb-4">
-              <span className="font-semibold text-gray-900">{filtered.length}</span> recetas encontradas
+              {totalCount > 0 ? (
+                <>
+                  Mostrando{" "}
+                  <span className="font-semibold text-gray-900">
+                    {rangeFrom}–{rangeTo}
+                  </span>{" "}
+                  de{" "}
+                  <span className="font-semibold text-gray-900">{totalCount}</span>{" "}
+                  recetas
+                </>
+              ) : (
+                <>
+                  <span className="font-semibold text-gray-900">0</span> recetas encontradas
+                </>
+              )}
             </p>
 
             {/* Grid */}
             <div className="grid grid-cols-3 gap-5">
-              {filtered.map((r) => (
+              {recetas.map((r) => (
                 <div
                   key={r.id}
                   onClick={() => setSelected(r.id === selected?.id ? null : r)}
@@ -322,7 +509,6 @@ export default function RecetasPage() {
                     selected?.id === r.id ? "border-primary shadow-md" : "border-gray-200"
                   }`}
                 >
-                  {/* Image */}
                   <div className="relative h-40 bg-primary/5 flex items-center justify-center">
                     <span className="text-5xl">{r.emoji || "🍽️"}</span>
                     {r.tipo && (
@@ -333,7 +519,9 @@ export default function RecetasPage() {
                   </div>
 
                   <div className="p-4">
-                    <p className="font-semibold text-gray-900 text-sm leading-snug mb-2">{r.nombre}</p>
+                    <p className="font-semibold text-gray-900 text-sm leading-snug mb-2">
+                      {r.nombre}
+                    </p>
                     <div className="flex items-center gap-3 text-xs text-gray-500 mb-2">
                       <span>⏱ {r.tiempo_min ?? "—"} min</span>
                       <span>📊 {r.nivel ?? "—"}</span>
@@ -345,8 +533,10 @@ export default function RecetasPage() {
                       </span>
                     )}
 
-                    {/* Botones de acción */}
-                    <div className="flex items-center gap-2 mt-3" onClick={(e) => e.stopPropagation()}>
+                    <div
+                      className="flex items-center gap-2 mt-3"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       {canEdit(r) && (
                         <button
                           onClick={() => setEditing(r)}
@@ -376,13 +566,16 @@ export default function RecetasPage() {
                 </div>
               ))}
 
-              {filtered.length === 0 && (
+              {recetas.length === 0 && (
                 <div className="col-span-3 flex flex-col items-center justify-center py-16 text-gray-400">
                   <span className="text-4xl mb-2">🔍</span>
                   <p className="text-sm">No se encontraron recetas.</p>
                 </div>
               )}
             </div>
+
+            {/* Pagination controls */}
+            <Pagination page={page} totalPages={totalPages} onChange={setPage} />
           </>
         )}
       </div>
@@ -401,9 +594,7 @@ export default function RecetasPage() {
         />
       )}
 
-      {showCreate && (
-        <RecetaModal onSave={handleSaved} onClose={() => setShowCreate(false)} />
-      )}
+      {showCreate && <RecetaModal onSave={handleSaved} onClose={() => setShowCreate(false)} />}
       {editing && (
         <RecetaModal receta={editing} onSave={handleSaved} onClose={() => setEditing(null)} />
       )}

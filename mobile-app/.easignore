@@ -1,0 +1,57 @@
+# Dependencias — EAS las instala en el servidor
+node_modules/
+
+# Expo cache
+.expo/
+.expo-shared/
+
+# Build outputs
+dist/
+web-build/
+android/
+ios/
+
+# Metro
+.metro-health-check*
+*.orig.*
+
+# Logs
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# TypeScript
+*.tsbuildinfo
+
+# Keys / certs (nunca subir)
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+
+# Env locales
+.env*.local
+
+# IDE
+.vscode/
+.idea/
+
+# Tests
+__tests__/
+coverage/
+
+# Scripts de utilidad
+scripts/
+
+# Assets pesados no usados en el build nativo
+assets/images/tabIcons/
+
+# Git
+.git/

@@ -1,11 +1,10 @@
 import { useState } from 'react'
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Link, useRouter } from 'expo-router'
 import { Image } from 'expo-image'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '@/lib/supabase'
-import { useOAuthSignIn } from '@/hooks/useOAuthSignIn'
 import { COLORS } from '@/constants/colors'
 
 type Errors = { email?: string; password?: string }
@@ -39,14 +38,11 @@ function AuthInput({
   )
 }
 
-import { TextInput } from 'react-native'
-
 export default function LoginScreen() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState<Errors>({})
-  const { signInWithProvider, loading: oauthLoading } = useOAuthSignIn()
   const router = useRouter()
 
   const validate = () => {
@@ -61,9 +57,49 @@ export default function LoginScreen() {
   const handleLogin = async () => {
     if (!validate()) return
     setLoading(true)
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password })
+    const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password })
+    if (error) {
+      setLoading(false)
+      Alert.alert('Error', error.message)
+      return
+    }
+    // Verificar estatus del perfil antes de dejar entrar
+    const { data: perfil } = await supabase
+      .from('perfiles')
+      .select('is_active, estatus')
+      .eq('id', data.user.id)
+      .single()
+
+    if (perfil) {
+      if (perfil.estatus === 'pendiente') {
+        await supabase.auth.signOut()
+        setLoading(false)
+        Alert.alert(
+          'Cuenta pendiente',
+          'Tu cuenta está pendiente de aprobación por tu nutriólogo. Te avisaremos cuando sea revisada.',
+        )
+        return
+      }
+      if (perfil.estatus === 'rechazado') {
+        await supabase.auth.signOut()
+        setLoading(false)
+        Alert.alert(
+          'Solicitud rechazada',
+          'Tu solicitud de registro fue rechazada. Contacta a tu nutriólogo para más información.',
+        )
+        return
+      }
+      if (perfil.is_active === false) {
+        await supabase.auth.signOut()
+        setLoading(false)
+        Alert.alert(
+          'Cuenta deshabilitada',
+          'Tu cuenta se encuentra deshabilitada. Comunícate con tu administrador o nutriólogo para obtener más información.',
+        )
+        return
+      }
+    }
     setLoading(false)
-    if (error) Alert.alert('Error', error.message)
   }
 
   return (
@@ -107,34 +143,6 @@ export default function LoginScreen() {
               <TouchableOpacity onPress={() => router.push('/(auth)/forgot-password')} style={{ alignSelf: 'flex-end', marginTop: 4 }}>
                 <Text style={styles.link}>Olvide mi contraseña</Text>
               </TouchableOpacity>
-            </View>
-
-            <View style={styles.divider}>
-              <Text style={styles.dividerText}>Ingresar con</Text>
-            </View>
-
-            <View style={styles.socialBlock}>
-              <TouchableOpacity
-                style={styles.socialBtn}
-                onPress={() => signInWithProvider('google')}
-                disabled={oauthLoading === 'google'}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.gIcon}>G</Text>
-                <Text style={styles.socialBtnText}>Continue with Google</Text>
-              </TouchableOpacity>
-
-              {Platform.OS === 'ios' && (
-                <TouchableOpacity
-                  style={styles.socialBtn}
-                  onPress={() => signInWithProvider('apple')}
-                  disabled={oauthLoading === 'apple'}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="logo-apple" size={20} color="#000" />
-                  <Text style={styles.socialBtnText}>Continue with Apple</Text>
-                </TouchableOpacity>
-              )}
             </View>
 
             <View style={styles.footer}>
@@ -187,22 +195,6 @@ const styles = StyleSheet.create({
   },
   primaryBtnText: { color: COLORS.white, fontWeight: '700', fontSize: 17 },
   link: { color: COLORS.primary, fontWeight: '600', fontSize: 14 },
-  divider: { alignItems: 'center' },
-  dividerText: { color: COLORS.muted, fontWeight: '500', fontSize: 14 },
-  socialBlock: { gap: 12 },
-  socialBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    backgroundColor: COLORS.white,
-    borderRadius: 16,
-    height: 54,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  gIcon: { fontSize: 18, fontWeight: '700', color: '#4285F4' },
-  socialBtnText: { fontSize: 15, fontWeight: '600', color: COLORS.text },
   footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 4 },
   footerText: { color: COLORS.muted, fontSize: 14 },
 })

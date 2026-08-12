@@ -1,12 +1,50 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, Image, Linking, Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Ionicons } from '@expo/vector-icons'
+import { randomUUID } from 'expo-crypto'
 import { useFocusEffect } from '@react-navigation/native'
 import { COLORS } from '@/constants/colors'
 import { useAuthStore } from '@/store/auth'
 import { useNewsStore } from '@/store/news'
 import { fetchMiRutina, type RutinaCompleta, type SerieDetalle } from '@/lib/api/rutinas'
-import { fetchEjercicioLogs, fetchAllEjercicioLogs, createEjercicioLog, type EjercicioLog } from '@/lib/api/ejercicio_logs'
+import { fetchEjercicioLogs, fetchAllEjercicioLogs, createEjercicioLog, deleteEjercicioLogsForToday, type EjercicioLog } from '@/lib/api/ejercicio_logs'
+
+// ─── Persistencia del progreso semanal ───────────────────────────────────────
+const WEEK_KEY = '@rutinas_week_state'
+
+function getCurrentMondayISO(): string {
+  const now = new Date()
+  const day = now.getDay()                       // 0=Dom, 1=Lun, ..., 6=Sab
+  const diff = day === 0 ? -6 : 1 - day         // días hasta el lunes anterior
+  const monday = new Date(now)
+  monday.setDate(now.getDate() + diff)
+  return monday.toISOString().slice(0, 10)       // "YYYY-MM-DD"
+}
+
+async function loadWeekState(): Promise<number[]> {
+  try {
+    const raw = await AsyncStorage.getItem(WEEK_KEY)
+    if (!raw) return []
+    const stored = JSON.parse(raw) as { weekStart: string; completedDays: number[] }
+    if (stored.weekStart !== getCurrentMondayISO()) {
+      await AsyncStorage.removeItem(WEEK_KEY)    // nueva semana → limpiar
+      return []
+    }
+    return stored.completedDays ?? []
+  } catch {
+    return []
+  }
+}
+
+async function saveWeekState(completedDays: number[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(
+      WEEK_KEY,
+      JSON.stringify({ weekStart: getCurrentMondayISO(), completedDays }),
+    )
+  } catch {}
+}
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 type DayStatus = 'completado' | 'pendiente' | 'descanso'
@@ -99,6 +137,32 @@ function isYouTubeShort(url: string): boolean {
   return /youtube\.com\/shorts\//.test(url)
 }
 
+// ─── Helpers historial ───────────────────────────────────────────────────────
+const MONTHS_SHORT = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
+
+type MobileSession = {
+  sesionId: string
+  fecha: string
+  series: { numero: number; peso: number }[]
+}
+
+function buildMobileSessions(logs: EjercicioLog[]): MobileSession[] {
+  const map = new Map<string, MobileSession>()
+  const order: string[] = []
+  for (const log of logs) {
+    const key = log.sesion_id ?? log.fecha  // fallback para datos pre-migración
+    if (!map.has(key)) {
+      map.set(key, { sesionId: key, fecha: log.fecha, series: [] })
+      order.push(key)
+    }
+    map.get(key)!.series.push({ numero: log.numero_serie ?? 1, peso: log.peso_kg })
+  }
+  const sessions = order.map((k) => map.get(k)!)
+  for (const s of sessions) s.series.sort((a, b) => a.numero - b.numero)
+  sessions.sort((a, b) => b.fecha.localeCompare(a.fecha))
+  return sessions
+}
+
 // ─── Modal de detalle del ejercicio ─────────────────────────────────────────
 function ExerciseDetailModal({ exercise, userId, onClose }: { exercise: Exercise; userId: string; onClose: () => void }) {
   const ytId = exercise.video_url ? getYouTubeEmbedId(exercise.video_url) : null
@@ -136,8 +200,11 @@ function ExerciseDetailModal({ exercise, userId, onClose }: { exercise: Exercise
       return
     }
     setSavingPeso(true)
+    const sesionId = randomUUID()
     try {
-      await Promise.all(entries.map((e) => createEjercicioLog(userId, exercise.ejercicio_id, e.peso)))
+      // Eliminar registros de hoy antes de insertar (sobreescritura del día)
+      await deleteEjercicioLogsForToday(userId, exercise.ejercicio_id)
+      await Promise.all(entries.map((e) => createEjercicioLog(userId, exercise.ejercicio_id, e.peso, e.serie, sesionId)))
       const updated = await fetchEjercicioLogs(userId, exercise.ejercicio_id)
       setLogs(updated)
       Alert.alert('Registrado', `${entries.length} serie${entries.length > 1 ? 's' : ''} guardada${entries.length > 1 ? 's' : ''} correctamente.`)
@@ -279,7 +346,7 @@ function ExerciseDetailModal({ exercise, userId, onClose }: { exercise: Exercise
               </TouchableOpacity>
             </View>
 
-            {/* Historial de pesos */}
+            {/* Historial de pesos — tabla agrupada por sesión */}
             <View style={ed.detailCard}>
               <Text style={ed.detailTitle}>Historial de pesos</Text>
               {loadingLogs ? (
@@ -288,23 +355,64 @@ function ExerciseDetailModal({ exercise, userId, onClose }: { exercise: Exercise
                 <Text style={{ fontSize: 12, color: COLORS.muted, textAlign: 'center', paddingVertical: 12 }}>
                   Aún no hay registros. Guarda tus primeras series arriba.
                 </Text>
-              ) : (
-                <View style={{ gap: 0 }}>
-                  {[...logs].reverse().map((log) => {
-                    const [y, m, d] = log.fecha.split('-').map(Number)
-                    const isBest = log.peso_kg === bestWeight
-                    return (
-                      <View key={log.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' }}>
-                        <Text style={{ fontSize: 13, color: COLORS.muted }}>{d}/{m}/{y}</Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <Text style={{ fontSize: 15, fontWeight: '700', color: isBest ? COLORS.primary : COLORS.text }}>{log.peso_kg} kg</Text>
-                          {isBest && <Text style={{ fontSize: 10 }}>🏆</Text>}
-                        </View>
+              ) : (() => {
+                const sessions = buildMobileSessions(logs)
+                const maxSeries = Math.max(...sessions.map((s) => s.series.length))
+                const allPesos = sessions.flatMap((s) => s.series.map((sr) => sr.peso))
+                const best = allPesos.length > 0 ? Math.max(...allPesos) : null
+                let trophySesionId: string | null = null
+                let trophyNumSerie: number | null = null
+                if (best != null) {
+                  outer: for (const session of sessions) {
+                    for (const serie of session.series) {
+                      if (serie.peso === best) {
+                        trophySesionId = session.sesionId
+                        trophyNumSerie = serie.numero
+                        break outer
+                      }
+                    }
+                  }
+                }
+                const DATE_W = 84
+                const COL_W = 68
+                return (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -4 }}>
+                    <View style={{ paddingHorizontal: 4 }}>
+                      {/* Cabecera */}
+                      <View style={{ flexDirection: 'row', backgroundColor: '#F1F5F9', borderRadius: 8, paddingVertical: 7, marginBottom: 2 }}>
+                        <Text style={{ width: DATE_W, paddingHorizontal: 6, fontSize: 10, fontWeight: '700', color: COLORS.muted }}>Fecha</Text>
+                        {Array.from({ length: maxSeries }, (_, i) => (
+                          <Text key={i} style={{ width: COL_W, textAlign: 'right', paddingHorizontal: 6, fontSize: 10, fontWeight: '700', color: COLORS.muted }}>
+                            Serie {i + 1}
+                          </Text>
+                        ))}
                       </View>
-                    )
-                  })}
-                </View>
-              )}
+                      {/* Filas */}
+                      {sessions.map((session, rowIdx) => {
+                        const [y, m, d] = session.fecha.split('-').map(Number)
+                        const serieMap = new Map(session.series.map((sr) => [sr.numero, sr]))
+                        return (
+                          <View key={session.sesionId} style={{ flexDirection: 'row', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F3F4F6', backgroundColor: rowIdx % 2 === 1 ? '#F9FAFB' : COLORS.white }}>
+                            <Text style={{ width: DATE_W, paddingHorizontal: 6, fontSize: 11, color: COLORS.muted, fontWeight: '500' }}>
+                              {d}/{MONTHS_SHORT[m - 1]}/{String(y).slice(2)}
+                            </Text>
+                            {Array.from({ length: maxSeries }, (_, i) => {
+                              const n = i + 1
+                              const serie = serieMap.get(n)
+                              const isTrophy = session.sesionId === trophySesionId && n === trophyNumSerie
+                              return (
+                                <Text key={n} style={{ width: COL_W, textAlign: 'right', paddingHorizontal: 6, fontSize: 12, fontWeight: serie ? '700' : '400', color: isTrophy ? COLORS.primary : serie ? COLORS.text : '#CBD5E1' }}>
+                                  {serie ? `${serie.peso}kg${isTrophy ? ' 🏆' : ''}` : '—'}
+                                </Text>
+                              )
+                            })}
+                          </View>
+                        )
+                      })}
+                    </View>
+                  </ScrollView>
+                )
+              })()}
             </View>
 
             {/* Descripción */}
@@ -451,18 +559,25 @@ export default function RutinasScreen() {
   const [expanded, setExpanded] = useState<number[]>([])
   const [allExercises, setAllExercises] = useState<ProgressExercise[]>([])
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null)
+  const weekAlertShown = useRef(false)
 
   const loadData = useCallback((isRefresh = false) => {
     if (!userId) return
     if (isRefresh) setRefreshing(true); else setLoading(true)
-    Promise.all([fetchMiRutina(userId), fetchAllEjercicioLogs(userId)])
-      .then(([rutina, logs]) => {
+    Promise.all([fetchMiRutina(userId), fetchAllEjercicioLogs(userId), loadWeekState()])
+      .then(([rutina, logs, completedDays]) => {
         if (rutina) {
           const mapped = mapRutinaToDays(rutina)
-          setDays(mapped)
+          // Restaurar días completados de esta semana
+          const withStatus = mapped.map((d) =>
+            !d.isRest && completedDays.includes(d.num)
+              ? { ...d, status: 'completado' as DayStatus }
+              : d
+          )
+          setDays(withStatus)
           setRutinaNombre(rutina.nombre)
           setAllExercises(buildProgressList(mapped, logs))
-          const firstWorkout = mapped.find((d) => !d.isRest)
+          const firstWorkout = withStatus.find((d) => !d.isRest)
           if (firstWorkout) setExpanded([firstWorkout.num])
         } else {
           setDays([])
@@ -490,8 +605,42 @@ export default function RutinasScreen() {
   const toggleDay = (num: number) =>
     setExpanded((prev) => prev.includes(num) ? prev.filter((d) => d !== num) : [...prev, num])
 
-  const markComplete = (dayNum: number) =>
-    setDays((prev) => prev.map((d) => d.num === dayNum ? { ...d, status: 'completado' } : d))
+  const markComplete = (dayNum: number) => {
+    setDays((prev) => {
+      const next = prev.map((d) =>
+        d.num === dayNum ? { ...d, status: 'completado' as DayStatus } : d
+      )
+      const completed = next.filter((d) => !d.isRest && d.status === 'completado').map((d) => d.num)
+      saveWeekState(completed)
+      return next
+    })
+  }
+
+  // Detectar semana completa y ofrecer reinicio
+  useEffect(() => {
+    if (loading) return
+    const nonRest = days.filter((d) => !d.isRest)
+    if (nonRest.length === 0) return
+    if (!nonRest.every((d) => d.status === 'completado')) {
+      weekAlertShown.current = false
+      return
+    }
+    if (weekAlertShown.current) return
+    weekAlertShown.current = true
+    Alert.alert(
+      '¡Semana completa! 🎉',
+      'Completaste todos los entrenamientos de la semana. ¡Excelente trabajo!',
+      [{
+        text: 'Reiniciar semana',
+        onPress: () => {
+          AsyncStorage.removeItem(WEEK_KEY).catch(() => {})
+          weekAlertShown.current = false
+          setDays((prev) => prev.map((d) => d.isRest ? d : { ...d, status: 'pendiente' as DayStatus }))
+        },
+      }],
+      { cancelable: false },
+    )
+  }, [days, loading])
 
   return (
     <View style={s.container}>

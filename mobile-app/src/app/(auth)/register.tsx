@@ -5,7 +5,6 @@ import { Link, useRouter } from 'expo-router'
 import { Image } from 'expo-image'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '@/lib/supabase'
-import { useOAuthSignIn } from '@/hooks/useOAuthSignIn'
 import { COLORS } from '@/constants/colors'
 import { fetchNutricionistas, type Nutricionista } from '@/lib/api/nutricionistas'
 
@@ -16,7 +15,6 @@ export default function RegisterScreen() {
   const [showPass, setShowPass] = useState(false)
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const { signInWithProvider, loading: oauthLoading } = useOAuthSignIn()
   const router = useRouter()
 
   // Nutritionist selection
@@ -166,25 +164,6 @@ export default function RegisterScreen() {
               <Text style={styles.primaryBtnText}>{loading ? 'Registrando...' : 'Registrar'}</Text>
             </TouchableOpacity>
 
-            <View style={styles.divider}>
-              <Text style={styles.dividerText}>O ingresar con</Text>
-            </View>
-
-            <View style={styles.socialBlock}>
-              <TouchableOpacity style={styles.socialBtn} onPress={() => signInWithProvider('google')}
-                disabled={oauthLoading === 'google'} activeOpacity={0.8}>
-                <Text style={styles.gIcon}>G</Text>
-                <Text style={styles.socialBtnText}>Continue with Google</Text>
-              </TouchableOpacity>
-              {Platform.OS === 'ios' && (
-                <TouchableOpacity style={styles.socialBtn} onPress={() => signInWithProvider('apple')}
-                  disabled={oauthLoading === 'apple'} activeOpacity={0.8}>
-                  <Ionicons name="logo-apple" size={20} color="#000" />
-                  <Text style={styles.socialBtnText}>Continue with Apple</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-
             <View style={styles.footer}>
               <Text style={styles.footerText}>¿Ya tienes cuenta? </Text>
               <Link href="/(auth)/login" asChild>
@@ -253,16 +232,6 @@ const styles = StyleSheet.create({
   },
   primaryBtnText: { color: COLORS.white, fontWeight: '700', fontSize: 17 },
   link: { color: COLORS.primary, fontWeight: '600', fontSize: 14 },
-  divider: { alignItems: 'center' },
-  dividerText: { color: COLORS.muted, fontWeight: '500', fontSize: 14 },
-  socialBlock: { gap: 12 },
-  socialBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-    backgroundColor: COLORS.white, borderRadius: 16, height: 54,
-    borderWidth: 1, borderColor: COLORS.border,
-  },
-  gIcon: { fontSize: 18, fontWeight: '700', color: '#4285F4' },
-  socialBtnText: { fontSize: 15, fontWeight: '600', color: COLORS.text },
   footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 4 },
   footerText: { color: COLORS.muted, fontSize: 14 },
 })

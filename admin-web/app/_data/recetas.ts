@@ -98,6 +98,42 @@ export async function fetchRecetas(): Promise<Receta[]> {
   return (data as RecetaRow[]).map(normalizeReceta);
 }
 
+export type FetchRecetasParams = {
+  page: number;     // 1-based
+  pageSize: number;
+  search?: string;
+  tipo?: string;
+};
+
+export async function fetchRecetasPaginated(
+  params: FetchRecetasParams
+): Promise<{ data: Receta[]; count: number }> {
+  const { page, pageSize, search = "", tipo = "" } = params;
+  const from = (page - 1) * pageSize;
+  const to   = from + pageSize - 1;
+
+  let query = supabase
+    .from("recetas")
+    .select(RECETA_SELECT, { count: "exact" })
+    .is("user_id", null)
+    .order("created_at", { ascending: false })
+    .range(from, to);
+
+  if (search.trim()) {
+    query = query.ilike("nombre", `%${search.trim()}%`);
+  }
+  if (tipo && tipo !== "Todas") {
+    query = query.eq("tipo", tipo);
+  }
+
+  const { data, error, count } = await query;
+  if (error) throw error;
+  return {
+    data: (data as RecetaRow[]).map(normalizeReceta),
+    count: count ?? 0,
+  };
+}
+
 async function replaceIngredientes(recetaId: string, ingredientes: RecetaIngredienteInput[]): Promise<void> {
   const { error: deleteError } = await supabase.from("receta_ingredientes").delete().eq("receta_id", recetaId);
   if (deleteError) throw deleteError;

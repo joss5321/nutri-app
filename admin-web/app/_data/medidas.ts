@@ -22,20 +22,21 @@ export async function fetchUltimaMedida(userId: string): Promise<Medida | null> 
     .from("medidas")
     .select("*")
     .eq("user_id", userId)
-    .order("fecha", { ascending: false })
+    .order("fecha",      { ascending: false })
+    .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
   if (error) throw error;
   return data as Medida | null;
 }
 
-export async function fetchMedidasHistorial(userId: string, limit = 6): Promise<Medida[]> {
+export async function fetchMedidasHistorial(userId: string): Promise<Medida[]> {
   const { data, error } = await supabase
     .from("medidas")
     .select("*")
     .eq("user_id", userId)
-    .order("fecha", { ascending: true })
-    .limit(limit);
+    .order("fecha",      { ascending: true })
+    .order("created_at", { ascending: true });
   if (error) throw error;
   return data as Medida[];
 }

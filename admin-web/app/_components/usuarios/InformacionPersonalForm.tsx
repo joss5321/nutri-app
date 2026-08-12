@@ -114,6 +114,9 @@ export default function InformacionPersonalForm({
   // Loading / error
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState<string | null>(null);
+  const [ready,   setReady]   = useState(false);
+  const [hasDraft, setHasDraft] = useState(false);
+  const DRAFT_KEY = `clinico_draft_${userId}`;
 
   // Datos personales
   const [savingPerfil,   setSavingPerfil]   = useState(false);
@@ -175,12 +178,74 @@ export default function InformacionPersonalForm({
         setBrazo(medida?.brazo_cm != null ? String(medida.brazo_cm) : "");
         setPantorrilla(medida?.pantorrilla_cm != null ? String(medida.pantorrilla_cm) : "");
         if (historia) setHist({ ...emptyHistoria(), ...historia });
+        // ── Restaurar borrador per-paciente ──────────────────────────────
+        const snap = {
+          nombreCompleto:  perfil.nombre_completo  ?? "",
+          planMembresia:   perfil.plan_membresia   ?? "basico",
+          fechaNacimiento: perfil.fecha_nacimiento ?? "",
+          sexo:            perfil.sexo             ?? "femenino",
+          hist:            historia ? { ...emptyHistoria(), ...historia } : emptyHistoria(),
+          peso:        medida?.peso_kg           != null ? String(medida.peso_kg)           : "",
+          altura:      perfil.altura_cm          != null ? String(perfil.altura_cm)          : "",
+          cintura:     medida?.cintura_cm        != null ? String(medida.cintura_cm)        : "",
+          cadera:      medida?.cadera_cm         != null ? String(medida.cadera_cm)         : "",
+          masaMuscular: medida?.masa_muscular_pct != null ? String(medida.masa_muscular_pct) : "",
+          grasa:       medida?.grasa_pct         != null ? String(medida.grasa_pct)         : "",
+          brazo:       medida?.brazo_cm          != null ? String(medida.brazo_cm)          : "",
+          pantorrilla: medida?.pantorrilla_cm    != null ? String(medida.pantorrilla_cm)    : "",
+        };
+        try {
+          const raw = localStorage.getItem(`clinico_draft_${userId}`);
+          if (raw) {
+            const d = JSON.parse(raw) as typeof snap & { openSecs?: string[] };
+            const scalarKeys = [
+              "nombreCompleto","planMembresia","fechaNacimiento","sexo",
+              "peso","altura","cintura","cadera","masaMuscular","grasa","brazo","pantorrilla",
+            ] as const;
+            const differs =
+              scalarKeys.some((k) => d[k] !== undefined && d[k] !== snap[k]) ||
+              (d.hist !== undefined && JSON.stringify(d.hist) !== JSON.stringify(snap.hist));
+            if (differs) {
+              if (d.nombreCompleto  != null) setNombreCompleto(d.nombreCompleto);
+              if (d.planMembresia   != null) setPlanMembresia(d.planMembresia);
+              if (d.fechaNacimiento != null) setFechaNacimiento(d.fechaNacimiento);
+              if (d.sexo            != null) setSexo(d.sexo);
+              if (d.hist            != null) setHist({ ...emptyHistoria(), ...d.hist });
+              if (d.peso            != null) setPeso(d.peso);
+              if (d.altura          != null) setAltura(d.altura);
+              if (d.cintura         != null) setCintura(d.cintura);
+              if (d.cadera          != null) setCadera(d.cadera);
+              if (d.masaMuscular    != null) setMasaMuscular(d.masaMuscular);
+              if (d.grasa           != null) setGrasa(d.grasa);
+              if (d.brazo           != null) setBrazo(d.brazo);
+              if (d.pantorrilla     != null) setPantorrilla(d.pantorrilla);
+              if (d.openSecs)               setOpenSecs(new Set(d.openSecs));
+              setHasDraft(true);
+            }
+          }
+        } catch {}
+        setReady(true);
       })
       .catch((err) => setError(err instanceof Error ? err.message : "No se pudo cargar la información."))
       .finally(() => setLoading(false));
   };
 
   useEffect(() => { loadInfo(); }, []);
+
+  // Auto-guardar borrador per-paciente en cada cambio del formulario
+  useEffect(() => {
+    if (!ready) return;
+    const draft = {
+      nombreCompleto, planMembresia, fechaNacimiento, sexo, hist,
+      peso, altura, cintura, cadera, masaMuscular, grasa, brazo, pantorrilla,
+      openSecs: [...openSecs],
+    };
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch {}
+  // DRAFT_KEY es estable durante el ciclo de vida del componente (mismo userId)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, nombreCompleto, planMembresia, fechaNacimiento, sexo, hist,
+      peso, altura, cintura, cadera, masaMuscular, grasa, brazo, pantorrilla, openSecs]);
+
   const load = () => { setLoading(true); setError(null); loadInfo(); };
 
   const pesoNum   = parseFloat(peso);
@@ -201,6 +266,8 @@ export default function InformacionPersonalForm({
       });
       await saveHistoriaClinica(userId, hist);
       setPerfilFeedback({ type: "success", text: "Historial guardado correctamente." });
+      localStorage.removeItem(DRAFT_KEY);
+      setHasDraft(false);
       onPerfilUpdated?.();
     } catch (err) {
       setPerfilFeedback({ type: "error", text: err instanceof Error ? err.message : "No se pudo guardar." });
@@ -209,14 +276,31 @@ export default function InformacionPersonalForm({
     }
   };
 
-  // ── Save medidas (unchanged) ──────────────────────
+  // ── Save medidas ─────────────────────────────────
   const handleSaveMedidas = async () => {
+    // Rechazar valores negativos (defensa en profundidad: la UI ya lo previene en onChange)
+    const camposNum = [
+      { label: "Peso (kg)",                    val: peso },
+      { label: "Altura (cm)",                  val: altura },
+      { label: "Circunferencia cintura (cm)",  val: cintura },
+      { label: "Circunferencia cadera (cm)",   val: cadera },
+      { label: "% Masa muscular",              val: masaMuscular },
+      { label: "% Grasa corporal",             val: grasa },
+      { label: "Circunferencia brazo (cm)",    val: brazo },
+      { label: "Circunferencia pantorrilla (cm)", val: pantorrilla },
+    ];
+    const negativo = camposNum.find(({ val }) => val.trim() !== "" && parseFloat(val) < 0);
+    if (negativo) {
+      setShowMedidasConfirm(false);
+      setMedidasFeedback({ type: "error", text: `El campo "${negativo.label}" no puede ser menor a cero.` });
+      return;
+    }
     setShowMedidasConfirm(false);
     setSavingMedidas(true);
     setMedidasFeedback(null);
     try {
       await updatePerfil(userId, { altura_cm: altura.trim() ? Number(altura) : null });
-      await createMedida(userId, {
+      const nuevaMedida = await createMedida(userId, {
         fecha: new Date().toISOString().slice(0, 10),
         peso_kg:           peso.trim()        ? Number(peso)        : null,
         cintura_cm:        cintura.trim()     ? Number(cintura)     : null,
@@ -227,6 +311,15 @@ export default function InformacionPersonalForm({
         pantorrilla_cm:    pantorrilla.trim() ? Number(pantorrilla) : null,
         imc: imc != null ? Number(imc.toFixed(2)) : null,
       });
+      // Sincronizar el formulario con los valores exactos guardados en BD
+      setPeso(nuevaMedida.peso_kg           != null ? String(nuevaMedida.peso_kg)           : "");
+      setCintura(nuevaMedida.cintura_cm     != null ? String(nuevaMedida.cintura_cm)         : "");
+      setCadera(nuevaMedida.cadera_cm       != null ? String(nuevaMedida.cadera_cm)          : "");
+      setMasaMuscular(nuevaMedida.masa_muscular_pct != null ? String(nuevaMedida.masa_muscular_pct) : "");
+      setGrasa(nuevaMedida.grasa_pct        != null ? String(nuevaMedida.grasa_pct)          : "");
+      setBrazo(nuevaMedida.brazo_cm         != null ? String(nuevaMedida.brazo_cm)           : "");
+      setPantorrilla(nuevaMedida.pantorrilla_cm != null ? String(nuevaMedida.pantorrilla_cm) : "");
+      // altura no se toca: viene de perfiles y ya fue guardada con updatePerfil
       setMedidasFeedback({ type: "success", text: `Medidas registradas con fecha ${new Date().toLocaleDateString("es-MX")}.` });
     } catch (err) {
       setMedidasFeedback({ type: "error", text: err instanceof Error ? err.message : "No se pudo guardar." });
@@ -279,6 +372,25 @@ export default function InformacionPersonalForm({
 
   return (
     <div className="space-y-5">
+
+      {/* Banner de borrador no guardado */}
+      {hasDraft && (
+        <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 font-medium">
+          <span>📝</span>
+          <span>Borrador restaurado — tienes cambios sin guardar en este formulario.</span>
+          <button
+            type="button"
+            onClick={() => {
+              localStorage.removeItem(DRAFT_KEY);
+              setHasDraft(false);
+              setReady(false);
+              load();
+            }}
+            className="ml-auto shrink-0 text-amber-600 hover:text-amber-800 underline font-semibold">
+            Descartar cambios
+          </button>
+        </div>
+      )}
 
       {/* ═══════════════════════════════════════════════
           SECCIÓN 1 — DATOS PERSONALES
@@ -360,7 +472,17 @@ export default function InformacionPersonalForm({
         ].map((f) => (
           <div key={f.label}>
             <label className={LB}>{f.label}</label>
-            <input value={f.value} type="number" onChange={(e) => f.set(e.target.value)} className={IC} />
+            <input
+              value={f.value}
+              type="number"
+              min="0"
+              step="0.1"
+              onChange={(e) => {
+                const n = parseFloat(e.target.value);
+                f.set(!isNaN(n) && n < 0 ? "0" : e.target.value);
+              }}
+              className={IC}
+            />
           </div>
         ))}
       </div>
@@ -382,14 +504,24 @@ export default function InformacionPersonalForm({
 
       <div className="grid grid-cols-4 gap-3">
         {[
-          { label: "% Masa muscular",                     value: masaMuscular, set: setMasaMuscular },
+          { label: "Masa muscular (kg)",                   value: masaMuscular, set: setMasaMuscular },
           { label: "% Grasa corporal",                    value: grasa,        set: setGrasa },
           { label: "Circunferencia brazo (cm)",           value: brazo,        set: setBrazo },
           { label: "Circunferencia pantorrilla (cm)",     value: pantorrilla,  set: setPantorrilla },
         ].map((f) => (
           <div key={f.label}>
             <label className={LB}>{f.label}</label>
-            <input value={f.value} type="number" onChange={(e) => f.set(e.target.value)} className={IC} />
+            <input
+              value={f.value}
+              type="number"
+              min="0"
+              step="0.1"
+              onChange={(e) => {
+                const n = parseFloat(e.target.value);
+                f.set(!isNaN(n) && n < 0 ? "0" : e.target.value);
+              }}
+              className={IC}
+            />
           </div>
         ))}
       </div>
@@ -525,8 +657,17 @@ export default function InformacionPersonalForm({
               </div>
               <div>
                 <label className={LB}>Duración (min)</label>
-                <input type="number" value={hist.ev_duracion}
-                  onChange={(e) => sh("ev_duracion")(e.target.value)} className={IC} />
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={hist.ev_duracion}
+                  onChange={(e) => {
+                    const n = parseFloat(e.target.value);
+                    sh("ev_duracion")(!isNaN(n) && n < 0 ? "0" : e.target.value);
+                  }}
+                  className={IC}
+                />
               </div>
               <div>
                 <label className={LB}>Intensidad</label>
@@ -583,13 +724,31 @@ export default function InformacionPersonalForm({
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={LB}>Vasos de agua potable al día</label>
-            <input type="number" value={hist.ev_vasos_agua}
-              onChange={(e) => sh("ev_vasos_agua")(e.target.value)} className={IC} />
+            <input
+              type="number"
+              min="0"
+              step="1"
+              value={hist.ev_vasos_agua}
+              onChange={(e) => {
+                const n = parseFloat(e.target.value);
+                sh("ev_vasos_agua")(!isNaN(n) && n < 0 ? "0" : e.target.value);
+              }}
+              className={IC}
+            />
           </div>
           <div>
             <label className={LB}>Vasos de bebidas al día (refrescos, jugos, aguas)</label>
-            <input type="number" value={hist.ev_vasos_bebidas}
-              onChange={(e) => sh("ev_vasos_bebidas")(e.target.value)} className={IC} />
+            <input
+              type="number"
+              min="0"
+              step="1"
+              value={hist.ev_vasos_bebidas}
+              onChange={(e) => {
+                const n = parseFloat(e.target.value);
+                sh("ev_vasos_bebidas")(!isNaN(n) && n < 0 ? "0" : e.target.value);
+              }}
+              className={IC}
+            />
           </div>
         </div>
 
@@ -629,8 +788,17 @@ export default function InformacionPersonalForm({
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={LB}>Cuántas comidas hace al día</label>
-            <input type="number" value={hist.id_comidas_dia}
-              onChange={(e) => sh("id_comidas_dia")(e.target.value)} className={IC} />
+            <input
+              type="number"
+              min="0"
+              step="1"
+              value={hist.id_comidas_dia}
+              onChange={(e) => {
+                const n = parseFloat(e.target.value);
+                sh("id_comidas_dia")(!isNaN(n) && n < 0 ? "0" : e.target.value);
+              }}
+              className={IC}
+            />
           </div>
           <div>
             <label className={LB}>Quién prepara sus alimentos</label>

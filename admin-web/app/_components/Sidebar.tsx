@@ -13,7 +13,6 @@ import {
   Apple,
   ChefHat,
   Dumbbell,
-  Scale,
   ShieldCheck,
   Settings,
   LogOut,
@@ -43,7 +42,6 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/nutricion", label: "Nutrición", icon: Utensils },
       { href: "/rutinas", label: "Rutinas", icon: CalendarDays },
-      { href: "/suplementos", label: "Suplementos", icon: Pill },
     ],
   },
   {
@@ -52,7 +50,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/alimentos", label: "Alimentos", icon: Apple },
       { href: "/recetas", label: "Recetas", icon: ChefHat },
       { href: "/ejercicios", label: "Ejercicios", icon: Dumbbell },
-      { href: "/equivalentes", label: "Equivalentes", icon: Scale },
+      { href: "/suplementos", label: "Suplementos", icon: Pill },
     ],
   },
   {

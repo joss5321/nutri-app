@@ -56,6 +56,7 @@ export default function RutinaBuilderModal({
   const [deleting, setDeleting] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     fetchEjercicios()
@@ -64,10 +65,14 @@ export default function RutinaBuilderModal({
       .finally(() => setLoadingExercises(false));
   }, []);
 
-  const loadRutina = () => {
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingRutina(true);
+    setError(null);
     fetchRutinaActiva(patient.id)
       .then((rutina) => {
-        if (!rutina) return;
+        if (cancelled) return;
+        if (!rutina) { setLoadingRutina(false); return; }
         setRutinaId(rutina.id);
         setNombre(rutina.nombre);
         setPesoUnidad(rutina.unidad_peso ?? "kg");
@@ -79,7 +84,7 @@ export default function RutinaBuilderModal({
             const n = ej.series ?? DEFAULT_SERIES;
             let seriesRows: SerieRow[];
             if (ej.series_detalle && Array.isArray(ej.series_detalle) && ej.series_detalle.length > 0) {
-              seriesRows = ej.series_detalle.map((s) => ({
+              seriesRows = ej.series_detalle.map((s: { reps?: string; peso?: number | null }) => ({
                 reps: s.reps ?? "",
                 peso: s.peso != null ? String(s.peso) : "",
               }));
@@ -103,18 +108,19 @@ export default function RutinaBuilderModal({
           });
         }
         setAssigned(next);
+        setLoadingRutina(false);
       })
-      .catch((err) => setError(err instanceof Error ? err.message : "No se pudo cargar la rutina."))
-      .finally(() => setLoadingRutina(false));
-  };
+      .catch((err) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "No se pudo cargar la rutina.");
+          setLoadingRutina(false);
+        }
+      });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [retryCount]);
 
-  useEffect(() => { loadRutina(); }, []);
-
-  const retryLoadRutina = () => {
-    setLoadingRutina(true);
-    setError(null);
-    loadRutina();
-  };
+  const retryLoadRutina = () => setRetryCount((c) => c + 1);
 
   const exerciseById = (id: string) => exercises.find((e) => e.id === id);
 
@@ -155,18 +161,17 @@ export default function RutinaBuilderModal({
     setAssigned((prev) => ({ ...prev, [activeDay]: prev[activeDay].filter((a) => a.uid !== uid) }));
   };
 
-  const updateSeries = (uid: string, value: string) => {
-    const n = Math.max(1, parseInt(value) || 1);
+  const stepSeries = (uid: string, delta: 1 | -1) => {
     setAssigned((prev) => ({
       ...prev,
       [activeDay]: prev[activeDay].map((a) => {
         if (a.uid !== uid) return a;
+        const n = Math.min(20, Math.max(1, (parseInt(a.series) || 1) + delta));
         const cur = a.seriesRows;
         const last = cur[cur.length - 1] ?? { reps: "10", peso: "" };
-        const newRows =
-          n > cur.length
-            ? [...cur, ...makeRows(n - cur.length, last)]
-            : cur.slice(0, n);
+        const newRows = n > cur.length
+          ? [...cur, ...makeRows(n - cur.length, last)]
+          : cur.slice(0, n);
         return { ...a, series: String(n), seriesRows: newRows };
       }),
     }));
@@ -410,7 +415,7 @@ export default function RutinaBuilderModal({
                   if (id) addExercise(id);
                   setDragOver(false);
                 }}
-                className={`flex-1 rounded-xl border-2 border-dashed p-3 flex flex-col gap-3 min-h-[24rem] max-h-[38rem] overflow-y-auto transition-colors ${
+                className={`series-scroll h-[36rem] rounded-xl border-2 border-dashed p-3 flex flex-col gap-3 overflow-y-auto transition-colors ${
                   dragOver ? "border-primary bg-primary/5" : "border-gray-200"
                 }`}
               >
@@ -425,7 +430,7 @@ export default function RutinaBuilderModal({
                   const ex = exerciseById(a.exerciseId);
                   if (!ex) return null;
                   return (
-                    <div key={a.uid} className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                    <div key={a.uid} className="shrink-0 bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
                       {/* Exercise header */}
                       <div className="flex items-center gap-2 px-3 py-2.5 bg-gray-50/80 border-b border-gray-100">
                         <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-base shrink-0">
@@ -442,14 +447,13 @@ export default function RutinaBuilderModal({
                           {/* Series */}
                           <div className="flex flex-col items-center">
                             <span className="text-[10px] text-gray-400 mb-0.5">Series</span>
-                            <input
-                              type="number"
-                              min="1"
-                              max="20"
-                              value={a.series}
-                              onChange={(e) => updateSeries(a.uid, e.target.value)}
-                              className="w-12 h-7 text-center border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-primary font-semibold"
-                            />
+                            <div className="flex items-center">
+                              <button type="button" onClick={() => stepSeries(a.uid, -1)}
+                                className="w-6 h-7 flex items-center justify-center border border-gray-200 rounded-l-lg text-xs text-gray-500 hover:bg-gray-50 active:bg-gray-100 select-none">−</button>
+                              <span className="w-7 h-7 flex items-center justify-center border-t border-b border-gray-200 text-xs font-semibold text-gray-900 select-none">{a.series}</span>
+                              <button type="button" onClick={() => stepSeries(a.uid, 1)}
+                                className="w-6 h-7 flex items-center justify-center border border-gray-200 rounded-r-lg text-xs text-gray-500 hover:bg-gray-50 active:bg-gray-100 select-none">+</button>
+                            </div>
                           </div>
                           {/* RIR */}
                           <div className="flex flex-col items-center">
@@ -534,32 +538,38 @@ export default function RutinaBuilderModal({
                             </div>
                           </div>
                         </div>
-                        {a.seriesRows.map((row, si) => (
-                          <div key={si} className="grid grid-cols-[32px_1fr_1fr] gap-2 items-center px-3 py-2">
-                            <span className="text-xs font-bold text-gray-400">S{si + 1}</span>
-                            <input
-                              type={a.tipoEsfuerzo === "tiempo" ? "number" : "text"}
-                              min={a.tipoEsfuerzo === "tiempo" ? "0" : undefined}
-                              value={row.reps}
-                              onChange={(e) => updateSerieRow(a.uid, si, "reps", e.target.value)}
-                              placeholder={a.tipoEsfuerzo === "tiempo" ? "seg" : "—"}
-                              className={`h-8 text-center border rounded-lg text-sm focus:outline-none w-full ${
-                                a.tipoEsfuerzo === "tiempo"
-                                  ? "border-orange-200 focus:border-orange-400"
-                                  : "border-gray-200 focus:border-primary"
-                              }`}
-                            />
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.5"
-                              value={row.peso}
-                              onChange={(e) => updateSerieRow(a.uid, si, "peso", e.target.value.replace(/^-/, ""))}
-                              placeholder="—"
-                              className="h-8 text-center border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary w-full"
-                            />
-                          </div>
-                        ))}
+                        {/* Scrollable rows */}
+                        <div
+                          className="series-scroll divide-y divide-gray-50 overflow-y-auto max-h-44"
+                          style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(0,0,0,0.08) transparent" }}
+                        >
+                          {a.seriesRows.map((row, si) => (
+                            <div key={si} className="grid grid-cols-[32px_1fr_1fr] gap-2 items-center px-3 py-2">
+                              <span className="text-xs font-bold text-gray-400">S{si + 1}</span>
+                              <input
+                                type={a.tipoEsfuerzo === "tiempo" ? "number" : "text"}
+                                min={a.tipoEsfuerzo === "tiempo" ? "0" : undefined}
+                                value={row.reps}
+                                onChange={(e) => updateSerieRow(a.uid, si, "reps", e.target.value)}
+                                placeholder={a.tipoEsfuerzo === "tiempo" ? "seg" : "—"}
+                                className={`h-8 text-center border rounded-lg text-sm focus:outline-none w-full ${
+                                  a.tipoEsfuerzo === "tiempo"
+                                    ? "border-orange-200 focus:border-orange-400"
+                                    : "border-gray-200 focus:border-primary"
+                                }`}
+                              />
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.5"
+                                value={row.peso}
+                                onChange={(e) => updateSerieRow(a.uid, si, "peso", e.target.value.replace(/^-/, ""))}
+                                placeholder="—"
+                                className="h-8 text-center border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary w-full"
+                              />
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     </div>
                   );

@@ -12,6 +12,8 @@ export type Perfil = {
   plan_membresia: string;
   rol: string;
   nutricionista_id: string | null;
+  is_active: boolean;
+  estatus: "pendiente" | "aprobado" | "rechazado";
   created_at?: string;
 };
 
@@ -59,6 +61,25 @@ export async function fetchPerfil(id: string): Promise<Perfil> {
     .single();
   if (error) throw error;
   return data as Perfil;
+}
+
+export async function setIsActive(id: string, isActive: boolean): Promise<void> {
+  const { error } = await supabase
+    .from("perfiles")
+    .update({ is_active: isActive })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function setEstatus(
+  id: string,
+  estatus: "aprobado" | "rechazado"
+): Promise<void> {
+  const { error } = await supabase
+    .from("perfiles")
+    .update({ estatus, is_active: estatus === "aprobado" })
+    .eq("id", id);
+  if (error) throw error;
 }
 
 export async function updatePerfil(

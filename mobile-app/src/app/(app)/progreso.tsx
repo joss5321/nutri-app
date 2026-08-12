@@ -4,7 +4,7 @@ import { useFocusEffect } from '@react-navigation/native'
 import { AppHeader } from '@/components/ui/AppHeader'
 import { COLORS } from '@/constants/colors'
 import { useAuthStore } from '@/store/auth'
-import { updateMiPerfil } from '@/lib/api/perfiles'
+import { fetchMiPerfil, updateMiPerfil } from '@/lib/api/perfiles'
 import { fetchUltimaMedida, fetchMedidasHistorial, createMedida, type Medida } from '@/lib/api/medidas'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -83,6 +83,10 @@ function LineChart({
   const points = values.map((v, i) => ({ x: getX(i), y: getY(v), v }))
   const yTicks = [dMax, (dMax + dMin) / 2, dMin]
 
+  const LABEL_W = 32
+  const maxLabels = Math.max(2, Math.floor(plotW / LABEL_W))
+  const labelStep = values.length <= maxLabels ? 1 : Math.ceil(values.length / maxLabels)
+
   return (
     <View style={{ height: CHART_H, position: 'relative' }}>
       {yTicks.map((t, i) => (
@@ -112,11 +116,15 @@ function LineChart({
           </Text>
         </View>
       ))}
-      {points.map((pt, i) => (
-        <Text key={`xl${i}`} style={{ position: 'absolute', left: pt.x - 16, top: CHART_H - PAD_B + 5, width: 32, textAlign: 'center', fontSize: 9, color: COLORS.muted }}>
-          {labels[i]}
-        </Text>
-      ))}
+      {points.map((pt, i) => {
+        const show = i % labelStep === 0 || i === points.length - 1
+        if (!show) return null
+        return (
+          <Text key={`xl${i}`} style={{ position: 'absolute', left: pt.x - 16, top: CHART_H - PAD_B + 5, width: 32, textAlign: 'center', fontSize: 9, color: COLORS.muted }}>
+            {labels[i]}
+          </Text>
+        )
+      })}
     </View>
   )
 }
@@ -182,11 +190,11 @@ export default function ProgresoScreen() {
   const loadData = useCallback((isRefresh = false) => {
     if (!userId) return
     if (isRefresh) setRefreshing(true); else setLoading(true)
-    fetchUltimaMedida(userId)
-      .then((medida) => {
+    Promise.all([fetchUltimaMedida(userId), fetchMiPerfil(userId)])
+      .then(([medida, perfil]) => {
+        setAlturaCm(perfil?.altura_cm ?? null)
         if (medida) {
           setHasData(true)
-          setAlturaCm(null)
           fetchMedidasHistorial(userId).then(setHistorial)
         }
       })

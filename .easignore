@@ -1,0 +1,52 @@
+# Dependencias de todos los sub-proyectos
+node_modules/
+mobile-app/node_modules/
+admin-web/node_modules/
+
+# Expo cache
+.expo/
+.expo-shared/
+mobile-app/.expo/
+
+# Build outputs
+dist/
+web-build/
+android/
+ios/
+.next/
+admin-web/.next/
+
+# Supabase local
+supabase/.branches/
+supabase/.temp/
+
+# Logs
+*.log
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# TypeScript
+*.tsbuildinfo
+
+# Keys / certs
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+
+# Env locales
+.env*.local
+
+# IDE
+.vscode/
+.idea/
+
+# Git
+.git/

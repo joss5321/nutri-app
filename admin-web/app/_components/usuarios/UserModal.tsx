@@ -30,7 +30,8 @@ function CircleProgress({ value, label, sub }: { value: number; label: string; s
 }
 
 // ── Mini gráfica de línea ────────────────────────────────────
-function LineChart({ data }: { data: { label: string; value: number }[] }) {
+function LineChart({ data, unit = "" }: { data: { label: string; value: number }[]; unit?: string }) {
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
   const W = 260, H = 90, PX = 24, PY = 12;
   const vals = data.map((d) => d.value);
   const min = Math.min(...vals), max = Math.max(...vals);
@@ -42,21 +43,59 @@ function LineChart({ data }: { data: { label: string; value: number }[] }) {
     data.slice(1).map((d, i) => `L${gx(i + 1)},${gy(d.value)}`).join(" ") +
     ` L${gx(data.length - 1)},${H - PY} L${gx(0)},${H - PY} Z`;
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" preserveAspectRatio="none">
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" preserveAspectRatio="none" style={{ overflow: "visible" }}>
       <path d={area} fill="#2EBD8C" fillOpacity="0.1" />
       <polyline points={pts} fill="none" stroke="#2EBD8C" strokeWidth="2" strokeLinejoin="round" />
-      {data.map((d, i) => (
-        <g key={i}>
-          <circle cx={gx(i)} cy={gy(d.value)} r="4" fill="#2EBD8C" />
-          <text x={gx(i)} y={H - 2} textAnchor="middle" fontSize="8" fill="#9CA3AF">{d.label}</text>
-          {i === data.length - 1 && (
-            <rect x={gx(i) - 16} y={gy(d.value) - 18} width="32" height="14" rx="4" fill="#2EBD8C" />
-          )}
-          {i === data.length - 1 && (
-            <text x={gx(i)} y={gy(d.value) - 8} textAnchor="middle" fontSize="8" fill="white" fontWeight="bold">{d.value}</text>
-          )}
-        </g>
-      ))}
+      {data.map((d, i) => {
+        const cx = gx(i);
+        const cy = gy(d.value);
+        const isLast = i === data.length - 1;
+        const isHovered = hoveredIdx === i;
+        const label = unit ? `${d.value} ${unit}` : String(d.value);
+        // Ajustar ancho del tooltip según longitud del texto
+        const tipW = label.length * 6 + 12;
+        // Centrar horizontalmente, clampear a los bordes del viewBox
+        const tipX = Math.min(W - tipW, Math.max(0, cx - tipW / 2));
+        // Mostrar arriba del punto; si está muy cerca del top, mostrar abajo
+        const tipAbove = cy - 22 >= 4;
+        const tipY = tipAbove ? cy - 22 : cy + 10;
+        return (
+          <g key={i}>
+            <circle cx={cx} cy={cy} r={isHovered ? 5 : 4} fill="#2EBD8C"
+              style={{ transition: "r 0.1s" }} />
+            <text x={cx} y={H - 2} textAnchor="middle" fontSize="8" fill="#9CA3AF">{d.label}</text>
+            {/* Badge persistente en el último punto */}
+            {isLast && !isHovered && (
+              <>
+                <rect x={cx - 16} y={cy - 18} width="32" height="14" rx="4" fill="#2EBD8C" />
+                <text x={cx} y={cy - 8} textAnchor="middle" fontSize="8" fill="white" fontWeight="bold">{d.value}</text>
+              </>
+            )}
+            {/* Tooltip on hover */}
+            {isHovered && (
+              <g style={{ pointerEvents: "none" }}>
+                <rect x={tipX} y={tipY} width={tipW} height="15" rx="4" fill="#111827" opacity="0.88" />
+                {/* pequeña flecha */}
+                {tipAbove && (
+                  <polygon
+                    points={`${cx - 4},${tipY + 15} ${cx + 4},${tipY + 15} ${cx},${tipY + 20}`}
+                    fill="#111827" opacity="0.88"
+                  />
+                )}
+                <text x={tipX + tipW / 2} y={tipY + 10} textAnchor="middle" fontSize="8.5"
+                  fill="white" fontWeight="bold" style={{ fontFamily: "system-ui, sans-serif" }}>
+                  {label}
+                </text>
+              </g>
+            )}
+            {/* Área invisible de captura (más grande que el círculo) */}
+            <circle cx={cx} cy={cy} r="12" fill="transparent" style={{ cursor: "crosshair" }}
+              onMouseEnter={() => setHoveredIdx(i)}
+              onMouseLeave={() => setHoveredIdx(null)}
+            />
+          </g>
+        );
+      })}
     </svg>
   );
 }
@@ -183,7 +222,7 @@ function ChartDetailModal({ chart, medidas, onClose }: { chart: ChartDef; medida
                     const prev = i < arr.length - 1 ? arr[i + 1] : null;
                     const change = prev ? d.value - prev.value : null;
                     return (
-                      <tr key={d.fecha} className="border-t border-gray-100">
+                      <tr key={`${d.fecha}-${i}`} className="border-t border-gray-100">
                         <td className="px-4 py-2 text-xs text-gray-700">{d.label}</td>
                         <td className="px-4 py-2 text-xs text-right font-semibold text-gray-900">{d.value.toFixed(1)} {chart.unit}</td>
                         <td className="px-4 py-2 text-xs text-right">
@@ -280,6 +319,34 @@ function ProgresoMedidas({ userId }: { userId: string }) {
 // ── Modal detalle de ejercicio ───────────────────────────────
 type EjExercise = { id: string; nombre: string; emoji: string; logs: EjercicioLog[]; best: number | null };
 
+type Session = {
+  sesionId: string;
+  fecha: string;
+  series: { numeroSerie: number; pesoKg: number; id: string }[];
+};
+
+function buildSessions(logs: EjercicioLog[]): Session[] {
+  const map = new Map<string, Session>();
+  const order: string[] = [];
+  for (const log of logs) {
+    if (!map.has(log.sesion_id)) {
+      map.set(log.sesion_id, { sesionId: log.sesion_id, fecha: log.fecha, series: [] });
+      order.push(log.sesion_id);
+    }
+    map.get(log.sesion_id)!.series.push({
+      numeroSerie: log.numero_serie,
+      pesoKg: log.peso_kg,
+      id: log.id,
+    });
+  }
+  const sessions = order.map((id) => map.get(id)!);
+  // sort series within each session by numero_serie
+  for (const s of sessions) s.series.sort((a, b) => a.numeroSerie - b.numeroSerie);
+  // sort sessions newest first; same fecha keeps insertion order (most recent sesion_id last in order array = newest)
+  sessions.sort((a, b) => b.fecha.localeCompare(a.fecha));
+  return sessions;
+}
+
 function EjercicioDetailModal({ ej, onClose }: { ej: EjExercise; onClose: () => void }) {
   const [period, setPeriod] = useState<Period>("all");
   const allLogs = ej.logs;
@@ -290,17 +357,43 @@ function EjercicioDetailModal({ ej, onClose }: { ej: EjExercise; onClose: () => 
     return allLogs.filter((l) => new Date(l.fecha) >= cutoff);
   })();
 
-  const best = filtered.length > 0 ? Math.max(...filtered.map((l) => l.peso_kg)) : null;
-  const worst = filtered.length > 0 ? Math.min(...filtered.map((l) => l.peso_kg)) : null;
-  const latest = filtered.length > 0 ? filtered[filtered.length - 1] : null;
-  const first = filtered.length > 0 ? filtered[0] : null;
-  const delta = latest && first ? latest.peso_kg - first.peso_kg : null;
-  const avg = filtered.length > 0 ? filtered.reduce((a, l) => a + l.peso_kg, 0) / filtered.length : null;
+  const sessions = buildSessions(filtered);
 
-  const chartData = filtered.map((l) => {
-    const [, m, d] = l.fecha.split("-").map(Number);
-    return { label: `${d}/${MONTH_SHORT[m - 1]}`, value: l.peso_kg };
+  // Stats based on max peso per session
+  const sessionMaxPesos = sessions.map((s) => Math.max(...s.series.map((sr) => sr.pesoKg)));
+  const best    = sessionMaxPesos.length > 0 ? Math.max(...sessionMaxPesos) : null;
+  const worst   = sessionMaxPesos.length > 0 ? Math.min(...sessionMaxPesos) : null;
+  const latestMax = sessions.length > 0 ? sessionMaxPesos[0] : null;           // sessions[0] = newest
+  const firstMax  = sessions.length > 0 ? sessionMaxPesos[sessions.length - 1] : null;
+  const delta   = latestMax != null && firstMax != null ? latestMax - firstMax : null;
+  const avg     = sessionMaxPesos.length > 0
+    ? sessionMaxPesos.reduce((a, b) => a + b, 0) / sessionMaxPesos.length
+    : null;
+
+  // Line chart: one point per session (max peso), oldest→newest
+  const chartData = [...sessions].reverse().map((s) => {
+    const [, m, d] = s.fecha.split("-").map(Number);
+    return { label: `${d}/${MONTH_SHORT[m - 1]}`, value: Math.max(...s.series.map((sr) => sr.pesoKg)) };
   });
+
+  // Trophy: most recent session+serie that holds the best peso
+  let trophySesionId: string | null = null;
+  let trophyNumSerie: number | null = null;
+  if (best != null) {
+    outer: for (const session of sessions) {         // sessions sorted newest first
+      for (const serie of session.series) {
+        if (serie.pesoKg === best) {
+          trophySesionId = session.sesionId;
+          trophyNumSerie = serie.numeroSerie;
+          break outer;
+        }
+      }
+    }
+  }
+
+  // Max series count across all sessions
+  const maxSeries = sessions.length > 0 ? Math.max(...sessions.map((s) => s.series.length)) : 0;
+  const serieColumns = Array.from({ length: maxSeries }, (_, i) => i + 1);
 
   return (
     <div className="fixed inset-0 bg-black/60 z-[70] flex items-center justify-center p-4" onClick={onClose}>
@@ -308,7 +401,7 @@ function EjercicioDetailModal({ ej, onClose }: { ej: EjExercise; onClose: () => 
         <div className="flex items-center justify-between p-6 border-b border-gray-100">
           <div>
             <h3 className="font-bold text-gray-900 text-lg">{ej.emoji} {ej.nombre}</h3>
-            <p className="text-sm text-gray-500">{filtered.length} registros de peso</p>
+            <p className="text-sm text-gray-500">{sessions.length} sesión{sessions.length !== 1 ? "es" : ""} · {maxSeries} serie{maxSeries !== 1 ? "s" : ""} máx.</p>
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 text-xl">×</button>
         </div>
@@ -329,11 +422,11 @@ function EjercicioDetailModal({ ej, onClose }: { ej: EjExercise; onClose: () => 
           {/* Stats */}
           <div className="grid grid-cols-5 gap-3">
             {[
-              { label: "Actual", value: latest ? `${latest.peso_kg} kg` : "—" },
-              { label: "Cambio", value: delta != null ? `${delta >= 0 ? "+" : ""}${delta.toFixed(1)} kg` : "—", color: delta != null ? (delta >= 0 ? "text-green-600" : "text-red-500") : "" },
-              { label: "Promedio", value: avg != null ? `${avg.toFixed(1)} kg` : "—" },
-              { label: "Máximo 🏆", value: best != null ? `${best} kg` : "—" },
-              { label: "Mínimo", value: worst != null ? `${worst} kg` : "—" },
+              { label: "Actual",    value: latestMax != null ? `${latestMax} kg` : "—" },
+              { label: "Cambio",    value: delta != null ? `${delta >= 0 ? "+" : ""}${delta.toFixed(1)} kg` : "—", color: delta != null ? (delta >= 0 ? "text-green-600" : "text-red-500") : "" },
+              { label: "Promedio",  value: avg   != null ? `${avg.toFixed(1)} kg` : "—" },
+              { label: "Máximo 🏆", value: best  != null ? `${best} kg` : "—" },
+              { label: "Mínimo",   value: worst  != null ? `${worst} kg` : "—" },
             ].map((s) => (
               <div key={s.label} className="bg-gray-50 rounded-xl p-3 border border-gray-100 text-center">
                 <p className="text-xs text-gray-500">{s.label}</p>
@@ -342,76 +435,67 @@ function EjercicioDetailModal({ ej, onClose }: { ej: EjExercise; onClose: () => 
             ))}
           </div>
 
-          {/* Gráfica de línea grande */}
+          {/* Gráfica de línea (max peso por sesión) */}
           {chartData.length >= 2 ? (
             <div className="bg-white rounded-xl border border-gray-200 p-4">
-              <LineChart data={chartData} />
+              <LineChart data={chartData} unit="kg" />
             </div>
           ) : (
-            <p className="text-sm text-gray-400 text-center py-8">Se necesitan al menos 2 registros en este período.</p>
+            <p className="text-sm text-gray-400 text-center py-8">Se necesitan al menos 2 sesiones en este período.</p>
           )}
 
-          {/* Gráfica de barras */}
-          {filtered.length > 0 && (
-            <div className="bg-white rounded-xl border border-gray-200 p-4">
-              <p className="text-xs font-bold text-gray-700 mb-3">Historial de pesos</p>
-              <div className="flex items-end gap-1.5" style={{ height: 80 }}>
-                {filtered.map((log, i) => {
-                  const maxV = best ?? 1;
-                  const barH = Math.max(6, Math.round((log.peso_kg / maxV) * 64));
-                  const isLast = i === filtered.length - 1;
-                  const isBest = log.peso_kg === best;
-                  const [, m, d] = log.fecha.split("-").map(Number);
-                  return (
-                    <div key={log.id} className="flex flex-col items-center flex-1" title={`${log.peso_kg} kg — ${d}/${m}`}>
-                      <span className={`text-[9px] mb-1 font-semibold ${isBest ? "text-primary" : isLast ? "text-gray-700" : "text-gray-400"}`}>
-                        {log.peso_kg}
-                      </span>
-                      <div className={`w-4 rounded-sm ${isBest ? "bg-primary" : isLast ? "bg-primary/60" : "bg-gray-300"}`} style={{ height: barH }} />
-                      <span className="text-[8px] text-gray-400 mt-1">{d}/{m}</span>
-                    </div>
-                  );
-                })}
+          {/* Tabla por sesión × series */}
+          {sessions.length > 0 && maxSeries > 0 && (
+            <div className="rounded-xl border border-gray-200 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm" style={{ minWidth: 200 + maxSeries * 90 }}>
+                  <thead>
+                    <tr className="bg-gray-50">
+                      <th className="sticky left-0 bg-gray-50 text-left px-4 py-2.5 text-xs font-semibold text-gray-500 border-r border-gray-200 whitespace-nowrap z-10">
+                        Fecha
+                      </th>
+                      {serieColumns.map((n) => (
+                        <th key={n} className="text-right px-4 py-2.5 text-xs font-semibold text-gray-500 whitespace-nowrap">
+                          Serie {n}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sessions.map((session) => {
+                      const [y, m, d] = session.fecha.split("-").map(Number);
+                      const serieMap = new Map(session.series.map((sr) => [sr.numeroSerie, sr]));
+                      return (
+                        <tr key={session.sesionId} className="border-t border-gray-100 hover:bg-gray-50/50">
+                          <td className="sticky left-0 bg-white hover:bg-gray-50/50 px-4 py-2.5 text-xs font-medium text-gray-700 border-r border-gray-200 whitespace-nowrap z-10">
+                            {d}/{MONTH_SHORT[m - 1]}/{String(y).slice(2)}
+                          </td>
+                          {serieColumns.map((n) => {
+                            const serie = serieMap.get(n);
+                            const isTrophy = session.sesionId === trophySesionId && n === trophyNumSerie;
+                            return (
+                              <td key={n} className="px-4 py-2.5 text-xs text-right font-semibold whitespace-nowrap">
+                                {serie != null ? (
+                                  <span className={isTrophy ? "text-primary" : "text-gray-800"}>
+                                    {serie.pesoKg} kg{isTrophy ? " 🏆" : ""}
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-300">—</span>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
 
-          {/* Tabla */}
-          {filtered.length > 0 && (
-            <div className="rounded-xl border border-gray-200 overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-gray-50">
-                    <th className="text-left px-4 py-2 text-xs font-semibold text-gray-500">Fecha</th>
-                    <th className="text-right px-4 py-2 text-xs font-semibold text-gray-500">Peso</th>
-                    <th className="text-right px-4 py-2 text-xs font-semibold text-gray-500">Cambio</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...filtered].reverse().map((log, i, arr) => {
-                    const prev = i < arr.length - 1 ? arr[i + 1] : null;
-                    const change = prev ? log.peso_kg - prev.peso_kg : null;
-                    const [, m, d] = log.fecha.split("-").map(Number);
-                    const isBest = log.peso_kg === best;
-                    return (
-                      <tr key={log.id} className="border-t border-gray-100">
-                        <td className="px-4 py-2 text-xs text-gray-700">{d}/{MONTH_SHORT[m - 1]}</td>
-                        <td className="px-4 py-2 text-xs text-right font-semibold text-gray-900">
-                          {log.peso_kg} kg {isBest && "🏆"}
-                        </td>
-                        <td className="px-4 py-2 text-xs text-right">
-                          {change != null ? (
-                            <span className={change >= 0 ? "text-green-600" : "text-red-500"}>
-                              {change >= 0 ? "+" : ""}{change.toFixed(1)}
-                            </span>
-                          ) : "—"}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+          {sessions.length === 0 && (
+            <p className="text-sm text-gray-400 text-center py-8">Sin registros en este período.</p>
           )}
         </div>
       </div>
@@ -502,10 +586,10 @@ function ProgresoEjercicios({ userId }: { userId: string }) {
                       {delta >= 0 ? "↑" : "↓"} {Math.abs(delta).toFixed(1)} kg desde el primer registro
                     </p>
                   )}
-                  <div className="flex items-end gap-1 h-14">
+                  <div className="flex items-end gap-1 h-16">
                     {recentLogs.map((log, i) => {
                       const maxV = Math.max(...recentLogs.map((l) => l.peso_kg));
-                      const barH = Math.max(4, Math.round((log.peso_kg / maxV) * 48));
+                      const barH = Math.max(4, Math.round((log.peso_kg / maxV) * 40));
                       const isLast = i === recentLogs.length - 1;
                       const [, m, d] = log.fecha.split("-").map(Number);
                       return (
