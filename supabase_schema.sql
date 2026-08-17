@@ -1326,3 +1326,329 @@ for insert to authenticated with check (
     or created_by = auth.uid()             -- admin solo puede crear los suyos
   )
 );
+
+-- ============================================================
+-- 41. MIGRACIÓN — integración WorkoutX: nuevos campos en ejercicios
+-- ============================================================
+-- Objetivo: permitir importar el catálogo externo de WorkoutX
+-- sin borrar ni modificar los ejercicios existentes.
+-- Los ejercicios manuales conservan source='manual' y external_id=NULL.
+-- Los ejercicios WorkoutX tendrán source='workoutx' y external_id=<id WorkoutX>.
+--
+-- Cambio de tipo: instrucciones TEXT → TEXT[] (migración segura con USING).
+-- El campo estaba definido en el DDL original pero nunca fue usado en producción,
+-- por lo que la conversión no afecta datos reales.
+
+-- 41a. Nuevos campos de identificación y multimedia
+alter table ejercicios
+  add column if not exists source          text    not null default 'manual',
+  add column if not exists external_id     text,
+  add column if not exists gif_url         text;
+
+-- 41b. Constraint de validación de origen
+alter table ejercicios
+  drop constraint if exists ejercicios_source_check;
+alter table ejercicios
+  add constraint ejercicios_source_check check (source in ('manual', 'workoutx'));
+
+-- 41c. Backfill: marcar ejercicios existentes como 'manual'
+update ejercicios set source = 'manual' where source is distinct from 'workoutx';
+
+-- 41d. Nuevos campos descriptivos de WorkoutX
+alter table ejercicios
+  add column if not exists body_part            text,
+  add column if not exists equipment            text,
+  add column if not exists difficulty           text,
+  add column if not exists category             text,
+  add column if not exists mechanic             text,
+  add column if not exists force                text,
+  add column if not exists met                  numeric,
+  add column if not exists calories_per_minute  numeric,
+  add column if not exists is_unilateral        boolean default false,
+  add column if not exists popularity_rank      int,
+  add column if not exists recommended_sets     text,
+  add column if not exists recommended_reps     text,
+  add column if not exists joint_focus          text,
+  add column if not exists intensity_level      text,
+  add column if not exists movement_tags        text[] default '{}',
+  add column if not exists language             text   default 'es';
+
+-- 41e. Migración segura de instrucciones: TEXT → TEXT[]
+-- Convierte texto existente en un array de un elemento.
+-- NULL y texto vacío quedan como array vacío {}.
+alter table ejercicios
+  alter column instrucciones type text[]
+  using (
+    case
+      when instrucciones is null or btrim(instrucciones) = ''
+        then array[]::text[]
+      else array[instrucciones]
+    end
+  );
+
+-- 41f. Índice único parcial: evita importar dos veces el mismo ejercicio de WorkoutX.
+-- Los ejercicios manuales no se ven afectados (external_id = NULL).
+create unique index if not exists ejercicios_workoutx_external_id_unique
+  on ejercicios (external_id)
+  where source = 'workoutx';
+
+-- 41g. Índices para filtros del catálogo
+-- pg_trgm es necesaria para el índice GIN de búsqueda por nombre (ILIKE '%texto%')
+create extension if not exists pg_trgm;
+
+create index if not exists ejercicios_source_idx        on ejercicios (source);
+create index if not exists ejercicios_body_part_idx     on ejercicios (body_part);
+create index if not exists ejercicios_difficulty_idx    on ejercicios (difficulty);
+create index if not exists ejercicios_category_idx      on ejercicios (category);
+create index if not exists ejercicios_equipment_idx     on ejercicios (equipment);
+create index if not exists ejercicios_nombre_trgm_idx   on ejercicios using gin (nombre gin_trgm_ops);
+
+-- 41h. Política RLS: los ejercicios WorkoutX se comportan igual que los globales.
+-- Las políticas existentes ya cubren correctamente este caso:
+-- - ejercicios con created_by IS NULL son visibles globalmente (superadmin + admin en lectura).
+-- - Los ejercicios WorkoutX se insertan con created_by = NULL (ver Edge Function).
+-- - admins normales NO pueden editar/eliminar ejercicios con created_by IS NULL (policy actual).
+-- No se modifica ninguna política existente en esta migración.
+--
+-- Policies activas sobre ejercicios (documentación):
+--   ejercicios: lectura para autenticados  → SELECT para cualquier authenticated (legacy, mantener)
+--   ejercicios_select                      → SELECT filtrado por rol (migración 35)
+--   ejercicios_insert                      → INSERT solo admin/superadmin (migración 40)
+--   ejercicios_update                      → UPDATE superadmin(globales) o admin(propios)
+--   ejercicios_delete                      → DELETE superadmin(globales) o admin(propios)
+
+-- ============================================================
+-- 42. SUPABASE STORAGE — bucket público para GIFs de ejercicios
+-- ============================================================
+-- Prerrequisito para la Edge Function migrate-gifs.
+-- Correr en Supabase Dashboard → Storage → New bucket
+--   Nombre: exercise-gifs
+--   Public: ON
+--
+-- O ejecutar via SQL (Storage API no expone CREATE BUCKET en SQL puro —
+-- usar el Dashboard es el método recomendado por Supabase para crear buckets).
+--
+-- Una vez creado el bucket, ejecutar migrate-gifs para:
+--   1. Descargar cada GIF de WorkoutX (~1327 requests únicos con WORKOUTX_API_KEY)
+--   2. Subirlo al bucket exercise-gifs (público, CDN de Supabase)
+--   3. Actualizar gif_url en ejercicios con la URL pública de Storage
+--
+-- Después de la migración, proxyGifUrl() devuelve la URL de Storage directamente
+-- sin necesidad del gif-proxy Edge Function ni del API key de WorkoutX para display.
+--
+-- Policy de Storage (crear en Dashboard → Storage → Policies → exercise-gifs):
+--   Nombre: "GIFs públicos de ejercicios"
+--   Operation: SELECT
+--   Role: anon, authenticated
+--   Policy: bucket_id = 'exercise-gifs'
+--
+-- No requiere políticas INSERT/UPDATE/DELETE en prod (solo migrate-gifs escribe,
+-- y lo hace con service_role que bypasea RLS).
+
+-- ============================================================
+-- 43. MIGRACIÓN — Registro de pacientes desde admin-web (sin app móvil)
+-- ============================================================
+-- Permite a un nutriólogo registrar un paciente directamente desde
+-- admin-web (Pacientes → "+ Nuevo paciente") sin depender de que el
+-- paciente tenga celular o use la app móvil.
+--
+-- `perfiles.id` referencia auth.users(id), así que no se puede insertar
+-- un perfil "de verdad" sin una cuenta de auth. En su lugar, estos
+-- pacientes se guardan en la tabla nueva `pacientes_manuales` (sin FK a
+-- auth.users) con estatus 'sin_registro_movil'.
+--
+-- Cuando el paciente eventualmente se registra desde la app móvil con el
+-- MISMO correo, el trigger crear_perfil_nuevo_usuario() detecta la
+-- coincidencia, crea el perfil real heredando el nutricionista_id y los
+-- datos ya capturados, y marca la fila de pacientes_manuales como
+-- 'vinculado' (para no duplicar). El perfil resultante queda con
+-- estatus = 'pendiente', igual que cualquier registro nuevo, así que
+-- sigue el flujo normal de aprobación del nutriólogo en la pestaña
+-- Pacientes.
+--
+-- Este cambio SOLO añade una rama nueva al inicio del trigger para este
+-- escenario de reconciliación por correo; el resto de la función (registro
+-- normal desde la app móvil, sin paciente pre-registrado en la web) queda
+-- byte-por-byte igual a como estaba antes de esta migración.
+
+-- 1. Tabla de pacientes pre-registrados desde admin-web
+create table if not exists pacientes_manuales (
+  id                uuid        primary key default uuid_generate_v4(),
+  nombre            text        not null,
+  apellidos         text,
+  fecha_nacimiento  date,
+  sexo              text        check (sexo in ('masculino', 'femenino', 'otro')),
+  telefono          text,
+  email             text        not null,
+  nutricionista_id  uuid        not null references auth.users(id) on delete cascade,
+  estatus           text        not null default 'sin_registro_movil'
+                                 check (estatus in ('sin_registro_movil', 'vinculado')),
+  perfil_id         uuid        references perfiles(id) on delete set null,
+  created_at        timestamptz not null default now()
+);
+
+create index if not exists idx_pacientes_manuales_nutricionista
+  on pacientes_manuales(nutricionista_id);
+
+-- Evita registrar dos veces el mismo correo en estado "sin_registro_movil"
+create unique index if not exists idx_pacientes_manuales_email_pendiente
+  on pacientes_manuales (lower(email))
+  where estatus = 'sin_registro_movil';
+
+alter table pacientes_manuales enable row level security;
+
+drop policy if exists "pacientes_manuales: select propio" on pacientes_manuales;
+create policy "pacientes_manuales: select propio" on pacientes_manuales
+  for select using (
+    auth.uid() = nutricionista_id
+    or public.get_user_rol() = 'superadmin'
+  );
+
+drop policy if exists "pacientes_manuales: insert propio" on pacientes_manuales;
+create policy "pacientes_manuales: insert propio" on pacientes_manuales
+  for insert with check (auth.uid() = nutricionista_id);
+
+drop policy if exists "pacientes_manuales: update propio" on pacientes_manuales;
+create policy "pacientes_manuales: update propio" on pacientes_manuales
+  for update
+  using (auth.uid() = nutricionista_id or public.get_user_rol() = 'superadmin')
+  with check (auth.uid() = nutricionista_id or public.get_user_rol() = 'superadmin');
+
+drop policy if exists "pacientes_manuales: delete propio" on pacientes_manuales;
+create policy "pacientes_manuales: delete propio" on pacientes_manuales
+  for delete using (auth.uid() = nutricionista_id or public.get_user_rol() = 'superadmin');
+
+-- 2. Trigger — rama de reconciliación por correo (única modificación real)
+create or replace function crear_perfil_nuevo_usuario()
+returns trigger language plpgsql security definer as $$
+declare
+  v_nutricionista_id uuid;
+  v_manual pacientes_manuales%rowtype;
+begin
+  -- ── Reconciliación: ¿ya existe un paciente pre-registrado desde la web
+  --    con este mismo correo? Si sí, se vincula en vez de duplicar. ──
+  select * into v_manual
+  from public.pacientes_manuales
+  where lower(email) = lower(new.email)
+    and estatus = 'sin_registro_movil'
+  limit 1;
+
+  if v_manual.id is not null then
+    insert into public.perfiles (
+      id, nombre_completo, email, telefono, sexo, fecha_nacimiento,
+      nutricionista_id, is_active, estatus
+    )
+    values (
+      new.id,
+      coalesce(
+        new.raw_user_meta_data->>'full_name',
+        nullif(trim(v_manual.nombre || ' ' || coalesce(v_manual.apellidos, '')), ''),
+        new.email
+      ),
+      new.email,
+      v_manual.telefono,
+      v_manual.sexo,
+      v_manual.fecha_nacimiento,
+      v_manual.nutricionista_id,
+      false,        -- bloqueado hasta que el nutriólogo apruebe
+      'pendiente'
+    );
+
+    update public.pacientes_manuales
+      set estatus = 'vinculado', perfil_id = new.id
+      where id = v_manual.id;
+
+    return new;
+  end if;
+
+  -- ── Comportamiento original — sin cambios ───────────────────────────
+  v_nutricionista_id := (new.raw_user_meta_data->>'nutricionista_id')::uuid;
+
+  if v_nutricionista_id is null then
+    select id into v_nutricionista_id
+    from auth.users
+    where email = 'j.rym5312@gmail.com'
+    limit 1;
+  end if;
+
+  insert into public.perfiles (id, nombre_completo, email, nutricionista_id, is_active, estatus)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'full_name', new.email),
+    new.email,
+    v_nutricionista_id,
+    false,
+    'pendiente'
+  );
+  return new;
+end;
+$$;
+
+-- ============================================================
+-- 44. MIGRACIÓN — Pacientes creados desde admin-web: cuenta real desde el inicio
+-- ============================================================
+-- Reemplaza el enfoque de la Sección 43. En vez de una tabla satélite
+-- (pacientes_manuales) que esperaba a que el paciente se registrara desde
+-- el móvil para "ascenderlo" a perfiles, ahora la Edge Function
+-- invitar-usuario crea la cuenta de auth.users real desde el momento en
+-- que el nutriólogo da de alta al paciente en Pacientes → "+ Nuevo
+-- paciente" (supabase.auth.admin.inviteUserByEmail). Esto permite
+-- asignarle rutinas, planes y ver su detalle (historial, medidas,
+-- próximas citas) de inmediato, sin esperar a que instale la app.
+--
+-- Por eso esta migración:
+--   1. Revierte crear_perfil_nuevo_usuario() a su forma anterior a la
+--      Sección 43 (quita la rama de reconciliación por correo contra
+--      pacientes_manuales, que ya no se usa — el registro normal desde
+--      el móvil, sin preregistro web, sigue exactamente igual).
+--   2. Agrega perfiles.movil_vinculado: marcador informativo (no afecta
+--      estatus/is_active ni ninguna política existente) que indica si el
+--      paciente ya inició sesión alguna vez desde la app móvil. Los
+--      perfiles existentes y los que se registran normalmente desde el
+--      móvil quedan en true (nunca fueron "pacientes sin app"); los que
+--      la Edge Function invitar-usuario crea desde admin-web arrancan en
+--      false y la propia app móvil lo pone en true la primera vez que
+--      ese usuario abre sesión (ver mobile-app/src/app/_layout.tsx).
+--
+-- La tabla pacientes_manuales de la Sección 43 queda sin usar (no se
+-- borra por si quedó algún registro de prueba); puede eliminarse
+-- manualmente con `drop table if exists pacientes_manuales;` una vez
+-- confirmado que no se necesita.
+
+-- 1. Revertir el trigger a la versión previa a la Sección 43
+create or replace function crear_perfil_nuevo_usuario()
+returns trigger language plpgsql security definer as $$
+declare
+  v_nutricionista_id uuid;
+begin
+  v_nutricionista_id := (new.raw_user_meta_data->>'nutricionista_id')::uuid;
+
+  if v_nutricionista_id is null then
+    select id into v_nutricionista_id
+    from auth.users
+    where email = 'j.rym5312@gmail.com'
+    limit 1;
+  end if;
+
+  insert into public.perfiles (id, nombre_completo, email, nutricionista_id, is_active, estatus)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'full_name', new.email),
+    new.email,
+    v_nutricionista_id,
+    false,        -- bloqueado hasta que el nutriólogo apruebe
+    'pendiente'
+  );
+  return new;
+end;
+$$;
+
+-- 2. Marcador "ya usó la app móvil" (informativo, no afecta acceso)
+alter table perfiles
+  add column if not exists movil_vinculado boolean not null default true;
+
+-- Pacientes ya invitados desde admin-web antes de esta migración (si los
+-- hubiera) deberían quedar en false hasta su primer login móvil; como no
+-- hay forma de distinguirlos retroactivamente, no se tocan filas
+-- existentes — el default true es correcto para todo lo ya registrado
+-- por la vía normal (móvil), que es la inmensa mayoría de los datos.

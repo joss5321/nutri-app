@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, Image, Linking, Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { Image as ExpoImage } from 'expo-image'
+import { proxyGifUrl } from '@/lib/gif-proxy'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Ionicons } from '@expo/vector-icons'
 import { randomUUID } from 'expo-crypto'
@@ -53,7 +55,7 @@ interface Exercise {
   series: string; series_count: number; reps: string; weight?: string; rest: string
   rir?: string; rpe?: string
   grupo_muscular?: string; grupos_secundarios?: string[]
-  descripcion?: string; video_url?: string
+  descripcion?: string; video_url?: string; gif_url?: string
   series_detalle: SerieDetalle[] | null
 }
 interface Day {
@@ -83,6 +85,7 @@ function mapRutinaToDays(rutina: RutinaCompleta): Day[] {
       grupos_secundarios: ej.ejercicios?.grupos_secundarios ?? undefined,
       descripcion: ej.ejercicios?.descripcion ?? undefined,
       video_url: ej.ejercicios?.video_url ?? undefined,
+      gif_url: ej.ejercicios?.gif_url ?? undefined,
     })),
   }))
 }
@@ -228,8 +231,16 @@ function ExerciseDetailModal({ exercise, userId, onClose }: { exercise: Exercise
         </View>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
-          {/* Video / placeholder */}
-          {ytId ? (
+          {/* Media: GIF (vía proxy) → YouTube → emoji */}
+          {proxyGifUrl(exercise.gif_url) ? (
+            <ExpoImage
+              source={{ uri: proxyGifUrl(exercise.gif_url)! }}
+              style={{ width: '100%', height: 240, backgroundColor: '#111' }}
+              contentFit="contain"
+              autoplay
+              accessibilityLabel={exercise.name}
+            />
+          ) : ytId ? (
             <TouchableOpacity
               activeOpacity={0.85}
               onPress={() => Linking.openURL(exercise.video_url!)}

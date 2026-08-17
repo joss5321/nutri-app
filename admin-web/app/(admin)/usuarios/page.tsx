@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import UserModal from "@/app/_components/usuarios/UserModal";
+import NuevoPacienteModal from "@/app/_components/usuarios/NuevoPacienteModal";
 import { fetchPerfiles, setIsActive, setEstatus, type Perfil } from "@/app/_data/perfiles";
 
 // ── Badges ────────────────────────────────────────────────────────────────────
@@ -44,6 +45,17 @@ function EstatusBadge({ perfil }: { perfil: Perfil }) {
     <span className="text-xs px-2.5 py-1 rounded-full font-semibold inline-flex items-center gap-1.5 bg-red-100 text-red-700">
       <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />
       Deshabilitado
+    </span>
+  );
+}
+
+function ManualBadge() {
+  return (
+    <span
+      className="text-[10px] px-2 py-0.5 rounded-full font-semibold inline-flex items-center gap-1 bg-slate-100 text-slate-500 shrink-0"
+      title="Todavía no ha iniciado sesión desde la app móvil"
+    >
+      Sin registro móvil
     </span>
   );
 }
@@ -135,14 +147,15 @@ export default function UsuariosPage() {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Perfil | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [showNuevoPaciente, setShowNuevoPaciente] = useState(false);
 
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
   // Filter tabs
-  const [tabEstatus, setTabEstatus] = useState<"todos" | "pendiente" | "aprobado" | "rechazado">(
-    "todos"
-  );
+  const [tabEstatus, setTabEstatus] = useState<
+    "todos" | "pendiente" | "aprobado" | "rechazado" | "sin_registro_movil"
+  >("todos");
 
   const loadPerfiles = () => {
     setError(null);
@@ -167,6 +180,7 @@ export default function UsuariosPage() {
   const handleConfirm = async () => {
     if (!pendingAction) return;
     setActionLoading(true);
+
     const { perfil } = pendingAction;
     try {
       if (pendingAction.type === "aprobar") {
@@ -211,13 +225,19 @@ export default function UsuariosPage() {
     pendiente: perfiles.filter((p) => p.estatus === "pendiente").length,
     aprobado: perfiles.filter((p) => p.estatus === "aprobado").length,
     rechazado: perfiles.filter((p) => p.estatus === "rechazado").length,
+    sin_registro_movil: perfiles.filter((p) => !p.movil_vinculado).length,
   };
 
   const filtered = perfiles.filter((u) => {
     const matchSearch =
       (u.nombre_completo ?? "").toLowerCase().includes(search.toLowerCase()) ||
       (u.email ?? "").toLowerCase().includes(search.toLowerCase());
-    const matchTab = tabEstatus === "todos" || u.estatus === tabEstatus;
+    const matchTab =
+      tabEstatus === "todos"
+        ? true
+        : tabEstatus === "sin_registro_movil"
+        ? !u.movil_vinculado
+        : u.estatus === tabEstatus;
     return matchSearch && matchTab;
   });
 
@@ -232,16 +252,23 @@ export default function UsuariosPage() {
             Gestiona las solicitudes y pacientes asignados a tu cuenta.
           </p>
         </div>
+        <button
+          onClick={() => setShowNuevoPaciente(true)}
+          className="flex items-center gap-2 h-10 px-4 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-dark transition-colors"
+        >
+          + Nuevo paciente
+        </button>
       </div>
 
       {/* Tabs de estatus */}
       <div className="flex items-center gap-1 mb-5">
         {(
           [
-            { key: "todos",     label: "Todos" },
-            { key: "pendiente", label: "Pendientes" },
-            { key: "aprobado",  label: "Aprobados" },
-            { key: "rechazado", label: "Rechazados" },
+            { key: "todos",              label: "Todos" },
+            { key: "pendiente",          label: "Pendientes" },
+            { key: "aprobado",           label: "Aprobados" },
+            { key: "rechazado",          label: "Rechazados" },
+            { key: "sin_registro_movil", label: "Sin registro móvil" },
           ] as const
         ).map(({ key, label }) => (
           <button
@@ -343,7 +370,10 @@ export default function UsuariosPage() {
                             .slice(0, 2)
                             .toUpperCase()}
                         </div>
-                        <span className="font-medium text-gray-900">{nombre}</span>
+                        <div className="flex flex-col gap-1">
+                          <span className="font-medium text-gray-900">{nombre}</span>
+                          {!u.movil_vinculado && <ManualBadge />}
+                        </div>
                       </div>
                     </td>
                     <td className="px-4 py-3.5 text-gray-500 text-xs">{u.email || "—"}</td>
@@ -417,6 +447,8 @@ export default function UsuariosPage() {
                       ? "No se encontraron pacientes con ese criterio."
                       : tabEstatus === "pendiente"
                       ? "No hay solicitudes pendientes."
+                      : tabEstatus === "sin_registro_movil"
+                      ? "No hay pacientes sin registro móvil."
                       : "No hay pacientes en esta categoría."}
                   </td>
                 </tr>
@@ -469,6 +501,18 @@ export default function UsuariosPage() {
           loading={actionLoading}
           onConfirm={handleConfirm}
           onCancel={() => !actionLoading && setPendingAction(null)}
+        />
+      )}
+
+      {/* Modal nuevo paciente */}
+      {showNuevoPaciente && (
+        <NuevoPacienteModal
+          onClose={() => setShowNuevoPaciente(false)}
+          onCreated={() => {
+            setShowNuevoPaciente(false);
+            setToast("Paciente registrado correctamente.");
+            reload();
+          }}
         />
       )}
 

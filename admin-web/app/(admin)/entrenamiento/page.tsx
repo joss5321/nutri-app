@@ -14,7 +14,7 @@ function PlanBadge({ plan }: { plan: string }) {
   );
 }
 
-export default function RutinasPage() {
+export default function EntrenamientoPage() {
   const [perfiles, setPerfiles] = useState<Perfil[]>([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
@@ -47,7 +47,7 @@ export default function RutinasPage() {
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Rutinas</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Entrenamiento</h1>
           <p className="text-gray-500 text-sm mt-1">Selecciona un usuario para ver y armar su rutina semanal.</p>
         </div>
       </div>

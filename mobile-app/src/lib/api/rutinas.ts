@@ -9,6 +9,7 @@ export type EjercicioInfo = {
   grupos_secundarios: string[] | null
   descripcion: string | null
   video_url: string | null
+  gif_url: string | null
 }
 
 export type SerieDetalle = {
@@ -49,7 +50,7 @@ export type RutinaCompleta = {
   rutina_dias: RutinaDia[]
 }
 
-const SELECT = '*, rutina_dias(*, rutina_ejercicios(*, ejercicios(id, nombre, emoji, grupo_muscular, grupos_secundarios, descripcion, video_url)))'
+const SELECT = '*, rutina_dias(*, rutina_ejercicios(*, ejercicios(id, nombre, emoji, grupo_muscular, grupos_secundarios, descripcion, video_url, gif_url)))'
 
 export async function fetchMiRutina(userId: string): Promise<RutinaCompleta | null> {
   return withCache(`rutina_${userId}`, async () => {

@@ -56,6 +56,22 @@ function Ck({ label, checked, onChange }: { label: string; checked: boolean; onC
   );
 }
 
+function AfRow({ label, checked, onCheck, quien, onQuien }: {
+  label: string; checked: boolean; onCheck: (v: boolean) => void;
+  quien: string; onQuien: (v: string) => void;
+}) {
+  return (
+    <div className="flex items-center gap-3 min-h-9">
+      <Ck label={label} checked={checked} onChange={onCheck} />
+      {checked && (
+        <input value={quien} onChange={(e) => onQuien(e.target.value)}
+          placeholder="¿Quién en la familia?"
+          className="flex-1 h-8 border border-gray-200 rounded-lg px-2 text-sm focus:outline-none focus:border-primary" />
+      )}
+    </div>
+  );
+}
+
 function YesNo({ value, onChange, labels = ["Sí", "No"] }: {
   value: boolean | null; onChange: (v: boolean | null) => void; labels?: [string, string];
 }) {
@@ -621,14 +637,16 @@ export default function InformacionPersonalForm({
       <Accordion title="Antecedentes familiares" icon="👨‍👩‍👧‍👦"
         isOpen={openSecs.has("af")} onToggle={() => tog("af")}>
 
-        <div className="grid grid-cols-2 gap-3">
-          <Ck label="Obesidad"              checked={hist.af_obesidad}             onChange={sh("af_obesidad")} />
-          <Ck label="Diabetes"              checked={hist.af_diabetes}             onChange={sh("af_diabetes")} />
-          <Ck label="HTA (Hipertensión)"    checked={hist.af_hta}                  onChange={sh("af_hta")} />
-          <Ck label="Cáncer"                checked={hist.af_cancer}               onChange={sh("af_cancer")} />
-          <Ck label="Hipercolesterolemia"   checked={hist.af_hipercolesterolemia}  onChange={sh("af_hipercolesterolemia")} />
-          <Ck label="Hipertrigliceridemia"  checked={hist.af_hipertrigliceridemia} onChange={sh("af_hipertrigliceridemia")} />
-          <Ck label="Trastornos mentales"   checked={hist.af_trastornos_mentales}  onChange={sh("af_trastornos_mentales")} />
+        <div className="space-y-2">
+          <AfRow label="Obesidad"            checked={hist.af_obesidad}            onCheck={sh("af_obesidad")}            quien={hist.af_obesidad_quien}            onQuien={sh("af_obesidad_quien")} />
+          <AfRow label="Diabetes"            checked={hist.af_diabetes}            onCheck={sh("af_diabetes")}            quien={hist.af_diabetes_quien}            onQuien={sh("af_diabetes_quien")} />
+          <AfRow label="HTA (Hipertensión)"  checked={hist.af_hta}                 onCheck={sh("af_hta")}                 quien={hist.af_hta_quien}                 onQuien={sh("af_hta_quien")} />
+          <AfRow label="Cáncer"              checked={hist.af_cancer}              onCheck={sh("af_cancer")}              quien={hist.af_cancer_quien}              onQuien={sh("af_cancer_quien")} />
+          <AfRow label="Dislipidemia"        checked={hist.af_dislipidemia}        onCheck={sh("af_dislipidemia")}        quien={hist.af_dislipidemia_quien}        onQuien={sh("af_dislipidemia_quien")} />
+          <AfRow label="Trastornos mentales" checked={hist.af_trastornos_mentales} onCheck={sh("af_trastornos_mentales")} quien={hist.af_trastornos_mentales_quien} onQuien={sh("af_trastornos_mentales_quien")} />
+          <AfRow label="Enfermedad renal"    checked={hist.af_enfermedad_renal}    onCheck={sh("af_enfermedad_renal")}    quien={hist.af_enfermedad_renal_quien}    onQuien={sh("af_enfermedad_renal_quien")} />
+          <AfRow label="Enfermedad cardiaca" checked={hist.af_enfermedad_cardiaca} onCheck={sh("af_enfermedad_cardiaca")} quien={hist.af_enfermedad_cardiaca_quien} onQuien={sh("af_enfermedad_cardiaca_quien")} />
+          <AfRow label="Tiroides"            checked={hist.af_tiroides}            onCheck={sh("af_tiroides")}            quien={hist.af_tiroides_quien}            onQuien={sh("af_tiroides_quien")} />
         </div>
         <div>
           <label className={LB}>Otros</label>
@@ -697,6 +715,13 @@ export default function InformacionPersonalForm({
             className={IC} placeholder="Horas, calidad, horario..." />
         </div>
 
+        <div>
+          <label className={LB}>Nivel de estrés</label>
+          <input value={hist.ev_nivel_estres}
+            onChange={(e) => sh("ev_nivel_estres")(e.target.value)}
+            className={IC} placeholder="Ej. Alto, moderado / situación actual..." />
+        </div>
+
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Consumo</p>
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -725,15 +750,11 @@ export default function InformacionPersonalForm({
           <div>
             <label className={LB}>Vasos de agua potable al día</label>
             <input
-              type="number"
-              min="0"
-              step="1"
+              type="text"
               value={hist.ev_vasos_agua}
-              onChange={(e) => {
-                const n = parseFloat(e.target.value);
-                sh("ev_vasos_agua")(!isNaN(n) && n < 0 ? "0" : e.target.value);
-              }}
+              onChange={(e) => sh("ev_vasos_agua")(e.target.value)}
               className={IC}
+              placeholder="Ej. 8 vasos, 2 litros..."
             />
           </div>
           <div>

@@ -32,6 +32,20 @@ Deno.serve(async (req) => {
     })
   }
 
+  // Solo un nutriólogo (admin/superadmin) puede dar de alta pacientes
+  const { data: callerPerfil } = await supabaseUser
+    .from("perfiles")
+    .select("rol")
+    .eq("id", caller.id)
+    .single()
+
+  if (!callerPerfil || !["admin", "superadmin"].includes(callerPerfil.rol)) {
+    return new Response(JSON.stringify({ error: "No autorizado" }), {
+      status: 403,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    })
+  }
+
   const { email, nombre_completo, fecha_nacimiento, sexo, telefono } = await req.json()
 
   if (!email?.trim() || !nombre_completo?.trim()) {
@@ -53,13 +67,19 @@ Deno.serve(async (req) => {
   )
 
   if (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
+    const yaExiste = error.message?.toLowerCase().includes("already been registered")
+      || error.message?.toLowerCase().includes("already registered")
+    return new Response(JSON.stringify({
+      error: yaExiste ? "Ya existe un paciente registrado con este correo." : error.message,
+    }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     })
   }
 
-  // Completar el perfil y asignar al nutricionista
+  // Completar el perfil, asignar al nutricionista y aprobarlo de inmediato:
+  // este paciente puede recibir rutinas/planes/citas desde ya, aunque
+  // todavía no haya usado la app móvil (movil_vinculado = false).
   await supabaseAdmin.from("perfiles").update({
     nombre_completo: nombre_completo.trim(),
     email: email.trim().toLowerCase(),
@@ -67,9 +87,12 @@ Deno.serve(async (req) => {
     sexo: sexo || null,
     telefono: telefono?.trim() || null,
     nutricionista_id: caller.id,
+    estatus: "aprobado",
+    is_active: true,
+    movil_vinculado: false,
   }).eq("id", data.user.id)
 
-  return new Response(JSON.stringify({ success: true }), {
+  return new Response(JSON.stringify({ success: true, id: data.user.id }), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   })
 })

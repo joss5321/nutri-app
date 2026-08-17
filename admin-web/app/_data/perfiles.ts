@@ -14,6 +14,7 @@ export type Perfil = {
   nutricionista_id: string | null;
   is_active: boolean;
   estatus: "pendiente" | "aprobado" | "rechazado";
+  movil_vinculado: boolean;
   created_at?: string;
 };
 

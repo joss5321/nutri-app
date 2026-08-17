@@ -41,7 +41,7 @@ const NAV_SECTIONS: NavSection[] = [
     label: "PLANES",
     items: [
       { href: "/nutricion", label: "Nutrición", icon: Utensils },
-      { href: "/rutinas", label: "Rutinas", icon: CalendarDays },
+      { href: "/entrenamiento", label: "Entrenamiento", icon: CalendarDays },
     ],
   },
   {

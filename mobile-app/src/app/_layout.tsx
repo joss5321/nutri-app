@@ -61,7 +61,7 @@ export default function RootLayout() {
         if (session) {
           const { data: perfil } = await supabase
             .from('perfiles')
-            .select('is_active, estatus')
+            .select('is_active, estatus, movil_vinculado')
             .eq('id', session.user.id)
             .single()
 
@@ -98,6 +98,15 @@ export default function RootLayout() {
               setSession(null)
               setInitialized(true)
               return
+            }
+            if (perfil.movil_vinculado === false) {
+              supabase
+                .from('perfiles')
+                .update({ movil_vinculado: true })
+                .eq('id', session.user.id)
+                .then(({ error }) => {
+                  if (error) console.error('[APP] No se pudo marcar movil_vinculado:', error.message)
+                })
             }
           }
         }

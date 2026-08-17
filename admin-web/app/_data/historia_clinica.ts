@@ -45,14 +45,19 @@ export type HistoriaClinicaDatos = {
   nota_antecedentes_personales: string;
   // Antecedentes familiares
   af_obesidad: boolean; af_diabetes: boolean; af_hta: boolean; af_cancer: boolean;
-  af_hipercolesterolemia: boolean; af_hipertrigliceridemia: boolean; af_trastornos_mentales: boolean;
+  af_hipercolesterolemia: boolean; af_hipertrigliceridemia: boolean; // legacy, kept for compat
+  af_dislipidemia: boolean; af_trastornos_mentales: boolean;
+  af_enfermedad_renal: boolean; af_enfermedad_cardiaca: boolean; af_tiroides: boolean;
+  af_obesidad_quien: string; af_diabetes_quien: string; af_hta_quien: string; af_cancer_quien: string;
+  af_dislipidemia_quien: string; af_trastornos_mentales_quien: string;
+  af_enfermedad_renal_quien: string; af_enfermedad_cardiaca_quien: string; af_tiroides_quien: string;
   af_otros: string;
   nota_antecedentes_familiares: string;
   // Estilo de vida
   ev_hace_ejercicio: boolean;
   ev_tipo_ejercicio: string;
   ev_frecuencia: string; ev_duracion: string; ev_intensidad: string;
-  ev_rutina_semanal: string; ev_habitos_sueno: string;
+  ev_rutina_semanal: string; ev_habitos_sueno: string; ev_nivel_estres: string;
   ev_alcohol: string; ev_tabaco: string; ev_cafe: string; ev_drogas: string;
   ev_vasos_agua: string; ev_vasos_bebidas: string;
   nota_estilo_vida: string;
@@ -95,9 +100,14 @@ export function emptyHistoria(): HistoriaClinicaDatos {
     ap_ciclos_menstruales: "", nota_antecedentes_personales: "",
     af_obesidad: false, af_diabetes: false, af_hta: false, af_cancer: false,
     af_hipercolesterolemia: false, af_hipertrigliceridemia: false,
-    af_trastornos_mentales: false, af_otros: "", nota_antecedentes_familiares: "",
+    af_dislipidemia: false, af_trastornos_mentales: false,
+    af_enfermedad_renal: false, af_enfermedad_cardiaca: false, af_tiroides: false,
+    af_obesidad_quien: "", af_diabetes_quien: "", af_hta_quien: "", af_cancer_quien: "",
+    af_dislipidemia_quien: "", af_trastornos_mentales_quien: "",
+    af_enfermedad_renal_quien: "", af_enfermedad_cardiaca_quien: "", af_tiroides_quien: "",
+    af_otros: "", nota_antecedentes_familiares: "",
     ev_hace_ejercicio: false, ev_tipo_ejercicio: "", ev_frecuencia: "", ev_duracion: "", ev_intensidad: "",
-    ev_rutina_semanal: "", ev_habitos_sueno: "",
+    ev_rutina_semanal: "", ev_habitos_sueno: "", ev_nivel_estres: "",
     ev_alcohol: "", ev_tabaco: "", ev_cafe: "", ev_drogas: "",
     ev_vasos_agua: "", ev_vasos_bebidas: "", nota_estilo_vida: "",
     ib_ultima_fecha: "", ib_se_solicitaron: null, ib_cuales: "",
