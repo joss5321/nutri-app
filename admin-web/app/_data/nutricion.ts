@@ -20,6 +20,24 @@ export const FOOD_GROUPS: { icono: string; grupo: string }[] = [
   { icono: "🍮", grupo: "Azúcares con grasa" },
 ];
 
+// Valores nutricionales por equivalente — SMAE
+export const NUTRICION_POR_EQUIV: Record<string, { hco: number; prot: number; lip: number; kcal: number }> = {
+  "Cereales sin grasa":  { hco: 15, prot: 2, lip: 0, kcal: 70 },
+  "Cereales con grasa":  { hco: 15, prot: 2, lip: 5, kcal: 115 },
+  "Frutas":              { hco: 15, prot: 0, lip: 0, kcal: 60 },
+  "Verduras":            { hco: 4,  prot: 2, lip: 0, kcal: 25 },
+  "Leche descremada":    { hco: 12, prot: 9, lip: 2, kcal: 95 },
+  "Leguminosas":         { hco: 20, prot: 8, lip: 1, kcal: 120 },
+  "POA muy bajo aporte": { hco: 0,  prot: 7, lip: 1, kcal: 40 },
+  "POA bajo aporte":     { hco: 0,  prot: 7, lip: 3, kcal: 55 },
+  "POA medio aporte":    { hco: 0,  prot: 7, lip: 5, kcal: 75 },
+  "POA alto aporte":     { hco: 0,  prot: 7, lip: 8, kcal: 100 },
+  "Aceites y grasas":    { hco: 0,  prot: 0, lip: 5, kcal: 45 },
+  "AC y G c/Proteína":   { hco: 3,  prot: 3, lip: 5, kcal: 70 },
+  "Azúcares sin grasa":  { hco: 10, prot: 0, lip: 0, kcal: 40 },
+  "Azúcares con grasa":  { hco: 10, prot: 0, lip: 5, kcal: 85 },
+};
+
 export type Equivalente = {
   id: string;
   plan_id: string;

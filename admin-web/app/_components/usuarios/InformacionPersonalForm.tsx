@@ -10,6 +10,7 @@ import {
   type Seguimiento,
 } from "@/app/_data/historia_clinica";
 import ConfirmModal from "@/app/_components/ConfirmModal";
+import { exportHistorialClinicoPdf } from "@/app/_utils/exportHistorialPdf";
 
 // ── Helpers ──────────────────────────────────────────────────
 function calcularEdad(fechaNacimiento: string): number | null {
@@ -146,6 +147,7 @@ export default function InformacionPersonalForm({
   const [savingMedidas,      setSavingMedidas]      = useState(false);
   const [medidasFeedback,    setMedidasFeedback]    = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [showMedidasConfirm, setShowMedidasConfirm] = useState(false);
+  const [fechaMedida, setFechaMedida] = useState("");
   const [peso,        setPeso]        = useState("");
   const [altura,      setAltura]      = useState("");
   const [cintura,     setCintura]     = useState("");
@@ -161,6 +163,12 @@ export default function InformacionPersonalForm({
   const sh = (key: keyof HistoriaClinicaDatos) => (val: any) =>
     setHist((prev) => ({ ...prev, [key]: val }));
 
+  // R24 — colación entre tiempos (solo un campo entre desayuno-comida y comida-cena)
+  const [colacionAMVisible, setColacionAMVisible] = useState(false);
+  const [colacionPMVisible, setColacionPMVisible] = useState(false);
+  const showColacionAM = colacionAMVisible || hist.id_r24_colacion_am.trim() !== "";
+  const showColacionPM = colacionPMVisible || hist.id_r24_colacion_pm.trim() !== "";
+
   // Accordion open state
   const [openSecs, setOpenSecs] = useState<Set<string>>(new Set());
   const tog = (k: string) => setOpenSecs((prev) => {
@@ -170,6 +178,7 @@ export default function InformacionPersonalForm({
   // Seguimientos
   const [showNewSeg,  setShowNewSeg]  = useState(false);
   const [newSeg,      setNewSeg]      = useState<Seguimiento>(emptySeg);
+  const [editingSegId, setEditingSegId] = useState<string | null>(null);
   const setSF = (k: keyof Seguimiento) => (v: string) => setNewSeg((p) => ({ ...p, [k]: v }));
   const [savingSeg,   setSavingSeg]   = useState(false);
   const [openSegs,    setOpenSegs]    = useState<Set<string>>(new Set());
@@ -213,14 +222,20 @@ export default function InformacionPersonalForm({
         try {
           const raw = localStorage.getItem(`clinico_draft_${userId}`);
           if (raw) {
-            const d = JSON.parse(raw) as typeof snap & { openSecs?: string[] };
+            const d = JSON.parse(raw) as typeof snap & {
+              openSecs?: string[];
+              newSeg?: Seguimiento;
+              showNewSeg?: boolean;
+              editingSegId?: string | null;
+            };
             const scalarKeys = [
               "nombreCompleto","planMembresia","fechaNacimiento","sexo",
               "peso","altura","cintura","cadera","masaMuscular","grasa","brazo","pantorrilla",
             ] as const;
             const differs =
               scalarKeys.some((k) => d[k] !== undefined && d[k] !== snap[k]) ||
-              (d.hist !== undefined && JSON.stringify(d.hist) !== JSON.stringify(snap.hist));
+              (d.hist !== undefined && JSON.stringify(d.hist) !== JSON.stringify(snap.hist)) ||
+              (d.newSeg !== undefined && JSON.stringify(d.newSeg) !== JSON.stringify(emptySeg()));
             if (differs) {
               if (d.nombreCompleto  != null) setNombreCompleto(d.nombreCompleto);
               if (d.planMembresia   != null) setPlanMembresia(d.planMembresia);
@@ -236,6 +251,9 @@ export default function InformacionPersonalForm({
               if (d.brazo           != null) setBrazo(d.brazo);
               if (d.pantorrilla     != null) setPantorrilla(d.pantorrilla);
               if (d.openSecs)               setOpenSecs(new Set(d.openSecs));
+              if (d.newSeg       != null)   setNewSeg(d.newSeg);
+              if (d.showNewSeg   != null)   setShowNewSeg(d.showNewSeg);
+              if (d.editingSegId !== undefined) setEditingSegId(d.editingSegId);
               setHasDraft(true);
             }
           }
@@ -255,12 +273,14 @@ export default function InformacionPersonalForm({
       nombreCompleto, planMembresia, fechaNacimiento, sexo, hist,
       peso, altura, cintura, cadera, masaMuscular, grasa, brazo, pantorrilla,
       openSecs: [...openSecs],
+      newSeg, showNewSeg, editingSegId,
     };
     try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch {}
   // DRAFT_KEY es estable durante el ciclo de vida del componente (mismo userId)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, nombreCompleto, planMembresia, fechaNacimiento, sexo, hist,
-      peso, altura, cintura, cadera, masaMuscular, grasa, brazo, pantorrilla, openSecs]);
+      peso, altura, cintura, cadera, masaMuscular, grasa, brazo, pantorrilla, openSecs,
+      newSeg, showNewSeg, editingSegId]);
 
   const load = () => { setLoading(true); setError(null); loadInfo(); };
 
@@ -268,6 +288,9 @@ export default function InformacionPersonalForm({
   const alturaNum = parseFloat(altura);
   const imc = pesoNum > 0 && alturaNum > 0 ? pesoNum / Math.pow(alturaNum / 100, 2) : null;
   const edad = calcularEdad(fechaNacimiento);
+
+  const hoyISO = new Date().toISOString().slice(0, 10);
+  const fechaMedidaEfectiva = fechaMedida || hoyISO;
 
   // ── Save datos personales + historia ─────────────
   const handleSavePerfil = async () => {
@@ -311,13 +334,19 @@ export default function InformacionPersonalForm({
       setMedidasFeedback({ type: "error", text: `El campo "${negativo.label}" no puede ser menor a cero.` });
       return;
     }
+    // Rechazar fecha futura (defensa en profundidad: el input ya lo previene con max={hoyISO})
+    if (fechaMedidaEfectiva > hoyISO) {
+      setShowMedidasConfirm(false);
+      setMedidasFeedback({ type: "error", text: "La fecha del registro no puede ser posterior a hoy." });
+      return;
+    }
     setShowMedidasConfirm(false);
     setSavingMedidas(true);
     setMedidasFeedback(null);
     try {
       await updatePerfil(userId, { altura_cm: altura.trim() ? Number(altura) : null });
       const nuevaMedida = await createMedida(userId, {
-        fecha: new Date().toISOString().slice(0, 10),
+        fecha: fechaMedidaEfectiva,
         peso_kg:           peso.trim()        ? Number(peso)        : null,
         cintura_cm:        cintura.trim()     ? Number(cintura)     : null,
         cadera_cm:         cadera.trim()      ? Number(cadera)      : null,
@@ -336,7 +365,8 @@ export default function InformacionPersonalForm({
       setBrazo(nuevaMedida.brazo_cm         != null ? String(nuevaMedida.brazo_cm)           : "");
       setPantorrilla(nuevaMedida.pantorrilla_cm != null ? String(nuevaMedida.pantorrilla_cm) : "");
       // altura no se toca: viene de perfiles y ya fue guardada con updatePerfil
-      setMedidasFeedback({ type: "success", text: `Medidas registradas con fecha ${new Date().toLocaleDateString("es-MX")}.` });
+      setMedidasFeedback({ type: "success", text: `Medidas registradas con fecha ${new Date(fechaMedidaEfectiva + "T00:00:00").toLocaleDateString("es-MX")}.` });
+      setFechaMedida("");
     } catch (err) {
       setMedidasFeedback({ type: "error", text: err instanceof Error ? err.message : "No se pudo guardar." });
     } finally {
@@ -347,16 +377,20 @@ export default function InformacionPersonalForm({
   // ── Save seguimiento ──────────────────────────────
   const handleSaveSeguimiento = async () => {
     setSavingSeg(true);
-    const entry: Seguimiento = { ...newSeg, id: Date.now().toString() };
+    const isEditing = editingSegId != null;
+    const entry: Seguimiento = { ...newSeg, id: isEditing ? editingSegId! : Date.now().toString() };
     const updated: HistoriaClinicaDatos = {
       ...hist,
-      seguimientos: [entry, ...(hist.seguimientos ?? [])],
+      seguimientos: isEditing
+        ? (hist.seguimientos ?? []).map((s) => (s.id === editingSegId ? entry : s))
+        : [entry, ...(hist.seguimientos ?? [])],
     };
     try {
       await saveHistoriaClinica(userId, updated);
       setHist(updated);
       setNewSeg(emptySeg());
       setShowNewSeg(false);
+      setEditingSegId(null);
     } catch (err) {
       alert(err instanceof Error ? err.message : "No se pudo guardar el seguimiento.");
     } finally {
@@ -386,8 +420,30 @@ export default function InformacionPersonalForm({
     </div>
   );
 
+  const handleExportPdf = () => {
+    exportHistorialClinicoPdf({
+      nombreCompleto,
+      sexo,
+      fechaNacimiento,
+      edad,
+      planMembresia,
+      hist,
+      medida: { peso, altura, cintura, cadera, masaMuscular, grasa, brazo, pantorrilla, imc },
+    });
+  };
+
   return (
     <div className="space-y-5">
+
+      {/* Exportar historial clínico */}
+      <div className="flex items-center justify-end">
+        <button
+          type="button"
+          onClick={handleExportPdf}
+          className="flex items-center gap-2 h-9 px-4 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
+          📄 Exportar historial a PDF
+        </button>
+      </div>
 
       {/* Banner de borrador no guardado */}
       {hasDraft && (
@@ -399,6 +455,9 @@ export default function InformacionPersonalForm({
             onClick={() => {
               localStorage.removeItem(DRAFT_KEY);
               setHasDraft(false);
+              setNewSeg(emptySeg());
+              setShowNewSeg(false);
+              setEditingSegId(null);
               setReady(false);
               load();
             }}
@@ -476,7 +535,18 @@ export default function InformacionPersonalForm({
       ═══════════════════════════════════════════════ */}
       <div>
         <p className="font-semibold text-gray-900">Medidas antropométricas</p>
-        <p className="text-sm text-gray-500">Al guardar se creará un nuevo registro con la fecha de hoy en el historial de progreso.</p>
+        <p className="text-sm text-gray-500">Al guardar se creará un nuevo registro en el historial de progreso. Si no seleccionas una fecha, se usará la de hoy.</p>
+      </div>
+
+      <div className="max-w-[200px]">
+        <label className={LB}>Fecha del registro</label>
+        <input
+          type="date"
+          value={fechaMedida}
+          max={hoyISO}
+          onChange={(e) => setFechaMedida(e.target.value > hoyISO ? hoyISO : e.target.value)}
+          className={IC}
+        />
       </div>
 
       <div className="grid grid-cols-4 gap-3">
@@ -842,17 +912,63 @@ export default function InformacionPersonalForm({
 
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">R24 — Recordatorio 24 horas</p>
         <div className="space-y-3">
-          {[
-            { label: "Desayuno", key: "id_r24_desayuno" as const },
-            { label: "Comida",   key: "id_r24_comida"   as const },
-            { label: "Cena",     key: "id_r24_cena"     as const },
-          ].map(({ label, key }) => (
-            <div key={key}>
-              <label className={LB}>{label}</label>
-              <textarea value={hist[key]} onChange={(e) => sh(key)(e.target.value)}
-                rows={2} className={TXA} placeholder={`¿Qué comió en el ${label.toLowerCase()}?`} />
+          <div>
+            <label className={LB}>Desayuno</label>
+            <textarea value={hist.id_r24_desayuno} onChange={(e) => sh("id_r24_desayuno")(e.target.value)}
+              rows={2} className={TXA} placeholder="¿Qué comió en el desayuno?" />
+          </div>
+
+          {showColacionAM ? (
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs text-gray-500 font-medium">Colación (entre desayuno y comida)</label>
+                <button type="button"
+                  onClick={() => { setColacionAMVisible(false); sh("id_r24_colacion_am")(""); }}
+                  className="text-xs text-red-500 hover:underline">
+                  ✕ Quitar
+                </button>
+              </div>
+              <textarea value={hist.id_r24_colacion_am} onChange={(e) => sh("id_r24_colacion_am")(e.target.value)}
+                rows={2} className={TXA} placeholder="¿Qué comió de colación?" />
             </div>
-          ))}
+          ) : (
+            <button type="button" onClick={() => setColacionAMVisible(true)}
+              className="text-xs font-semibold text-primary hover:underline">
+              + Añadir colación entre desayuno y comida
+            </button>
+          )}
+
+          <div>
+            <label className={LB}>Comida</label>
+            <textarea value={hist.id_r24_comida} onChange={(e) => sh("id_r24_comida")(e.target.value)}
+              rows={2} className={TXA} placeholder="¿Qué comió en la comida?" />
+          </div>
+
+          {showColacionPM ? (
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs text-gray-500 font-medium">Colación (entre comida y cena)</label>
+                <button type="button"
+                  onClick={() => { setColacionPMVisible(false); sh("id_r24_colacion_pm")(""); }}
+                  className="text-xs text-red-500 hover:underline">
+                  ✕ Quitar
+                </button>
+              </div>
+              <textarea value={hist.id_r24_colacion_pm} onChange={(e) => sh("id_r24_colacion_pm")(e.target.value)}
+                rows={2} className={TXA} placeholder="¿Qué comió de colación?" />
+            </div>
+          ) : (
+            <button type="button" onClick={() => setColacionPMVisible(true)}
+              className="text-xs font-semibold text-primary hover:underline">
+              + Añadir colación entre comida y cena
+            </button>
+          )}
+
+          <div>
+            <label className={LB}>Cena</label>
+            <textarea value={hist.id_r24_cena} onChange={(e) => sh("id_r24_cena")(e.target.value)}
+              rows={2} className={TXA} placeholder="¿Qué comió en la cena?" />
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
@@ -1023,17 +1139,19 @@ export default function InformacionPersonalForm({
           <p className="text-sm text-gray-500">{(hist.seguimientos ?? []).length} consulta{(hist.seguimientos ?? []).length !== 1 ? "s" : ""} registrada{(hist.seguimientos ?? []).length !== 1 ? "s" : ""}</p>
         </div>
         <button
-          onClick={() => { setShowNewSeg(true); setNewSeg(emptySeg()); }}
+          onClick={() => { setShowNewSeg(true); setNewSeg(emptySeg()); setEditingSegId(null); }}
           className="flex items-center gap-2 h-9 px-4 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-dark transition-colors">
           + Nueva consulta de seguimiento
         </button>
       </div>
 
-      {/* Formulario nuevo seguimiento */}
+      {/* Formulario nuevo seguimiento / edición */}
       {showNewSeg && (
         <div className="border-2 border-primary/30 rounded-xl p-5 space-y-4 bg-primary/3">
           <div className="flex items-center justify-between">
-            <p className="font-semibold text-gray-900 text-sm">Nueva consulta de seguimiento</p>
+            <p className="font-semibold text-gray-900 text-sm">
+              {editingSegId ? "Editar consulta de seguimiento" : "Nueva consulta de seguimiento"}
+            </p>
             <div>
               <label className={LB}>Fecha</label>
               <input type="date" value={newSeg.fecha}
@@ -1099,13 +1217,13 @@ export default function InformacionPersonalForm({
           </div>
 
           <div className="flex items-center justify-end gap-3 pt-2 border-t border-primary/20">
-            <button onClick={() => setShowNewSeg(false)}
+            <button onClick={() => { setShowNewSeg(false); setEditingSegId(null); }}
               className="h-9 px-4 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50">
               Cancelar
             </button>
             <button onClick={handleSaveSeguimiento} disabled={savingSeg}
               className="h-9 px-4 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-dark disabled:opacity-50">
-              {savingSeg ? "Guardando..." : "💾 Guardar seguimiento"}
+              {savingSeg ? "Guardando..." : editingSegId ? "💾 Guardar cambios" : "💾 Guardar seguimiento"}
             </button>
           </div>
         </div>
@@ -1120,16 +1238,25 @@ export default function InformacionPersonalForm({
             const fechaFmt = d.toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" });
             return (
               <div key={seg.id} className="border border-gray-200 rounded-xl overflow-hidden">
-                <button type="button" onClick={() => togSeg(seg.id)}
-                  className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left">
-                  <span className="flex items-center gap-3">
-                    <span className="text-sm font-semibold text-gray-800">📅 Seguimiento — {fechaFmt}</span>
+                <div className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors">
+                  <button type="button" onClick={() => togSeg(seg.id)}
+                    className="flex-1 flex items-center gap-3 text-left min-w-0">
+                    <span className="text-sm font-semibold text-gray-800 shrink-0">📅 Seguimiento — {fechaFmt}</span>
                     {seg.como_se_sintio && (
                       <span className="text-xs text-gray-500 truncate max-w-[200px]">{seg.como_se_sintio}</span>
                     )}
-                  </span>
-                  <span className="text-gray-400 text-sm">{isOpen ? "▲" : "▼"}</span>
-                </button>
+                  </button>
+                  <div className="flex items-center gap-3 shrink-0 pl-3">
+                    <button type="button"
+                      onClick={() => { setNewSeg(seg); setEditingSegId(seg.id); setShowNewSeg(true); }}
+                      className="text-xs font-semibold text-primary hover:underline">
+                      ✏️ Editar
+                    </button>
+                    <button type="button" onClick={() => togSeg(seg.id)} className="text-gray-400 text-sm">
+                      {isOpen ? "▲" : "▼"}
+                    </button>
+                  </div>
+                </div>
                 {isOpen && (
                   <div className="p-4 space-y-3 text-sm">
                     {[
@@ -1172,7 +1299,7 @@ export default function InformacionPersonalForm({
       {showMedidasConfirm && (
         <ConfirmModal
           title="Registrar medidas"
-          message={`¿Estás seguro de guardar estas medidas? Se creará un nuevo registro con fecha ${new Date().toLocaleDateString("es-MX")} que actualizará el progreso del usuario.`}
+          message={`¿Estás seguro de guardar estas medidas? Se creará un nuevo registro con fecha ${new Date(fechaMedidaEfectiva + "T00:00:00").toLocaleDateString("es-MX")} que actualizará el progreso del usuario.`}
           confirmLabel="Sí, registrar"
           variant="warning"
           onConfirm={handleSaveMedidas}

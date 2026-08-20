@@ -75,6 +75,9 @@ export default function DietocalculoForm({ userId }: { userId: string }) {
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [existingId, setExistingId] = useState<string | null>(null);
+  const [ready, setReady] = useState(false);
+  const [hasDraft, setHasDraft] = useState(false);
+  const DRAFT_KEY = `dietocalculo_draft_${userId}`;
 
   const [peso, setPeso] = useState(0);
   const [altura, setAltura] = useState(0);
@@ -89,7 +92,7 @@ export default function DietocalculoForm({ userId }: { userId: string }) {
   const [proteGrKg, setProteGrKg] = useState("");
   const [lipidosGrKg, setLipidosGrKg] = useState("");
 
-  useEffect(() => {
+  const loadData = () => {
     Promise.all([fetchPerfil(userId), fetchUltimaMedida(userId), fetchDietocalculo(userId)])
       .then(([perfil, medida, calculo]) => {
         setSexo(perfil.sexo ?? "femenino");
@@ -103,20 +106,65 @@ export default function DietocalculoForm({ userId }: { userId: string }) {
         }
         if (medida?.peso_kg) setPeso(medida.peso_kg);
 
+        const snap = {
+          formula: "mifflin" as Formula,
+          actividad: "sedentario" as ActividadKey,
+          objetivo: "mantenimiento" as Objetivo,
+          nivelPct: "", carbsGrKg: "", proteGrKg: "", lipidosGrKg: "",
+        };
         if (calculo) {
           setExistingId(calculo.id);
-          setFormula(calculo.formula as Formula);
-          setActividad(calculo.actividad as ActividadKey);
-          setObjetivo(calculo.objetivo as Objetivo);
-          setNivelPct(calculo.nivel_pct > 0 ? String(calculo.nivel_pct) : "");
-          setCarbsGrKg(calculo.carbs_gr_kg > 0 ? String(calculo.carbs_gr_kg) : "");
-          setProteGrKg(calculo.prote_gr_kg > 0 ? String(calculo.prote_gr_kg) : "");
-          setLipidosGrKg(calculo.lipidos_gr_kg > 0 ? String(calculo.lipidos_gr_kg) : "");
+          snap.formula = calculo.formula as Formula;
+          snap.actividad = calculo.actividad as ActividadKey;
+          snap.objetivo = calculo.objetivo as Objetivo;
+          snap.nivelPct = calculo.nivel_pct > 0 ? String(calculo.nivel_pct) : "";
+          snap.carbsGrKg = calculo.carbs_gr_kg > 0 ? String(calculo.carbs_gr_kg) : "";
+          snap.proteGrKg = calculo.prote_gr_kg > 0 ? String(calculo.prote_gr_kg) : "";
+          snap.lipidosGrKg = calculo.lipidos_gr_kg > 0 ? String(calculo.lipidos_gr_kg) : "";
+          setFormula(snap.formula);
+          setActividad(snap.actividad);
+          setObjetivo(snap.objetivo);
+          setNivelPct(snap.nivelPct);
+          setCarbsGrKg(snap.carbsGrKg);
+          setProteGrKg(snap.proteGrKg);
+          setLipidosGrKg(snap.lipidosGrKg);
         }
+
+        // ── Restaurar borrador sin guardar, si existe y difiere de lo cargado ──
+        try {
+          const raw = localStorage.getItem(DRAFT_KEY);
+          if (raw) {
+            const d = JSON.parse(raw) as typeof snap;
+            const differs = (Object.keys(snap) as (keyof typeof snap)[])
+              .some((k) => d[k] !== undefined && d[k] !== snap[k]);
+            if (differs) {
+              if (d.formula     != null) setFormula(d.formula);
+              if (d.actividad   != null) setActividad(d.actividad);
+              if (d.objetivo    != null) setObjetivo(d.objetivo);
+              if (d.nivelPct    != null) setNivelPct(d.nivelPct);
+              if (d.carbsGrKg   != null) setCarbsGrKg(d.carbsGrKg);
+              if (d.proteGrKg   != null) setProteGrKg(d.proteGrKg);
+              if (d.lipidosGrKg != null) setLipidosGrKg(d.lipidosGrKg);
+              setHasDraft(true);
+            }
+          }
+        } catch {}
+        setReady(true);
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Error al cargar datos."))
       .finally(() => setLoading(false));
-  }, [userId]);
+  };
+
+  useEffect(() => { loadData(); }, [userId]);
+
+  // Auto-guardar borrador en cada cambio del formulario
+  useEffect(() => {
+    if (!ready) return;
+    const draft = { formula, actividad, objetivo, nivelPct, carbsGrKg, proteGrKg, lipidosGrKg };
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch {}
+  // DRAFT_KEY es estable durante el ciclo de vida del componente (mismo userId)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, formula, actividad, objetivo, nivelPct, carbsGrKg, proteGrKg, lipidosGrKg]);
 
   // ── Cálculos ──────────────────────────────────────────────
   const geb = calcGEB(formula, peso, altura, edad, sexo);
@@ -157,6 +205,8 @@ export default function DietocalculoForm({ userId }: { userId: string }) {
       const saved = await saveDietocalculo(userId, input, existingId ?? undefined);
       setExistingId(saved.id);
       setFeedback({ type: "success", text: existingId ? "Dietocálculo actualizado." : "Dietocálculo guardado." });
+      localStorage.removeItem(DRAFT_KEY);
+      setHasDraft(false);
     } catch (err) {
       setFeedback({ type: "error", text: err instanceof Error ? err.message : "No se pudo guardar." });
     } finally {
@@ -169,6 +219,24 @@ export default function DietocalculoForm({ userId }: { userId: string }) {
 
   return (
     <div className="space-y-6">
+      {hasDraft && (
+        <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 font-medium">
+          <span>📝</span>
+          <span>Borrador restaurado — tienes cambios sin guardar en este formulario.</span>
+          <button
+            type="button"
+            onClick={() => {
+              localStorage.removeItem(DRAFT_KEY);
+              setHasDraft(false);
+              setReady(false);
+              setLoading(true);
+              loadData();
+            }}
+            className="ml-auto shrink-0 text-amber-600 hover:text-amber-800 underline font-semibold">
+            Descartar cambios
+          </button>
+        </div>
+      )}
       {existingId && (
         <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-2 text-xs text-green-700 flex items-center gap-2">
           <span>✅</span> Este usuario ya tiene un dietocálculo guardado. Los cambios se actualizarán al guardar.

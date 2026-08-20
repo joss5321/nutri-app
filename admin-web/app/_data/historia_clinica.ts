@@ -67,6 +67,7 @@ export type HistoriaClinicaDatos = {
   // Indicadores dietéticos
   id_comidas_dia: string; id_quien_prepara: string; id_grasa_casa: string; id_presupuesto: string;
   id_r24_desayuno: string; id_r24_comida: string; id_r24_cena: string;
+  id_r24_colacion_am: string; id_r24_colacion_pm: string;
   id_apetito: string;
   id_alimentos_preferidos: string; id_no_agradan: string;
   id_alergias: string; id_malestar: string;
@@ -114,6 +115,7 @@ export function emptyHistoria(): HistoriaClinicaDatos {
     nota_indicadores_bioquimicos: "",
     id_comidas_dia: "", id_quien_prepara: "", id_grasa_casa: "", id_presupuesto: "",
     id_r24_desayuno: "", id_r24_comida: "", id_r24_cena: "",
+    id_r24_colacion_am: "", id_r24_colacion_pm: "",
     id_apetito: "", id_alimentos_preferidos: "", id_no_agradan: "",
     id_alergias: "", id_malestar: "", id_agrega_sal: null,
     id_dieta_anterior: null, id_dieta_tipo: "", id_dieta_hace_cuanto: "",

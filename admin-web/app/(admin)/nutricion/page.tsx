@@ -5,11 +5,13 @@ import NutricionEquivalentesForm from "@/app/_components/usuarios/NutricionEquiv
 import RecetasAsignadasForm from "@/app/_components/usuarios/RecetasAsignadasForm";
 import SuplementosAsignadosForm from "@/app/_components/usuarios/SuplementosAsignadosForm";
 import DietocalculoForm from "@/app/_components/usuarios/DietocalculoForm";
+import { exportPlanNutricionPdf } from "@/app/_utils/exportPlanNutricionPdf";
 
 type NutricionTab = "dietocalculo" | "equivalentes" | "recetas" | "suplementos";
 
 function NutricionModal({ perfil, onClose }: { perfil: Perfil; onClose: () => void }) {
   const [tab, setTab] = useState<NutricionTab>("dietocalculo");
+  const [exportando, setExportando] = useState(false);
   const nombre = perfil.nombre_completo || "Usuario";
   const initials = nombre.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
 
@@ -19,6 +21,17 @@ function NutricionModal({ perfil, onClose }: { perfil: Perfil; onClose: () => vo
     { key: "recetas",      label: "Recetas",              icon: "🍽" },
     { key: "suplementos",  label: "Suplementos",          icon: "💊" },
   ];
+
+  const handleExportPdf = async () => {
+    setExportando(true);
+    try {
+      await exportPlanNutricionPdf(perfil.id, nombre);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "No se pudo exportar el plan a PDF.");
+    } finally {
+      setExportando(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
@@ -34,7 +47,15 @@ function NutricionModal({ perfil, onClose }: { perfil: Perfil; onClose: () => vo
               <p className="text-gray-500 text-sm">Asigna equivalentes, recetas y suplementos</p>
             </div>
           </div>
-          <button onClick={onClose} className="w-9 h-9 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 text-xl">×</button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleExportPdf}
+              disabled={exportando}
+              className="flex items-center gap-2 h-9 px-4 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors">
+              {exportando ? "Generando..." : "📄 Exportar plan a PDF"}
+            </button>
+            <button onClick={onClose} className="w-9 h-9 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 text-xl">×</button>
+          </div>
         </div>
 
         {/* Tabs */}

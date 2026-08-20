@@ -4,29 +4,12 @@ import {
   FOOD_GROUPS,
   MEAL_KEYS,
   MEAL_LABELS,
+  NUTRICION_POR_EQUIV,
   fetchEquivalentes,
   saveEquivalentes,
   type EquivalenteInput,
 } from "@/app/_data/nutricion";
 import { fetchDietocalculo, type Dietocalculo } from "@/app/_data/dietocalculo";
-
-// Valores nutricionales por equivalente — SMAE
-const NUTRICION_POR_EQUIV: Record<string, { hco: number; prot: number; lip: number; kcal: number }> = {
-  "Cereales sin grasa":  { hco: 15, prot: 2, lip: 0, kcal: 70 },
-  "Cereales con grasa":  { hco: 15, prot: 2, lip: 5, kcal: 115 },
-  "Frutas":              { hco: 15, prot: 0, lip: 0, kcal: 60 },
-  "Verduras":            { hco: 4,  prot: 2, lip: 0, kcal: 25 },
-  "Leche descremada":    { hco: 12, prot: 9, lip: 2, kcal: 95 },
-  "Leguminosas":         { hco: 20, prot: 8, lip: 1, kcal: 120 },
-  "POA muy bajo aporte": { hco: 0,  prot: 7, lip: 1, kcal: 40 },
-  "POA bajo aporte":     { hco: 0,  prot: 7, lip: 3, kcal: 55 },
-  "POA medio aporte":    { hco: 0,  prot: 7, lip: 5, kcal: 75 },
-  "POA alto aporte":     { hco: 0,  prot: 7, lip: 8, kcal: 100 },
-  "Aceites y grasas":    { hco: 0,  prot: 0, lip: 5, kcal: 45 },
-  "AC y G c/Proteína":   { hco: 3,  prot: 3, lip: 5, kcal: 70 },
-  "Azúcares sin grasa":  { hco: 10, prot: 0, lip: 0, kcal: 40 },
-  "Azúcares con grasa":  { hco: 10, prot: 0, lip: 5, kcal: 85 },
-};
 
 const buildEmptyRows = (): EquivalenteInput[] =>
   FOOD_GROUPS.map((fg) => ({
@@ -147,6 +130,9 @@ export default function NutricionEquivalentesForm({ userId }: { userId: string }
   // racList es independiente de los tiempos de comida — solo se valida al guardar
   const [racList, setRacList] = useState<number[]>(() => FOOD_GROUPS.map(() => 0));
   const [dietocalculo, setDietocalculo] = useState<Dietocalculo | null>(null);
+  const [ready, setReady] = useState(false);
+  const [hasDraft, setHasDraft] = useState(false);
+  const DRAFT_KEY = `equivalentes_draft_${userId}`;
 
   const loadData = () => {
     Promise.all([fetchEquivalentes(userId), fetchDietocalculo(userId)])
@@ -161,7 +147,25 @@ export default function NutricionEquivalentesForm({ userId }: { userId: string }
         });
         setRows(loaded);
         // Inicializar racList con la suma de comidas guardadas
-        setRacList(buildRacList(loaded));
+        const loadedRacList = buildRacList(loaded);
+        setRacList(loadedRacList);
+
+        // ── Restaurar borrador sin guardar, si existe y difiere de lo cargado ──
+        try {
+          const raw = localStorage.getItem(DRAFT_KEY);
+          if (raw) {
+            const d = JSON.parse(raw) as { rows?: EquivalenteInput[]; racList?: number[] };
+            const differs =
+              (d.rows !== undefined && JSON.stringify(d.rows) !== JSON.stringify(loaded)) ||
+              (d.racList !== undefined && JSON.stringify(d.racList) !== JSON.stringify(loadedRacList));
+            if (differs) {
+              if (d.rows != null) setRows(d.rows);
+              if (d.racList != null) setRacList(d.racList);
+              setHasDraft(true);
+            }
+          }
+        } catch {}
+        setReady(true);
       })
       .catch((err) => setError(err instanceof Error ? err.message : "No se pudo cargar la tabla de equivalentes."))
       .finally(() => setLoading(false));
@@ -170,6 +174,14 @@ export default function NutricionEquivalentesForm({ userId }: { userId: string }
   useEffect(() => { loadData(); }, []);
 
   const load = () => { setLoading(true); setError(null); loadData(); };
+
+  // Auto-guardar borrador en cada cambio de la tabla
+  useEffect(() => {
+    if (!ready) return;
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ rows, racList })); } catch {}
+  // DRAFT_KEY es estable durante el ciclo de vida del componente (mismo userId)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, rows, racList]);
 
   // Tiempos de comida y raciones son independientes entre sí
   const updateMeal = (gi: number, mealKey: (typeof MEAL_KEYS)[number], value: string) => {
@@ -222,6 +234,8 @@ export default function NutricionEquivalentesForm({ userId }: { userId: string }
     try {
       await saveEquivalentes(planId, rows);
       setFeedback({ type: "success", text: "Equivalentes guardados correctamente." });
+      localStorage.removeItem(DRAFT_KEY);
+      setHasDraft(false);
     } catch (err) {
       setFeedback({ type: "error", text: err instanceof Error ? err.message : "No se pudieron guardar los equivalentes." });
     } finally {
@@ -241,6 +255,8 @@ export default function NutricionEquivalentesForm({ userId }: { userId: string }
   // HCO/Prot/Líp/Kcal se calculan desde racList (columna # Raciones)
   let totalHCO = 0, totalProt = 0, totalLip = 0, totalKcal = 0;
   const mealTotals: Record<string, number> = { desayuno: 0, colacion_1: 0, comida: 0, colacion_2: 0, cena: 0 };
+  // Kcal por tiempo de comida = suma, por grupo, de las raciones asignadas a ESE tiempo × kcal por ración
+  const mealKcalTotals: Record<string, number> = { desayuno: 0, colacion_1: 0, comida: 0, colacion_2: 0, cena: 0 };
 
   const rowCalcs = rows.map((row, gi) => {
     const raciones = racList[gi];
@@ -253,9 +269,13 @@ export default function NutricionEquivalentesForm({ userId }: { userId: string }
     totalProt += prot;
     totalLip += lip;
     totalKcal += kcal;
-    MEAL_KEYS.forEach((k) => { mealTotals[k] += row[k]; });
+    MEAL_KEYS.forEach((k) => {
+      mealTotals[k] += row[k];
+      mealKcalTotals[k] += row[k] * nutri.kcal;
+    });
     return { raciones, hco, prot, lip, kcal };
   });
+  const totalMealKcal = MEAL_KEYS.reduce((acc, k) => acc + mealKcalTotals[k], 0);
 
   const totalRacList = racList.reduce((a, b) => a + b, 0);
 
@@ -279,6 +299,23 @@ export default function NutricionEquivalentesForm({ userId }: { userId: string }
 
   return (
     <div className="space-y-6">
+      {hasDraft && (
+        <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 font-medium">
+          <span>📝</span>
+          <span>Borrador restaurado — tienes cambios sin guardar en este formulario.</span>
+          <button
+            type="button"
+            onClick={() => {
+              localStorage.removeItem(DRAFT_KEY);
+              setHasDraft(false);
+              setReady(false);
+              load();
+            }}
+            className="ml-auto shrink-0 text-amber-600 hover:text-amber-800 underline font-semibold">
+            Descartar cambios
+          </button>
+        </div>
+      )}
       <div>
         <p className="font-semibold text-gray-900">Tabla de equivalentes</p>
         <p className="text-sm text-gray-500">
@@ -303,8 +340,8 @@ export default function NutricionEquivalentesForm({ userId }: { userId: string }
           </thead>
           <tbody>
             {rows.map((row, gi) => {
-              const { raciones, hco, prot, lip, kcal } = rowCalcs[gi];
-              const mealSum = raciones;
+              const { hco, prot, lip, kcal } = rowCalcs[gi];
+              const mealSum = MEAL_KEYS.reduce((acc, k) => acc + row[k], 0);
               const rac = racList[gi];
               const mismatch = (rac > 0 || mealSum > 0) && rac !== mealSum;
               return (
@@ -316,16 +353,34 @@ export default function NutricionEquivalentesForm({ userId }: { userId: string }
                     </div>
                   </td>
                   <td className="px-1 py-1.5 bg-primary/5">
-                    <input
-                      type="number" min={0} value={rac}
-                      onChange={(e) => updateRaciones(gi, e.target.value)}
-                      onFocus={(e) => e.target.select()}
-                      className={`w-14 h-8 text-center border-2 rounded-lg text-xs font-bold focus:outline-none mx-auto block ${
-                        mismatch
-                          ? "border-red-400 text-red-600 bg-red-50"
-                          : "border-primary/40 text-primary focus:border-primary"
-                      }`}
-                    />
+                    <div className="flex items-center justify-center gap-1.5">
+                      <input
+                        type="number" min={0} value={rac}
+                        onChange={(e) => updateRaciones(gi, e.target.value)}
+                        onFocus={(e) => e.target.select()}
+                        className={`w-12 h-8 text-center border-2 rounded-lg text-xs font-bold focus:outline-none shrink-0 ${
+                          mismatch
+                            ? "border-red-400 text-red-600 bg-red-50"
+                            : "border-primary/40 text-primary focus:border-primary"
+                        }`}
+                      />
+                      {(rac > 0 || mealSum > 0) && (
+                        mismatch ? (
+                          <span
+                            title={
+                              mealSum < rac
+                                ? `Faltan ${rac - mealSum} ración(es) por distribuir en los tiempos de comida`
+                                : `Sobran ${mealSum - rac} ración(es) distribuidas de más`
+                            }
+                            className="text-[10px] font-bold text-red-500 whitespace-nowrap"
+                          >
+                            {mealSum < rac ? `−${rac - mealSum}` : `+${mealSum - rac}`}
+                          </span>
+                        ) : (
+                          <span title="Raciones distribuidas correctamente" className="text-emerald-500 text-sm shrink-0">✓</span>
+                        )
+                      )}
+                    </div>
                   </td>
                   {MEAL_KEYS.map((key) => (
                     <td key={key} className="px-1 py-1.5">
@@ -358,6 +413,16 @@ export default function NutricionEquivalentesForm({ userId }: { userId: string }
               <td className="px-2 py-2.5 text-center text-xs text-red-600 font-extrabold">{totalProt.toFixed(0)}</td>
               <td className="px-2 py-2.5 text-center text-xs text-purple-600 font-extrabold">{totalLip.toFixed(0)}</td>
               <td className="px-2 py-2.5 text-center text-sm text-green-700 font-extrabold">{totalKcal.toFixed(0)}</td>
+            </tr>
+            <tr className="border-t border-gray-200 bg-green-50/60">
+              <td className="px-3 py-2 text-xs text-green-800 font-bold" colSpan={2}>Kcal por tiempo</td>
+              {MEAL_KEYS.map((k) => (
+                <td key={k} className="px-2 py-2 text-center text-xs text-green-800 font-bold">
+                  {mealKcalTotals[k].toFixed(0)}
+                </td>
+              ))}
+              <td className="px-2 py-2 text-center text-xs text-gray-400" colSpan={3}>—</td>
+              <td className="px-2 py-2 text-center text-sm text-green-800 font-extrabold">{totalMealKcal.toFixed(0)}</td>
             </tr>
           </tfoot>
         </table>

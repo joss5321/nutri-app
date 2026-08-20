@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import type { Alimento } from "./alimentos";
 
 export const TIPOS_RECETA = ["Desayuno", "Almuerzo", "Cena", "Colación", "Comida"] as const;
 export const NIVELES_RECETA = ["Fácil", "Medio", "Difícil"] as const;
@@ -132,6 +133,90 @@ export async function fetchRecetasPaginated(
     data: (data as RecetaRow[]).map(normalizeReceta),
     count: count ?? 0,
   };
+}
+
+export type MacrosCalculados = {
+  calorias: number;
+  proteinas_g: number;
+  carbohidratos_g: number;
+  grasas_g: number;
+};
+
+/**
+ * Suma kcal/macros de los ingredientes de una receta que están ligados al
+ * catálogo de alimentos (alimento_id), escalando la cantidad usada en la
+ * receta contra la cantidad de referencia del alimento. Fuente única usada
+ * tanto por el formulario de recetas (cálculo en vivo) como por el
+ * recálculo masivo del catálogo. Devuelve null si no hay ningún ingrediente
+ * ligado (nada que calcular).
+ */
+export function calcularMacrosDesdeIngredientes(
+  ingredientes: { alimento_id: string | null; cantidad: number | null }[],
+  alimentosById: Record<string, Alimento>
+): MacrosCalculados | null {
+  const ligados = ingredientes.filter((i) => !!i.alimento_id);
+  if (ligados.length === 0) return null;
+
+  let k = 0, p = 0, l = 0, h = 0;
+  for (const ing of ligados) {
+    const al = alimentosById[ing.alimento_id!];
+    if (!al || !al.cantidad) continue;
+    const scale = (ing.cantidad ?? 0) / al.cantidad;
+    k += (al.kcal ?? 0) * scale;
+    p += (al.proteinas_g ?? 0) * scale;
+    l += (al.lipidos_g ?? 0) * scale;
+    h += (al.hco_g ?? 0) * scale;
+  }
+  return {
+    calorias: Math.round(k),
+    proteinas_g: Number(p.toFixed(1)),
+    carbohidratos_g: Number(h.toFixed(1)),
+    grasas_g: Number(l.toFixed(1)),
+  };
+}
+
+/** Todas las recetas del catálogo base (sin paginar) — usado para el recálculo masivo. */
+export async function fetchTodasRecetasCatalogo(): Promise<Receta[]> {
+  const PAGE = 500;
+  let all: Receta[] = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await supabase
+      .from("recetas")
+      .select(RECETA_SELECT)
+      .is("user_id", null)
+      .order("created_at", { ascending: false })
+      .range(from, from + PAGE - 1);
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    all = [...all, ...(data as RecetaRow[]).map(normalizeReceta)];
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
+  return all;
+}
+
+/** Liga (o desliga, si alimentoId es null) un ingrediente de receta a una fila del catálogo de alimentos. */
+export async function vincularIngrediente(ingredienteId: string, alimentoId: string | null): Promise<void> {
+  const { error } = await supabase
+    .from("receta_ingredientes")
+    .update({ alimento_id: alimentoId })
+    .eq("id", ingredienteId);
+  if (error) throw error;
+}
+
+/** Actualiza solo calorías/macros de una receta, sin tocar ingredientes ni pasos. */
+export async function updateRecetaMacros(id: string, macros: MacrosCalculados): Promise<void> {
+  const { error } = await supabase
+    .from("recetas")
+    .update({
+      calorias: macros.calorias,
+      proteinas_g: macros.proteinas_g,
+      carbohidratos_g: macros.carbohidratos_g,
+      grasas_g: macros.grasas_g,
+    })
+    .eq("id", id);
+  if (error) throw error;
 }
 
 async function replaceIngredientes(recetaId: string, ingredientes: RecetaIngredienteInput[]): Promise<void> {

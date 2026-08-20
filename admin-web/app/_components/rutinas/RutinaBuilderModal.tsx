@@ -1,6 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
-import { MUSCLE_GROUPS, type Exercise } from "@/app/_data/exercises";
+import { useEffect, useMemo, useState } from "react";
+import { type Exercise } from "@/app/_data/exercises";
 import { fetchEjercicios } from "@/app/_data/ejercicios";
 import ConfirmModal from "@/app/_components/ConfirmModal";
 import {
@@ -10,6 +10,7 @@ import {
   saveRutina,
   type RutinaInput,
 } from "@/app/_data/rutinas";
+import { exportRutinaPdf } from "@/app/_utils/exportRutinaPdf";
 
 type SerieRow = { reps: string; peso: string };
 
@@ -123,6 +124,17 @@ export default function RutinaBuilderModal({
   const retryLoadRutina = () => setRetryCount((c) => c + 1);
 
   const exerciseById = (id: string) => exercises.find((e) => e.id === id);
+
+  // Músculos presentes en los ejercicios dados de alta (principal + secundarios),
+  // en vez de una lista fija — así el filtro siempre cubre el catálogo real.
+  const muscleGroups = useMemo(() => {
+    const set = new Set<string>();
+    for (const ex of exercises) {
+      if (ex.grupo_muscular) set.add(ex.grupo_muscular);
+      for (const g of ex.grupos_secundarios) if (g) set.add(g);
+    }
+    return [...set].sort((a, b) => a.localeCompare(b, "es"));
+  }, [exercises]);
 
   const catalog = exercises.filter((e) => {
     const matchSearch = e.nombre.toLowerCase().includes(search.toLowerCase());
@@ -268,6 +280,16 @@ export default function RutinaBuilderModal({
     }
   };
 
+  const handleExportPdf = () => {
+    exportRutinaPdf({
+      nombrePaciente: patient.name,
+      nombreRutina: nombre,
+      days: DAYS,
+      assigned,
+      exercises,
+    });
+  };
+
   const handleDelete = async () => {
     if (!rutinaId) return;
     setShowDeleteConfirm(false);
@@ -329,7 +351,7 @@ export default function RutinaBuilderModal({
               <select value={grupo} onChange={(e) => setGrupo(e.target.value)}
                 className="h-10 border border-gray-200 rounded-xl px-3 text-sm bg-white focus:outline-none focus:border-primary">
                 <option>Todos</option>
-                {MUSCLE_GROUPS.map((m) => <option key={m}>{m}</option>)}
+                {muscleGroups.map((m) => <option key={m}>{m}</option>)}
               </select>
 
               <div className="flex flex-col gap-2 overflow-y-auto max-h-[32rem] pr-1">
@@ -641,6 +663,13 @@ export default function RutinaBuilderModal({
           <div className="flex items-center gap-3">
             <button onClick={onClose} className="px-5 h-10 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50">
               Cancelar
+            </button>
+            <button
+              onClick={handleExportPdf}
+              disabled={loadingRutina || !!error}
+              className="flex items-center gap-2 px-5 h-10 rounded-xl border border-gray-200 text-gray-600 text-sm font-semibold hover:bg-gray-50 disabled:opacity-50"
+            >
+              📄 Exportar PDF
             </button>
             {rutinaId && (
               <button

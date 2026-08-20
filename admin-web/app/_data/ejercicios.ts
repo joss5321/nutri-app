@@ -105,6 +105,29 @@ export async function fetchEjercicioFilterValues(
   return unique;
 }
 
+/**
+ * Todos los músculos presentes en los ejercicios dados de alta (manuales +
+ * WorkoutX), combinando el músculo principal (grupo_muscular) y los
+ * secundarios (grupos_secundarios) de cada ejercicio — así el filtro
+ * "Músculo" cubre cualquier músculo que aparezca en el catálogo, no solo
+ * una lista fija predefinida.
+ */
+export async function fetchMuscleFilterOptions(): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("ejercicios")
+    .select("grupo_muscular, grupos_secundarios");
+  if (error) throw error;
+
+  const set = new Set<string>();
+  for (const row of (data ?? []) as { grupo_muscular: string | null; grupos_secundarios: string[] | null }[]) {
+    if (row.grupo_muscular) set.add(row.grupo_muscular);
+    for (const g of row.grupos_secundarios ?? []) {
+      if (g) set.add(g);
+    }
+  }
+  return [...set].sort((a, b) => a.localeCompare(b, "es"));
+}
+
 // ── Escritura — solo para ejercicios manuales ────────────────────────────
 
 export async function createEjercicio(input: ExerciseInput): Promise<Exercise> {

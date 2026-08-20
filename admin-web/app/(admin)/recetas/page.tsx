@@ -1,14 +1,19 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import RecetaModal from "@/app/_components/recetas/RecetaModal";
+import VincularIngredientesModal from "@/app/_components/recetas/VincularIngredientesModal";
 import ConfirmModal from "@/app/_components/ConfirmModal";
 import {
   TIPOS_RECETA,
+  calcularMacrosDesdeIngredientes,
   deleteReceta,
   duplicateReceta,
   fetchRecetasPaginated,
+  fetchTodasRecetasCatalogo,
+  updateRecetaMacros,
   type Receta,
 } from "@/app/_data/recetas";
+import { fetchAlimentos } from "@/app/_data/alimentos";
 import { fetchCurrentUserRol } from "@/app/_data/perfiles";
 import { supabase } from "@/lib/supabase";
 
@@ -294,6 +299,10 @@ export default function RecetasPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentRol, setCurrentRol]       = useState<string | null>(null);
 
+  const [recalculando, setRecalculando]   = useState(false);
+  const [recalcResumen, setRecalcResumen] = useState<string | null>(null);
+  const [showVincular, setShowVincular]   = useState(false);
+
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const rangeFrom  = totalCount === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
   const rangeTo    = Math.min(page * PAGE_SIZE, totalCount);
@@ -418,6 +427,50 @@ export default function RecetasPage() {
     }
   };
 
+  // Recalcula calorías/macros para todas las recetas del catálogo cuyos
+  // ingredientes están ligados al catálogo de alimentos (alimento_id). Útil
+  // para recetas cargadas por fuera del formulario (ej. importadas por SQL)
+  // que se guardaron con calorías vacías.
+  const handleRecalcularCalorias = async () => {
+    if (!confirm(
+      "Esto recalculará calorías y macronutrientes de todas las recetas del catálogo que tengan ingredientes ligados al catálogo de alimentos, sobrescribiendo los valores actuales. ¿Continuar?"
+    )) return;
+
+    setRecalculando(true);
+    setRecalcResumen(null);
+    try {
+      const [todasRecetas, alimentos] = await Promise.all([fetchTodasRecetasCatalogo(), fetchAlimentos()]);
+      const alimentosById = Object.fromEntries(alimentos.map((a) => [a.id, a]));
+
+      let actualizadas = 0, sinCambios = 0, sinIngredientesLigados = 0, errores = 0;
+      for (const r of todasRecetas) {
+        const macros = calcularMacrosDesdeIngredientes(r.ingredientes, alimentosById);
+        if (!macros) { sinIngredientesLigados++; continue; }
+        const sinCambio = r.calorias === macros.calorias
+          && r.proteinas_g === macros.proteinas_g
+          && r.carbohidratos_g === macros.carbohidratos_g
+          && r.grasas_g === macros.grasas_g;
+        if (sinCambio) { sinCambios++; continue; }
+        try {
+          await updateRecetaMacros(r.id, macros);
+          actualizadas++;
+        } catch {
+          errores++;
+        }
+      }
+
+      setRecalcResumen(
+        `✅ ${actualizadas} receta(s) actualizada(s) · ${sinCambios} ya estaban correctas · ${sinIngredientesLigados} sin ingredientes ligados al catálogo` +
+        (errores > 0 ? ` · ${errores} con error (revisa permisos)` : "")
+      );
+      reload();
+    } catch (err) {
+      setRecalcResumen(`❌ ${err instanceof Error ? err.message : "No se pudo recalcular."}`);
+    } finally {
+      setRecalculando(false);
+    }
+  };
+
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="flex h-full">
@@ -431,13 +484,41 @@ export default function RecetasPage() {
               Gestiona y crea recetas saludables para tus planes nutricionales.
             </p>
           </div>
-          <button
-            onClick={() => setShowCreate(true)}
-            className="flex items-center gap-2 h-10 px-4 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary-dark transition-colors"
-          >
-            + Nueva receta
-          </button>
+          <div className="flex items-center gap-3">
+            {currentRol === "superadmin" && (
+              <button
+                onClick={() => setShowVincular(true)}
+                title="Liga los ingredientes de las recetas al catálogo de alimentos para poder calcular sus calorías"
+                className="flex items-center gap-2 h-10 px-4 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                🔗 Vincular ingredientes
+              </button>
+            )}
+            {currentRol === "superadmin" && (
+              <button
+                onClick={handleRecalcularCalorias}
+                disabled={recalculando}
+                title="Recalcula calorías y macros de las recetas cuyos ingredientes están ligados al catálogo de alimentos"
+                className="flex items-center gap-2 h-10 px-4 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+              >
+                {recalculando ? "Recalculando..." : "🔄 Recalcular calorías"}
+              </button>
+            )}
+            <button
+              onClick={() => setShowCreate(true)}
+              className="flex items-center gap-2 h-10 px-4 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary-dark transition-colors"
+            >
+              + Nueva receta
+            </button>
+          </div>
         </div>
+
+        {recalcResumen && (
+          <div className="mb-4 flex items-center justify-between bg-primary/5 border border-primary/20 text-gray-700 text-sm rounded-xl px-4 py-3">
+            <span>{recalcResumen}</span>
+            <button onClick={() => setRecalcResumen(null)} className="text-gray-400 hover:text-gray-600 shrink-0 ml-3">×</button>
+          </div>
+        )}
 
         {/* Filters — Categoría and Dificultad removed; search + tipo remain */}
         <div className="flex flex-wrap items-end gap-3 mb-6">
@@ -606,6 +687,9 @@ export default function RecetasPage() {
           onConfirm={() => handleDelete(confirmDeleteId)}
           onCancel={() => setConfirmDeleteId(null)}
         />
+      )}
+      {showVincular && (
+        <VincularIngredientesModal onClose={() => { setShowVincular(false); reload(); }} />
       )}
     </div>
   );

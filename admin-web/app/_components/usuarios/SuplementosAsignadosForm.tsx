@@ -27,20 +27,59 @@ export default function SuplementosAsignadosForm({ userId }: { userId: string })
   const [asignados, setAsignados] = useState<AsignadoRow[]>([]);
   const [search, setSearch] = useState("");
   const [dragOver, setDragOver] = useState(false);
+  const [ready, setReady] = useState(false);
+  const [hasDraft, setHasDraft] = useState(false);
+  const DRAFT_KEY = `suplementos_draft_${userId}`;
+
+  const asignadosAInput = (rows: AsignadoRow[]): PlanSuplementoInput[] =>
+    rows.map((a) => ({
+      suplemento_id: a.suplemento.id,
+      dosis: a.dosis.trim() || null,
+      hora: a.hora || null,
+      momento: a.momento || null,
+      notas: a.notas.trim() || null,
+    }));
 
   const loadData = () => {
     Promise.all([fetchSuplementos(), fetchPlanSuplementacion(userId)])
       .then(([todos, plan]) => {
         setCatalogo(todos);
-        setAsignados(
-          plan.map((p) => ({
-            suplemento: p.suplementos,
-            dosis: p.dosis ?? "",
-            hora: p.hora ?? "",
-            momento: p.momento ?? "",
-            notas: p.notas ?? "",
-          }))
-        );
+        const loaded: AsignadoRow[] = plan.map((p) => ({
+          suplemento: p.suplementos,
+          dosis: p.dosis ?? "",
+          hora: p.hora ?? "",
+          momento: p.momento ?? "",
+          notas: p.notas ?? "",
+        }));
+        setAsignados(loaded);
+
+        // ── Restaurar borrador sin guardar, si existe y difiere de lo cargado ──
+        try {
+          const raw = localStorage.getItem(DRAFT_KEY);
+          if (raw) {
+            const d = JSON.parse(raw) as PlanSuplementoInput[];
+            const differs = JSON.stringify(d) !== JSON.stringify(asignadosAInput(loaded));
+            if (differs) {
+              const byId = new Map(todos.map((s) => [s.id, s]));
+              const restored = d
+                .map((item) => {
+                  const sup = byId.get(item.suplemento_id);
+                  if (!sup) return null;
+                  return {
+                    suplemento: sup,
+                    dosis: item.dosis ?? "",
+                    hora: item.hora ?? "",
+                    momento: item.momento ?? "",
+                    notas: item.notas ?? "",
+                  };
+                })
+                .filter(Boolean) as AsignadoRow[];
+              setAsignados(restored);
+              setHasDraft(true);
+            }
+          }
+        } catch {}
+        setReady(true);
       })
       .catch((err) => setError(err instanceof Error ? err.message : "No se pudieron cargar los suplementos."))
       .finally(() => setLoading(false));
@@ -55,6 +94,14 @@ export default function SuplementosAsignadosForm({ userId }: { userId: string })
     setError(null);
     loadData();
   };
+
+  // Auto-guardar borrador en cada cambio de la lista
+  useEffect(() => {
+    if (!ready) return;
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(asignadosAInput(asignados))); } catch {}
+  // DRAFT_KEY es estable durante el ciclo de vida del componente (mismo userId)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, asignados]);
 
   const asignadosIds = new Set(asignados.map((a) => a.suplemento.id));
 
@@ -78,15 +125,11 @@ export default function SuplementosAsignadosForm({ userId }: { userId: string })
     setSaving(true);
     setFeedback(null);
     try {
-      const items: PlanSuplementoInput[] = asignados.map((a) => ({
-        suplemento_id: a.suplemento.id,
-        dosis: a.dosis.trim() || null,
-        hora: a.hora || null,
-        momento: a.momento || null,
-        notas: a.notas.trim() || null,
-      }));
+      const items = asignadosAInput(asignados);
       await savePlanSuplementacion(userId, items);
       setFeedback({ type: "success", text: "Suplementación guardada correctamente." });
+      localStorage.removeItem(DRAFT_KEY);
+      setHasDraft(false);
     } catch (err) {
       setFeedback({ type: "error", text: err instanceof Error ? err.message : "No se pudo guardar." });
     } finally {
@@ -115,6 +158,23 @@ export default function SuplementosAsignadosForm({ userId }: { userId: string })
 
   return (
     <div className="space-y-4">
+      {hasDraft && (
+        <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 font-medium">
+          <span>📝</span>
+          <span>Borrador restaurado — tienes cambios sin guardar en este formulario.</span>
+          <button
+            type="button"
+            onClick={() => {
+              localStorage.removeItem(DRAFT_KEY);
+              setHasDraft(false);
+              setReady(false);
+              load();
+            }}
+            className="ml-auto shrink-0 text-amber-600 hover:text-amber-800 underline font-semibold">
+            Descartar cambios
+          </button>
+        </div>
+      )}
       <div>
         <p className="font-semibold text-gray-900">Asignar suplementos</p>
         <p className="text-sm text-gray-500">Arrastra o haz clic en los suplementos del catálogo para asignarlos con dosis y horario.</p>

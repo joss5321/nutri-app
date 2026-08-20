@@ -2,11 +2,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import EjercicioModal from "@/app/_components/ejercicios/EjercicioModal";
 import EjercicioDetalleModal from "@/app/_components/ejercicios/EjercicioDetalleModal";
-import { MUSCLE_GROUPS, type Exercise, type EjerciciosFiltros } from "@/app/_data/exercises";
+import { type Exercise, type EjerciciosFiltros } from "@/app/_data/exercises";
 import {
   deleteEjercicio,
   fetchEjerciciosCatalogo,
   fetchEjercicioFilterValues,
+  fetchMuscleFilterOptions,
 } from "@/app/_data/ejercicios";
 import { fetchCurrentUserRol } from "@/app/_data/perfiles";
 import { getYouTubeEmbedId, isYouTubeShort } from "@/app/_components/ejercicios/VideoPlayer";
@@ -25,6 +26,7 @@ import { proxyGifUrl } from "@/app/_data/gif-proxy";
 const PAGE_SIZE = 24;
 
 type FilterOptions = {
+  muscles:     string[];
   bodyParts:   string[];
   equipments:  string[];
   difficulties: string[];
@@ -50,7 +52,7 @@ export default function EjerciciosPage() {
 
   // ── Opciones de filtros (valores únicos de la BD) ──────────────────────
   const [filterOpts, setFilterOpts] = useState<FilterOptions>({
-    bodyParts: [], equipments: [], difficulties: [], categories: [],
+    muscles: [], bodyParts: [], equipments: [], difficulties: [], categories: [],
   });
 
   // ── UI ─────────────────────────────────────────────────────────────────
@@ -108,12 +110,13 @@ export default function EjerciciosPage() {
     fetchCurrentUserRol().then((rol) => setCurrentRol(rol));
 
     Promise.all([
+      fetchMuscleFilterOptions(),
       fetchEjercicioFilterValues("body_part"),
       fetchEjercicioFilterValues("equipment"),
       fetchEjercicioFilterValues("difficulty"),
       fetchEjercicioFilterValues("category"),
-    ]).then(([bodyParts, equipments, difficulties, categories]) => {
-      setFilterOpts({ bodyParts, equipments, difficulties, categories });
+    ]).then(([muscles, bodyParts, equipments, difficulties, categories]) => {
+      setFilterOpts({ muscles, bodyParts, equipments, difficulties, categories });
     }).catch(() => {});
   }, []);
 
@@ -219,7 +222,9 @@ export default function EjerciciosPage() {
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
           <FilterSelect value={grupo} onChange={applyFilter(setGrupo)} placeholder="Músculo">
             <option value="">Músculo (todos)</option>
-            {MUSCLE_GROUPS.map((m) => <option key={m}>{m}</option>)}
+            {filterOpts.muscles.map((m) => (
+              <option key={m} value={m}>{tx(MUSCLE_ES, m)}</option>
+            ))}
           </FilterSelect>
 
           <FilterSelect value={bodyPart} onChange={applyFilter(setBodyPart)} placeholder="Parte del cuerpo">

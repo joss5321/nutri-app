@@ -4,6 +4,7 @@ import {
   CATEGORIAS_NUTRICIONALES,
   NIVELES_RECETA,
   TIPOS_RECETA,
+  calcularMacrosDesdeIngredientes,
   createReceta,
   updateReceta,
   type Receta,
@@ -125,23 +126,15 @@ export default function RecetaModal({
 
   // Auto-calculate Kcal + macros from linked ingredients
   useEffect(() => {
-    const hasLinkedNow = ingredientes.some((i) => !!i.alimento_id);
-    if (!hasLinkedNow) return;
-    let k = 0, p = 0, l = 0, h = 0;
-    ingredientes.forEach((ing) => {
-      if (!ing.alimento_id) return;
-      const al = alimentosById[ing.alimento_id];
-      if (!al || !al.cantidad || al.cantidad === 0) return;
-      const scale = (parseFloat(ing.cantidad) || 0) / al.cantidad;
-      k += (al.kcal ?? 0) * scale;
-      p += (al.proteinas_g ?? 0) * scale;
-      l += (al.lipidos_g ?? 0) * scale;
-      h += (al.hco_g ?? 0) * scale;
-    });
-    setCalorias(Math.round(k).toString());
-    setProteinas(p.toFixed(1));
-    setGrasas(l.toFixed(1));
-    setCarbohidratos(h.toFixed(1));
+    const macros = calcularMacrosDesdeIngredientes(
+      ingredientes.map((i) => ({ alimento_id: i.alimento_id, cantidad: parseFloat(i.cantidad) || 0 })),
+      alimentosById
+    );
+    if (!macros) return;
+    setCalorias(macros.calorias.toString());
+    setProteinas(macros.proteinas_g.toFixed(1));
+    setGrasas(macros.grasas_g.toFixed(1));
+    setCarbohidratos(macros.carbohidratos_g.toFixed(1));
   }, [ingredientes, alimentosById]);
 
   const hasLinked = ingredientes.some((i) => !!i.alimento_id);

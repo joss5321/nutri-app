@@ -28,6 +28,12 @@ export default function RecetasAsignadasForm({ userId }: { userId: string }) {
   const [search, setSearch] = useState("");
   const [dragOver, setDragOver] = useState(false);
   const [editingReceta, setEditingReceta] = useState<{ receta: Receta; meal: MealKey } | null>(null);
+  const [ready, setReady] = useState(false);
+  const [hasDraft, setHasDraft] = useState(false);
+  const DRAFT_KEY = `recetas_draft_${userId}`;
+
+  const asignadasAIds = (m: Record<MealKey, Receta[]>): Record<MealKey, string[]> =>
+    Object.fromEntries(MEAL_TABS.map(({ key }) => [key, m[key].map((r) => r.id)])) as Record<MealKey, string[]>;
 
   const loadData = () => {
     Promise.all([fetchRecetas(), fetchRecetasAsignadas(userId)])
@@ -39,6 +45,30 @@ export default function RecetasAsignadasForm({ userId }: { userId: string }) {
           byMeal[key] = [...byMeal[key], r];
         });
         setAsignadas(byMeal);
+
+        // ── Restaurar borrador sin guardar, si existe y difiere de lo cargado ──
+        try {
+          const raw = localStorage.getItem(DRAFT_KEY);
+          if (raw) {
+            const d = JSON.parse(raw) as Record<MealKey, string[]>;
+            const loadedIds = asignadasAIds(byMeal);
+            const differs = MEAL_TABS.some(({ key }) =>
+              JSON.stringify(d[key] ?? []) !== JSON.stringify(loadedIds[key])
+            );
+            if (differs) {
+              // El catálogo y lo ya asignado cubren cualquier receta (incluidas personalizadas)
+              const pool = [...todas, ...guardadas];
+              const byId = new Map(pool.map((r) => [r.id, r]));
+              const restored = emptyMeals();
+              MEAL_TABS.forEach(({ key }) => {
+                restored[key] = (d[key] ?? []).map((id) => byId.get(id)).filter(Boolean) as Receta[];
+              });
+              setAsignadas(restored);
+              setHasDraft(true);
+            }
+          }
+        } catch {}
+        setReady(true);
       })
       .catch((err) => setError(err instanceof Error ? err.message : "No se pudieron cargar las recetas."))
       .finally(() => setLoading(false));
@@ -47,6 +77,14 @@ export default function RecetasAsignadasForm({ userId }: { userId: string }) {
   useEffect(() => { loadData(); }, []);
 
   const load = () => { setLoading(true); setError(null); loadData(); };
+
+  // Auto-guardar borrador (solo ids por tiempo de comida) en cada cambio
+  useEffect(() => {
+    if (!ready) return;
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(asignadasAIds(asignadas))); } catch {}
+  // DRAFT_KEY es estable durante el ciclo de vida del componente (mismo userId)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, asignadas]);
 
   const allAsignadas = Object.values(asignadas).flat();
   const assignedBaseIds = new Set(
@@ -81,6 +119,8 @@ export default function RecetasAsignadasForm({ userId }: { userId: string }) {
       );
       await saveRecetasAsignadas(userId, flat);
       setFeedback({ type: "success", text: "Recetas guardadas correctamente." });
+      localStorage.removeItem(DRAFT_KEY);
+      setHasDraft(false);
     } catch (err) {
       setFeedback({ type: "error", text: err instanceof Error ? err.message : "No se pudieron guardar las recetas." });
     } finally {
@@ -118,6 +158,23 @@ export default function RecetasAsignadasForm({ userId }: { userId: string }) {
 
   return (
     <div className="space-y-4">
+      {hasDraft && (
+        <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 font-medium">
+          <span>📝</span>
+          <span>Borrador restaurado — tienes cambios sin guardar en este formulario.</span>
+          <button
+            type="button"
+            onClick={() => {
+              localStorage.removeItem(DRAFT_KEY);
+              setHasDraft(false);
+              setReady(false);
+              load();
+            }}
+            className="ml-auto shrink-0 text-amber-600 hover:text-amber-800 underline font-semibold">
+            Descartar cambios
+          </button>
+        </div>
+      )}
       <div>
         <p className="font-semibold text-gray-900">Asignar recetas</p>
         <p className="text-sm text-gray-500">Selecciona el tiempo de comida y asigna recetas del catálogo.</p>
