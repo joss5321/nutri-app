@@ -2,6 +2,11 @@
 .branches
 .temp
 
+# Generadas por scripts/test-rls.mjs para "supabase test db" — se
+# regeneran en cada corrida a partir de supabase_schema.sql,
+# supabase_stripe_schema.sql y la infra de pgTAP. No son fuente de verdad.
+migrations/
+
 # dotenvx
 .env.keys
 .env.local

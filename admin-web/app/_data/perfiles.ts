@@ -18,14 +18,19 @@ export type Perfil = {
   created_at?: string;
 };
 
-export async function fetchAdmins(): Promise<Perfil[]> {
+// Columnas realmente usadas por la UI de /administradores (superadmin-only,
+// ver Sección 56: la policy de perfiles ya no expone rol='admin' a
+// authenticated en general, solo self/paciente-asignado/superadmin-global).
+export type AdminListItem = Pick<Perfil, "id" | "nombre_completo" | "avatar_url" | "rol" | "created_at">;
+
+export async function fetchAdmins(): Promise<AdminListItem[]> {
   const { data, error } = await supabase
     .from("perfiles")
-    .select("*")
+    .select("id, nombre_completo, avatar_url, rol, created_at")
     .in("rol", ["admin", "superadmin"])
     .order("created_at", { ascending: false });
   if (error) throw error;
-  return data as Perfil[];
+  return data as AdminListItem[];
 }
 
 export async function fetchCurrentUserRol(): Promise<string | null> {

@@ -1,12 +1,16 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { fetchAdmins, updatePerfil, type Perfil } from "@/app/_data/perfiles";
+import { fetchAdmins, updatePerfil, type AdminListItem } from "@/app/_data/perfiles";
 import ConfirmModal from "@/app/_components/ConfirmModal";
 
 export default function AdministradoresPage() {
-  const [admins, setAdmins] = useState<Perfil[]>([]);
+  const router = useRouter();
+  const [authorized, setAuthorized] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+  const [admins, setAdmins] = useState<AdminListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState("");
@@ -20,7 +24,7 @@ export default function AdministradoresPage() {
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // Edit modal
-  const [editing, setEditing] = useState<Perfil | null>(null);
+  const [editing, setEditing] = useState<AdminListItem | null>(null);
   const [editNombre, setEditNombre] = useState("");
   const [editNewPassword, setEditNewPassword] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
@@ -37,12 +41,33 @@ export default function AdministradoresPage() {
       .finally(() => setLoading(false));
   };
 
+  // Guard real de acceso: esta página es superadmin-only. El layout
+  // general de /admin solo exige rol admin/superadmin (aplica a todas las
+  // rutas), así que un admin normal que escriba /administradores
+  // directamente en la URL pasa ese primer check — este segundo check,
+  // específico de la página, es el que realmente lo bloquea antes de
+  // cargar cualquier dato.
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) setCurrentUserId(user.id);
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) {
+        router.replace("/login");
+        return;
+      }
+      const { data: perfil } = await supabase
+        .from("perfiles")
+        .select("rol")
+        .eq("id", user.id)
+        .single();
+      if (perfil?.rol !== "superadmin") {
+        router.replace("/dashboard");
+        return;
+      }
+      setCurrentUserId(user.id);
+      setAuthorized(true);
+      setCheckingAuth(false);
+      loadAdmins();
     });
-    loadAdmins();
-  }, []);
+  }, [router]);
 
   const handleCreate = async () => {
     if (!nombre.trim() || !email.trim() || password.length < 8) {
@@ -90,7 +115,7 @@ export default function AdministradoresPage() {
     }
   };
 
-  const openEdit = (admin: Perfil) => {
+  const openEdit = (admin: AdminListItem) => {
     setEditing(admin);
     setEditNombre(admin.nombre_completo ?? "");
     setEditNewPassword("");
@@ -166,9 +191,9 @@ export default function AdministradoresPage() {
     }
   };
 
-  const [confirmRemove, setConfirmRemove] = useState<Perfil | null>(null);
+  const [confirmRemove, setConfirmRemove] = useState<AdminListItem | null>(null);
 
-  const handleRemoveAdmin = async (admin: Perfil) => {
+  const handleRemoveAdmin = async (admin: AdminListItem) => {
     setConfirmRemove(null);
     setFeedback(null);
     try {
@@ -187,6 +212,14 @@ export default function AdministradoresPage() {
 
   const editInitials = (editing?.nombre_completo ?? "A")
     .split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
+
+  if (checkingAuth || !authorized) {
+    return (
+      <div className="p-8">
+        <p className="text-sm text-gray-400 py-10 text-center">Cargando...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8">

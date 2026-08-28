@@ -1,0 +1,8 @@
+{
+  "name": "nutri-app-rls-tests",
+  "private": true,
+  "description": "Infraestructura de testing de RLS (pgTAP). No es el proyecto admin-web ni mobile-app, que mantienen sus propios package.json.",
+  "scripts": {
+    "test:rls": "node scripts/test-rls.mjs"
+  }
+}

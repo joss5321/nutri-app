@@ -132,6 +132,17 @@ export default function Sidebar() {
   const initials = name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
   const rolLabel = rol === "superadmin" ? "SuperAdmin" : "Administrador";
 
+  // "Administradores" es superadmin-only (guard real en la propia página);
+  // ocultamos el link para admin normal para no ofrecer una ruta que de
+  // todos modos va a redirigirlo.
+  const navSections = rol === "superadmin"
+    ? NAV_SECTIONS
+    : NAV_SECTIONS.map((section) =>
+        section.label === "ADMINISTRACIÓN"
+          ? { ...section, items: section.items.filter((item) => item.href !== "/administradores") }
+          : section
+      );
+
   // Ref al <nav> para manipular su clase directamente desde los eventos
   // del <aside> sin provocar re-renders de React.
   const navRef = useRef<HTMLElement>(null);
@@ -218,7 +229,7 @@ export default function Sidebar() {
 
       {/* ── Navegación (scrollable) ────────────────────────────────── */}
       <nav ref={navRef} className="sidebar-nav flex-1 overflow-y-auto overflow-x-hidden py-2 flex flex-col">
-        {NAV_SECTIONS.map((section, si) => (
+        {navSections.map((section, si) => (
           <div key={section.label} className={si > 0 ? "mt-4" : ""}>
 
             {/* Etiqueta de sección */}

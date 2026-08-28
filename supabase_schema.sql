@@ -1652,3 +1652,1529 @@ alter table perfiles
 -- hay forma de distinguirlos retroactivamente, no se tocan filas
 -- existentes — el default true es correcto para todo lo ya registrado
 -- por la vía normal (móvil), que es la inmensa mayoría de los datos.
+
+-- ============================================================
+-- 45. MIGRACIÓN — Proteger columnas sensibles de perfiles
+-- ============================================================
+-- Contexto: la auditoría técnica del 2026-08-23 (y su verificación
+-- contra el Supabase real del 2026-08-24) confirmó que la policy de
+-- UPDATE de "perfiles" (Sección 27, "perfiles: actualizar multi-tenant")
+-- controla correctamente QUÉ FILA se puede tocar (auth.uid()=id OR
+-- auth.uid()=nutricionista_id OR superadmin), pero RLS no puede
+-- restringir QUÉ COLUMNAS dentro de esa fila — así que cualquier
+-- paciente autenticado podía cambiar su propio rol/estatus/is_active/
+-- nutricionista_id/plan_membresia directamente contra la API REST.
+--
+-- Esta migración NO toca ninguna policy existente (su alcance por fila
+-- ya era correcto) — agrega un trigger BEFORE UPDATE que solo actúa
+-- cuando alguna de las columnas sensibles realmente cambia de valor:
+--
+--   - rol, nutricionista_id, stripe_customer_id
+--       → exclusivo de superadmin.
+--   - estatus, is_active, plan_membresia
+--       → superadmin, o el nutriólogo dueño del paciente
+--         (auth.uid() = OLD.nutricionista_id), pero NUNCA el propio
+--         dueño de la fila sobre sí mismo.
+--   - cualquier otra columna (nombre_completo, sexo, fecha_nacimiento,
+--     altura_cm, avatar_url, telefono, movil_vinculado, email...)
+--     sigue exactamente igual que hoy, sin restricción nueva —
+--     confirmado contra cada UPDATE real de perfiles en mobile-app y
+--     admin-web antes de escribir esto (ver auditoría).
+--   - Las Edge Functions con SUPABASE_SERVICE_ROLE_KEY (invitar-usuario,
+--     crear-checkout, stripe-webhook) atraviesan el trigger sin
+--     restricción — lo necesitan para escribir estas mismas columnas.
+
+create or replace function public.proteger_columnas_sensibles_perfiles()
+returns trigger
+language plpgsql
+as $$
+declare
+  v_rol      text;
+  v_allowed  boolean;
+begin
+  -- Edge Functions con service role key: sin restricción.
+  if current_user = 'service_role' then
+    return new;
+  end if;
+
+  v_rol := public.get_user_rol();
+
+  -- rol / nutricionista_id / stripe_customer_id: solo superadmin.
+  -- "is distinct from" es NULL-safe: si v_rol es NULL, el resultado es
+  -- TRUE (NULL "es distinto de" 'superadmin'), así que SIEMPRE se lanza
+  -- la excepción cuando el rol no se pudo determinar — fail-closed.
+  if new.rol is distinct from old.rol
+     or new.nutricionista_id is distinct from old.nutricionista_id
+     or new.stripe_customer_id is distinct from old.stripe_customer_id
+  then
+    if v_rol is distinct from 'superadmin' then
+      raise exception 'No tienes permiso para modificar rol, nutricionista_id o stripe_customer_id.';
+    end if;
+  end if;
+
+  -- estatus / is_active / plan_membresia: superadmin, o el nutriólogo
+  -- dueño del paciente — nunca el propio paciente sobre sí mismo.
+  -- v_allowed se construye como un booleano que NUNCA es NULL: cada
+  -- comparación que involucra un valor potencialmente NULL (v_rol,
+  -- auth.uid(), old.nutricionista_id) queda envuelta en
+  -- COALESCE(...,false) o protegida con IS NOT NULL antes de comparar,
+  -- y el resultado final se envuelve otra vez en COALESCE por defensa
+  -- adicional. Cualquier ambigüedad resuelve a "denegar".
+  if new.estatus is distinct from old.estatus
+     or new.is_active is distinct from old.is_active
+     or new.plan_membresia is distinct from old.plan_membresia
+  then
+    v_allowed := coalesce(
+      coalesce(v_rol = 'superadmin', false)
+      or (
+        auth.uid() is not null
+        and old.nutricionista_id is not null
+        and auth.uid() = old.nutricionista_id
+        and auth.uid() <> old.id
+      ),
+      false
+    );
+
+    if not v_allowed then
+      raise exception 'No tienes permiso para modificar estatus, is_active o plan_membresia de este perfil.';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_proteger_columnas_sensibles_perfiles on public.perfiles;
+create trigger trg_proteger_columnas_sensibles_perfiles
+  before update on public.perfiles
+  for each row
+  execute function public.proteger_columnas_sensibles_perfiles();
+
+-- ============================================================
+-- 46. MIGRACIÓN — Cerrar INSERT y DELETE directos en perfiles
+-- ============================================================
+-- Verificación contra el Supabase real (2026-08-24/25) tras la Sección
+-- 45: además de la falta de protección de columnas ya resuelta, se
+-- confirmaron TRES policies que permiten a cualquier usuario
+-- autenticado escribir su propia fila de "perfiles" fuera del alcance
+-- que realmente necesita:
+--
+--   - "perfil: usuario gestiona el suyo" (Sección 1, FOR ALL, nunca
+--     eliminada) — cubre SELECT/INSERT/UPDATE/DELETE con
+--     auth.uid()=id. SELECT/UPDATE ya están cubiertos de forma más
+--     específica por policies posteriores (Sección 27); su único
+--     efecto no redundante es permitir INSERT y DELETE directos.
+--   - "perfiles: insercion propia" (Sección 27, FOR INSERT) — el
+--     WITH CHECK solo valida auth.uid()=id, sin restringir
+--     rol/estatus/is_active/nutricionista_id: un usuario sin fila en
+--     perfiles podría insertarse a sí mismo ya como
+--     rol='superadmin', estatus='aprobado', is_active=true.
+--   - "perfiles: borrar propio" (Sección 27, FOR DELETE) — permite a
+--     cualquiera borrar su propia fila.
+--
+-- Ninguna de las tres tiene un consumidor real: no existe ningún
+-- INSERT ni DELETE directo sobre "perfiles" en mobile-app, admin-web
+-- ni en las Edge Functions (verificado por búsqueda exhaustiva). La
+-- creación de perfiles la hace exclusivamente
+-- crear_perfil_nuevo_usuario() (SECURITY DEFINER) — confirmado contra
+-- la base real que su dueño (postgres) tiene rolbypassrls=true y
+-- además es dueño de "perfiles" en una tabla sin FORCE ROW LEVEL
+-- SECURITY, así que nunca dependió de ninguna policy de INSERT. Las
+-- Edge Functions con service_role key tampoco dependen de estas
+-- policies (bypasean RLS igual).
+--
+-- Resultado neto para un cliente autenticado normal:
+--   SELECT → permitido, según "perfiles: lectura multi-tenant" /
+--            "perfiles: admins publicos" (sin cambios).
+--   UPDATE → permitido por fila según "perfiles: actualizar
+--            multi-tenant" (sin cambios), y por columna según el
+--            trigger de la Sección 45 (sin cambios).
+--   INSERT → bloqueado por completo.
+--   DELETE → bloqueado por completo.
+
+drop policy if exists "perfil: usuario gestiona el suyo" on perfiles;
+drop policy if exists "perfiles: insercion propia" on perfiles;
+drop policy if exists "perfiles: borrar propio" on perfiles;
+
+-- ============================================================
+-- 47. MIGRACIÓN — Aislamiento multi-tenant real en
+--     medidas, dietocalculo, ejercicio_logs
+-- ============================================================
+-- Verificado contra código real (mobile-app + admin-web) el 2026-08-25.
+-- Las tres tablas tenían una policy legacy "...: gestion para
+-- autenticados" (auth.role() = 'authenticated') que permitía a
+-- cualquier usuario autenticado CRUD completo sobre filas de
+-- cualquier paciente, sin relación con nutricionista_id. Ninguna
+-- Edge Function usa estas tablas (verificado por grep exhaustivo).
+--
+-- Decisiones aprobadas:
+--   A) dietocalculo no tiene flujo real en mobile-app (0 referencias);
+--      el paciente no recibe acceso directo, solo admin dueño y superadmin.
+--   B) superadmin solo recibe los comandos que ya tienen un flujo legítimo
+--      para algún otro rol en esa tabla (ningún UPDATE/DELETE "por si acaso").
+
+-- ── medidas ──────────────────────────────────────────────────
+drop policy if exists "medidas: usuario gestiona las suyas" on medidas;
+drop policy if exists "medidas: gestion para autenticados" on medidas;
+
+create policy "medidas_select" on medidas
+for select to authenticated using (
+  auth.uid() = user_id
+  or exists (select 1 from perfiles where id = medidas.user_id and nutricionista_id = auth.uid())
+  or public.get_user_rol() = 'superadmin'
+);
+
+create policy "medidas_insert" on medidas
+for insert to authenticated with check (
+  auth.uid() = user_id
+  or exists (select 1 from perfiles where id = medidas.user_id and nutricionista_id = auth.uid())
+  or public.get_user_rol() = 'superadmin'
+);
+
+-- ── ejercicio_logs ───────────────────────────────────────────
+drop policy if exists "ej_logs: usuario gestiona los suyos" on ejercicio_logs;
+drop policy if exists "ej_logs: gestion para autenticados" on ejercicio_logs;
+
+create policy "ejercicio_logs_select" on ejercicio_logs
+for select to authenticated using (
+  auth.uid() = user_id
+  or exists (select 1 from perfiles where id = ejercicio_logs.user_id and nutricionista_id = auth.uid())
+  or public.get_user_rol() = 'superadmin'
+);
+
+create policy "ejercicio_logs_insert" on ejercicio_logs
+for insert to authenticated with check (
+  auth.uid() = user_id
+  or public.get_user_rol() = 'superadmin'
+);
+
+create policy "ejercicio_logs_delete" on ejercicio_logs
+for delete to authenticated using (
+  auth.uid() = user_id
+  or public.get_user_rol() = 'superadmin'
+);
+
+-- ── dietocalculo ─────────────────────────────────────────────
+drop policy if exists "dietocalculo: usuario ve el suyo" on dietocalculo;
+drop policy if exists "dietocalculo: gestion para autenticados" on dietocalculo;
+
+create policy "dietocalculo_select" on dietocalculo
+for select to authenticated using (
+  exists (select 1 from perfiles where id = dietocalculo.user_id and nutricionista_id = auth.uid())
+  or public.get_user_rol() = 'superadmin'
+);
+
+create policy "dietocalculo_insert" on dietocalculo
+for insert to authenticated with check (
+  exists (select 1 from perfiles where id = dietocalculo.user_id and nutricionista_id = auth.uid())
+  or public.get_user_rol() = 'superadmin'
+);
+
+create policy "dietocalculo_update" on dietocalculo
+for update to authenticated using (
+  exists (select 1 from perfiles where id = dietocalculo.user_id and nutricionista_id = auth.uid())
+  or public.get_user_rol() = 'superadmin'
+)
+with check (
+  exists (select 1 from perfiles where id = dietocalculo.user_id and nutricionista_id = auth.uid())
+  or public.get_user_rol() = 'superadmin'
+);
+
+-- ============================================================
+-- 48. MIGRACIÓN — Aislamiento multi-tenant real en
+--     rutinas, rutina_dias, rutina_ejercicios
+-- ============================================================
+-- Verificado contra código real (mobile-app + admin-web) el 2026-08-25.
+-- mobile-app SOLO lee (fetchMiRutina, useNewsStore) — nunca escribe
+-- rutinas/rutina_dias/rutina_ejercicios. admin-web (_data/rutinas.ts)
+-- es el único escritor: saveRutina() hace INSERT/UPDATE en rutinas;
+-- replaceDias() hace DELETE+INSERT en rutina_dias e INSERT en
+-- rutina_ejercicios (nunca UPDATE/DELETE directo en rutina_ejercicios
+-- — su limpieza ocurre por ON DELETE CASCADE al borrar el rutina_dias
+-- padre, lo cual bypassea RLS de la tabla referenciada). Ninguna Edge
+-- Function usa estas 3 tablas (verificado por grep exhaustivo).
+--
+-- rutinas conservaba además, desde la Sección 3, una policy FOR ALL
+-- de "propio" nunca eliminada que daba al paciente INSERT/UPDATE/
+-- DELETE sobre su propia rutina sin que mobile-app lo use nunca.
+--
+-- Se preserva la regla de negocio existente en "rutinas: insert
+-- paciente activo": solo se puede crear una rutina para un paciente
+-- con is_active = true y estatus = 'aprobado'.
+
+-- ── rutinas ──────────────────────────────────────────────────
+drop policy if exists "rutinas: usuario gestiona las suyas" on rutinas;
+drop policy if exists "rutinas: select autenticados" on rutinas;
+drop policy if exists "rutinas: update autenticados" on rutinas;
+drop policy if exists "rutinas: delete autenticados" on rutinas;
+drop policy if exists "rutinas: insert paciente activo" on rutinas;
+
+create policy "rutinas_select" on rutinas
+for select to authenticated using (
+  auth.uid() = user_id
+  or exists (select 1 from perfiles where id = rutinas.user_id and nutricionista_id = auth.uid())
+  or public.get_user_rol() = 'superadmin'
+);
+
+create policy "rutinas_insert" on rutinas
+for insert to authenticated with check (
+  (
+    exists (select 1 from perfiles where id = rutinas.user_id and nutricionista_id = auth.uid())
+    or public.get_user_rol() = 'superadmin'
+  )
+  and exists (
+    select 1 from perfiles
+    where id = rutinas.user_id
+      and is_active = true
+      and estatus = 'aprobado'
+  )
+);
+
+create policy "rutinas_update" on rutinas
+for update to authenticated using (
+  exists (select 1 from perfiles where id = rutinas.user_id and nutricionista_id = auth.uid())
+  or public.get_user_rol() = 'superadmin'
+)
+with check (
+  exists (select 1 from perfiles where id = rutinas.user_id and nutricionista_id = auth.uid())
+  or public.get_user_rol() = 'superadmin'
+);
+
+create policy "rutinas_delete" on rutinas
+for delete to authenticated using (
+  exists (select 1 from perfiles where id = rutinas.user_id and nutricionista_id = auth.uid())
+  or public.get_user_rol() = 'superadmin'
+);
+
+-- ── rutina_dias ──────────────────────────────────────────────
+drop policy if exists "rutina_dias: acceso via rutina propia" on rutina_dias;
+drop policy if exists "rutina_dias: gestion para autenticados" on rutina_dias;
+
+create policy "rutina_dias_select" on rutina_dias
+for select to authenticated using (
+  exists (
+    select 1 from rutinas r
+    where r.id = rutina_dias.rutina_id
+      and (
+        r.user_id = auth.uid()
+        or exists (select 1 from perfiles where id = r.user_id and nutricionista_id = auth.uid())
+        or public.get_user_rol() = 'superadmin'
+      )
+  )
+);
+
+create policy "rutina_dias_insert" on rutina_dias
+for insert to authenticated with check (
+  exists (
+    select 1 from rutinas r
+    where r.id = rutina_dias.rutina_id
+      and (
+        exists (select 1 from perfiles where id = r.user_id and nutricionista_id = auth.uid())
+        or public.get_user_rol() = 'superadmin'
+      )
+  )
+);
+
+create policy "rutina_dias_delete" on rutina_dias
+for delete to authenticated using (
+  exists (
+    select 1 from rutinas r
+    where r.id = rutina_dias.rutina_id
+      and (
+        exists (select 1 from perfiles where id = r.user_id and nutricionista_id = auth.uid())
+        or public.get_user_rol() = 'superadmin'
+      )
+  )
+);
+
+-- ── rutina_ejercicios ────────────────────────────────────────
+drop policy if exists "rutina_ejercicios: acceso via dia propio" on rutina_ejercicios;
+drop policy if exists "rutina_ejercicios: gestion para autenticados" on rutina_ejercicios;
+
+create policy "rutina_ejercicios_select" on rutina_ejercicios
+for select to authenticated using (
+  exists (
+    select 1 from rutina_dias rd
+    join rutinas r on r.id = rd.rutina_id
+    where rd.id = rutina_ejercicios.dia_id
+      and (
+        r.user_id = auth.uid()
+        or exists (select 1 from perfiles where id = r.user_id and nutricionista_id = auth.uid())
+        or public.get_user_rol() = 'superadmin'
+      )
+  )
+);
+
+create policy "rutina_ejercicios_insert" on rutina_ejercicios
+for insert to authenticated with check (
+  exists (
+    select 1 from rutina_dias rd
+    join rutinas r on r.id = rd.rutina_id
+    where rd.id = rutina_ejercicios.dia_id
+      and (
+        exists (select 1 from perfiles where id = r.user_id and nutricionista_id = auth.uid())
+        or public.get_user_rol() = 'superadmin'
+      )
+  )
+);
+
+-- ============================================================
+-- 49. MIGRACIÓN — Corrige rutinas_insert: superadmin no podía
+--     crear rutinas para pacientes que no gestiona directamente
+-- ============================================================
+-- Causa raíz: el EXISTS de is_active/estatus en rutinas_insert es una
+-- subconsulta directa contra perfiles, sujeta a la RLS de esa tabla.
+-- La policy SELECT de perfiles ("perfiles: lectura multi-tenant",
+-- Sección 27) no tiene cláusula de superadmin, así que ese EXISTS
+-- siempre daba falso para pacientes ajenos, sin importar su estado real
+-- (confirmado con fixtures sintéticos vía la suite pgTAP). Se reemplaza
+-- por una función SECURITY DEFINER que verifica el estado del paciente
+-- sin depender de que el rol actual pueda verlo vía RLS — la regla de
+-- negocio (solo paciente aprobado+activo recibe rutinas nuevas) no
+-- cambia, solo cómo se evalúa.
+
+create or replace function public.get_perfil_activo_aprobado(p_user_id uuid)
+returns boolean
+language sql
+security definer
+stable
+as $$
+  select exists (
+    select 1 from perfiles
+    where id = p_user_id
+      and is_active = true
+      and estatus = 'aprobado'
+  )
+$$;
+
+drop policy if exists "rutinas_insert" on rutinas;
+create policy "rutinas_insert" on rutinas
+for insert to authenticated with check (
+  (
+    exists (select 1 from perfiles where id = rutinas.user_id and nutricionista_id = auth.uid())
+    or public.get_user_rol() = 'superadmin'
+  )
+  and public.get_perfil_activo_aprobado(rutinas.user_id)
+);
+
+-- ============================================================
+-- 50. MIGRACIÓN — Aislamiento multi-tenant real en
+--     planes_nutricionales, plan_equivalentes
+-- ============================================================
+-- Verificado contra código real (mobile-app + admin-web) el 2026-08-26.
+-- mobile-app SOLO lee (fetchMisEquivalentes, useNewsStore) — nunca escribe
+-- ninguna de las dos tablas. admin-web (_data/nutricion.ts) es el único
+-- escritor: fetchEquivalentes() hace INSERT en planes_nutricionales
+-- (patrón "crear si no existe"); saveEquivalentes() hace DELETE+INSERT en
+-- plan_equivalentes (a diferencia de rutina_ejercicios, aquí el DELETE es
+-- directo sobre la tabla hija, no vía cascada — sí necesita policy DELETE
+-- explícita). Ninguna Edge Function usa estas tablas.
+--
+-- planes_nutricionales conservaba desde la Sección 5 una policy FOR ALL de
+-- "propio" nunca eliminada que daba al paciente INSERT/UPDATE/DELETE sobre
+-- su propio plan sin que mobile-app lo use nunca.
+--
+-- Se preserva la regla de negocio existente ("planes: insert paciente
+-- activo": is_active=true y estatus='aprobado'), evaluada con
+-- public.get_perfil_activo_aprobado() (Sección 49) en vez de una
+-- subconsulta directa contra perfiles, para no repetir el bug de
+-- visibilidad RLS que afectaba a superadmin en rutinas_insert.
+
+-- ── planes_nutricionales ─────────────────────────────────────
+drop policy if exists "planes: usuario ve el suyo" on planes_nutricionales;
+drop policy if exists "planes: select autenticados" on planes_nutricionales;
+drop policy if exists "planes: update autenticados" on planes_nutricionales;
+drop policy if exists "planes: delete autenticados" on planes_nutricionales;
+drop policy if exists "planes: insert paciente activo" on planes_nutricionales;
+
+create policy "planes_nutricionales_select" on planes_nutricionales
+for select to authenticated using (
+  auth.uid() = user_id
+  or exists (select 1 from perfiles where id = planes_nutricionales.user_id and nutricionista_id = auth.uid())
+  or public.get_user_rol() = 'superadmin'
+);
+
+create policy "planes_nutricionales_insert" on planes_nutricionales
+for insert to authenticated with check (
+  (
+    exists (select 1 from perfiles where id = planes_nutricionales.user_id and nutricionista_id = auth.uid())
+    or public.get_user_rol() = 'superadmin'
+  )
+  and public.get_perfil_activo_aprobado(planes_nutricionales.user_id)
+);
+
+-- ── plan_equivalentes ────────────────────────────────────────
+drop policy if exists "equivalentes: acceso via plan propio" on plan_equivalentes;
+drop policy if exists "equivalentes: gestion para autenticados" on plan_equivalentes;
+
+create policy "plan_equivalentes_select" on plan_equivalentes
+for select to authenticated using (
+  exists (
+    select 1 from planes_nutricionales p
+    where p.id = plan_equivalentes.plan_id
+      and (
+        p.user_id = auth.uid()
+        or exists (select 1 from perfiles where id = p.user_id and nutricionista_id = auth.uid())
+        or public.get_user_rol() = 'superadmin'
+      )
+  )
+);
+
+create policy "plan_equivalentes_insert" on plan_equivalentes
+for insert to authenticated with check (
+  exists (
+    select 1 from planes_nutricionales p
+    where p.id = plan_equivalentes.plan_id
+      and (
+        exists (select 1 from perfiles where id = p.user_id and nutricionista_id = auth.uid())
+        or public.get_user_rol() = 'superadmin'
+      )
+  )
+);
+
+create policy "plan_equivalentes_delete" on plan_equivalentes
+for delete to authenticated using (
+  exists (
+    select 1 from planes_nutricionales p
+    where p.id = plan_equivalentes.plan_id
+      and (
+        exists (select 1 from perfiles where id = p.user_id and nutricionista_id = auth.uid())
+        or public.get_user_rol() = 'superadmin'
+      )
+  )
+);
+
+-- ============================================================
+-- 51. MIGRACIÓN — Aislamiento multi-tenant real + protección de
+--     columnas en plan_suplementacion, citas
+-- ============================================================
+-- Verificado contra código real (mobile-app + admin-web) el 2026-08-26.
+--
+-- plan_suplementacion: mobile-app SELECT propio + UPDATE propio de
+-- hora/momento/notas (3 funciones separadas, nunca INSERT/DELETE).
+-- admin-web hace DELETE+INSERT directo sobre esta tabla (es la tabla
+-- padre, no hay cascada) — nunca UPDATE.
+--
+-- citas: mobile-app SELECT propio + UPDATE de estado (el paciente ve
+-- botones Confirmar/Cancelar solo sobre citas en estado 'pendiente' —
+-- perfil.tsx líneas 359/370 — nunca INSERT/DELETE). admin-web hace
+-- SELECT + INSERT + UPDATE de estado (cualquier valor) + DELETE.
+--
+-- RLS controla filas, no columnas: sin protección adicional, un paciente
+-- podría hacer UPDATE de columnas que su propia app nunca toca
+-- (suplemento_id/dosis/user_id en plan_suplementacion; fecha/hora/tipo/
+-- profesional/modalidad/notas/user_id/created_at en citas), o mover el
+-- estado de una cita por transiciones que la UI nunca permite
+-- (confirmada->cancelada, cancelada->confirmada, etc.). Column-level
+-- GRANT/REVOKE no puede resolver esto porque paciente/admin/superadmin
+-- comparten el mismo rol de Postgres (authenticated) — se usa el mismo
+-- patrón de BEFORE UPDATE trigger ya probado en producción para perfiles
+-- (Sección 45), incluyendo el mismo bypass "current_user = 'service_role'"
+-- para Edge Functions.
+--
+-- Ninguna Edge Function usa estas tablas hoy.
+--
+-- Ambas tablas conservaban una policy FOR ALL de "propio" (Secciones 5/13,
+-- nunca eliminadas) que daba comandos que el código real no usa completos.
+--
+-- Se preserva la regla de negocio existente ("... insert paciente activo":
+-- is_active=true y estatus='aprobado'), evaluada con
+-- public.get_perfil_activo_aprobado() (Sección 49).
+
+-- ── plan_suplementacion: policies ───────────────────────────
+drop policy if exists "plan_supp: usuario ve el suyo" on plan_suplementacion;
+drop policy if exists "plan_supp: select autenticados" on plan_suplementacion;
+drop policy if exists "plan_supp: update autenticados" on plan_suplementacion;
+drop policy if exists "plan_supp: delete autenticados" on plan_suplementacion;
+drop policy if exists "plan_supp: insert paciente activo" on plan_suplementacion;
+
+create policy "plan_suplementacion_select" on plan_suplementacion
+for select to authenticated using (
+  auth.uid() = user_id
+  or exists (select 1 from perfiles where id = plan_suplementacion.user_id and nutricionista_id = auth.uid())
+  or public.get_user_rol() = 'superadmin'
+);
+
+create policy "plan_suplementacion_update" on plan_suplementacion
+for update to authenticated using (
+  auth.uid() = user_id
+)
+with check (
+  auth.uid() = user_id
+);
+
+create policy "plan_suplementacion_insert" on plan_suplementacion
+for insert to authenticated with check (
+  (
+    exists (select 1 from perfiles where id = plan_suplementacion.user_id and nutricionista_id = auth.uid())
+    or public.get_user_rol() = 'superadmin'
+  )
+  and public.get_perfil_activo_aprobado(plan_suplementacion.user_id)
+);
+
+create policy "plan_suplementacion_delete" on plan_suplementacion
+for delete to authenticated using (
+  exists (select 1 from perfiles where id = plan_suplementacion.user_id and nutricionista_id = auth.uid())
+  or public.get_user_rol() = 'superadmin'
+);
+
+-- ── plan_suplementacion: protección de columnas ─────────────
+-- El UPDATE ya está restringido por RLS a auth.uid()=user_id (admin/
+-- superadmin no tienen policy UPDATE alguna). Este trigger asegura que
+-- ni siquiera el propio paciente pueda tocar columnas fuera de
+-- hora/momento/notas.
+create or replace function public.proteger_columnas_plan_suplementacion()
+returns trigger
+language plpgsql
+as $$
+begin
+  if current_user = 'service_role' then
+    return new;
+  end if;
+
+  if new.id is distinct from old.id
+     or new.user_id is distinct from old.user_id
+     or new.suplemento_id is distinct from old.suplemento_id
+     or new.dosis is distinct from old.dosis
+  then
+    raise exception 'Solo puedes modificar hora, momento o notas.';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_proteger_columnas_plan_suplementacion on public.plan_suplementacion;
+create trigger trg_proteger_columnas_plan_suplementacion
+  before update on public.plan_suplementacion
+  for each row
+  execute function public.proteger_columnas_plan_suplementacion();
+
+-- ── citas: policies ──────────────────────────────────────────
+drop policy if exists "citas: usuario gestiona las suyas" on citas;
+drop policy if exists "citas: select autenticados" on citas;
+drop policy if exists "citas: update autenticados" on citas;
+drop policy if exists "citas: delete autenticados" on citas;
+drop policy if exists "citas: insert paciente activo" on citas;
+
+create policy "citas_select" on citas
+for select to authenticated using (
+  auth.uid() = user_id
+  or exists (select 1 from perfiles where id = citas.user_id and nutricionista_id = auth.uid())
+  or public.get_user_rol() = 'superadmin'
+);
+
+create policy "citas_insert" on citas
+for insert to authenticated with check (
+  (
+    exists (select 1 from perfiles where id = citas.user_id and nutricionista_id = auth.uid())
+    or public.get_user_rol() = 'superadmin'
+  )
+  and public.get_perfil_activo_aprobado(citas.user_id)
+);
+
+create policy "citas_update" on citas
+for update to authenticated using (
+  auth.uid() = user_id
+  or exists (select 1 from perfiles where id = citas.user_id and nutricionista_id = auth.uid())
+  or public.get_user_rol() = 'superadmin'
+)
+with check (
+  auth.uid() = user_id
+  or exists (select 1 from perfiles where id = citas.user_id and nutricionista_id = auth.uid())
+  or public.get_user_rol() = 'superadmin'
+);
+
+create policy "citas_delete" on citas
+for delete to authenticated using (
+  exists (select 1 from perfiles where id = citas.user_id and nutricionista_id = auth.uid())
+  or public.get_user_rol() = 'superadmin'
+);
+
+-- ── citas: protección de columnas ───────────────────────────
+-- Verificado: ni paciente ni admin-web actualizan nunca fecha/hora/tipo/
+-- profesional/modalidad/notas/user_id/created_at — la única columna que
+-- alguien actualiza, alguna vez, es estado. La diferencia es el VALOR
+-- permitido: un paciente (rol='usuario') solo puede confirmar o cancelar
+-- una cita que esté en 'pendiente' (perfil.tsx: botones Confirmar/
+-- Cancelar solo se muestran sobre citas pendientes); admin/superadmin
+-- conservan cualquier transición válida del CHECK de estado.
+create or replace function public.proteger_columnas_citas()
+returns trigger
+language plpgsql
+as $$
+begin
+  if current_user = 'service_role' then
+    return new;
+  end if;
+
+  if new.id is distinct from old.id
+     or new.user_id is distinct from old.user_id
+     or new.fecha is distinct from old.fecha
+     or new.hora is distinct from old.hora
+     or new.tipo is distinct from old.tipo
+     or new.profesional is distinct from old.profesional
+     or new.modalidad is distinct from old.modalidad
+     or new.notas is distinct from old.notas
+     or new.created_at is distinct from old.created_at
+  then
+    raise exception 'Solo puedes modificar el estado de la cita.';
+  end if;
+
+  if public.get_user_rol() = 'usuario'
+     and new.estado is distinct from old.estado
+     and (old.estado is distinct from 'pendiente' or new.estado not in ('confirmada', 'cancelada'))
+  then
+    raise exception 'Como paciente solo puedes confirmar o cancelar una cita pendiente.';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_proteger_columnas_citas on public.citas;
+create trigger trg_proteger_columnas_citas
+  before update on public.citas
+  for each row
+  execute function public.proteger_columnas_citas();
+
+-- ============================================================
+-- 52. MIGRACIÓN — Aislamiento real, ownership de catálogo por
+--     creador, y protección de columnas en recetas,
+--     receta_ingredientes, receta_pasos
+-- ============================================================
+-- Verificado contra código real (mobile-app + admin-web) y contra
+-- pg_policies real de producción el 2026-08-27.
+--
+-- HALLAZGO CRÍTICO: la Sección 35 intentó corregir "recetas" con
+-- recetas_select/insert/update/delete basadas en propiedad real, pero el
+-- DROP POLICY que las precede usa nombres que nunca existieron — no
+-- coinciden con los nombres reales (confirmado contra pg_policies en
+-- vivo). Las 4 policies nuevas quedaron apiladas sobre las 5 legacy
+-- (auth.role()='authenticated'), que dominan por OR. receta_ingredientes/
+-- receta_pasos nunca tuvieron ni siquiera ese intento — 100% abiertas.
+-- Cualquier autenticado podía leer/escribir/BORRAR cualquier receta y sus
+-- ingredientes/pasos.
+--
+-- Modelo real (confirmado por canEdit() en admin-web/recetas/page.tsx, no
+-- por las policies): recetas.user_id NULL = catálogo global, visible a
+-- cualquier autenticado; cualquier admin/superadmin puede crear una
+-- receta nueva ("+ Nueva receta" no está condicionado por rol); solo su
+-- creador (created_by) o superadmin puede editarla/borrarla después.
+-- recetas.user_id NOT NULL = copia personalizada de un paciente,
+-- gestionada por su nutricionista dueño o superadmin.
+--
+-- recetas.created_by nunca se poblaba (RecetaInput lo excluye del
+-- payload, y a diferencia de ejercicios.created_by no tenía DEFAULT) —
+-- sin poblarlo es imposible expresar en RLS el ownership que canEdit() ya
+-- implementa en la UI. Se agrega un trigger BEFORE INSERT que fija
+-- created_by = auth.uid() únicamente cuando user_id es NULL (catálogo) y
+-- el actor es admin/superadmin — nunca confía en un valor enviado por el
+-- cliente (lo sobreescribe siempre), y no toca recetas personalizadas.
+--
+-- Todas las escrituras sobre hijos de una receta de catálogo (INSERT/
+-- UPDATE/DELETE en receta_ingredientes, INSERT/DELETE en receta_pasos)
+-- exigen created_by = auth.uid() (o superadmin) — sin excepción de
+-- "cualquier admin" — porque de lo contrario un admin no-creador podría
+-- modificar indirectamente una receta ajena agregándole/quitándole
+-- contenido. La única operación abierta a cualquier admin/superadmin es
+-- la creación de la receta PADRE (recetas_insert), que es lo que el
+-- código real permite vía "+ Nueva receta". createReceta() hace el INSERT
+-- de la receta primero (el trigger fija created_by ahí) y, en operaciones
+-- posteriores ya con la receta persistida, llama a replaceIngredientes()/
+-- replacePasos() — para ese momento created_by ya está fijado.
+--
+-- Ninguna Edge Function usa estas tablas.
+
+-- ── recetas: eliminar las 9 policies reales confirmadas ─────
+drop policy if exists "recetas: lectura para autenticados" on recetas;
+drop policy if exists "recetas: gestion para autenticados" on recetas;
+drop policy if exists "recetas: actualizacion para autenticados" on recetas;
+drop policy if exists "recetas: eliminacion para autenticados" on recetas;
+drop policy if exists "recetas: usuario lee las suyas" on recetas;
+drop policy if exists "recetas_select" on recetas;
+drop policy if exists "recetas_insert" on recetas;
+drop policy if exists "recetas_update" on recetas;
+drop policy if exists "recetas_delete" on recetas;
+
+create policy "recetas_select" on recetas
+for select to authenticated using (
+  recetas.user_id is null
+  or auth.uid() = recetas.user_id
+  or exists (select 1 from perfiles where id = recetas.user_id and nutricionista_id = auth.uid())
+  or public.get_user_rol() = 'superadmin'
+);
+
+create policy "recetas_insert" on recetas
+for insert to authenticated with check (
+  (recetas.user_id is null and public.get_user_rol() in ('admin', 'superadmin'))
+  or (
+    recetas.user_id is not null
+    and (
+      exists (select 1 from perfiles where id = recetas.user_id and nutricionista_id = auth.uid())
+      or public.get_user_rol() = 'superadmin'
+    )
+  )
+);
+
+create policy "recetas_update" on recetas
+for update to authenticated using (
+  (recetas.user_id is null and (recetas.created_by = auth.uid() or public.get_user_rol() = 'superadmin'))
+  or (
+    recetas.user_id is not null
+    and (
+      exists (select 1 from perfiles where id = recetas.user_id and nutricionista_id = auth.uid())
+      or public.get_user_rol() = 'superadmin'
+    )
+  )
+)
+with check (
+  (recetas.user_id is null and (recetas.created_by = auth.uid() or public.get_user_rol() = 'superadmin'))
+  or (
+    recetas.user_id is not null
+    and (
+      exists (select 1 from perfiles where id = recetas.user_id and nutricionista_id = auth.uid())
+      or public.get_user_rol() = 'superadmin'
+    )
+  )
+);
+
+create policy "recetas_delete" on recetas
+for delete to authenticated using (
+  (recetas.user_id is null and (recetas.created_by = auth.uid() or public.get_user_rol() = 'superadmin'))
+  or (
+    recetas.user_id is not null
+    and (
+      exists (select 1 from perfiles where id = recetas.user_id and nutricionista_id = auth.uid())
+      or public.get_user_rol() = 'superadmin'
+    )
+  )
+);
+
+-- ── recetas: created_by derivado siempre de auth.uid(), nunca del cliente ──
+create or replace function public.set_created_by_recetas()
+returns trigger
+language plpgsql
+as $$
+begin
+  if current_user = 'service_role' then
+    return new;
+  end if;
+
+  if new.user_id is null and public.get_user_rol() in ('admin', 'superadmin') then
+    new.created_by := auth.uid();
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_set_created_by_recetas on public.recetas;
+create trigger trg_set_created_by_recetas
+  before insert on public.recetas
+  for each row
+  execute function public.set_created_by_recetas();
+
+-- ── recetas: protección de columnas en UPDATE ────────────────
+create or replace function public.proteger_columnas_recetas()
+returns trigger
+language plpgsql
+as $$
+begin
+  if current_user = 'service_role' then
+    return new;
+  end if;
+
+  if new.id is distinct from old.id
+     or new.user_id is distinct from old.user_id
+     or new.receta_base_id is distinct from old.receta_base_id
+     or new.created_by is distinct from old.created_by
+     or new.created_at is distinct from old.created_at
+  then
+    raise exception 'No puedes modificar el propietario ni la referencia base de una receta.';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_proteger_columnas_recetas on public.recetas;
+create trigger trg_proteger_columnas_recetas
+  before update on public.recetas
+  for each row
+  execute function public.proteger_columnas_recetas();
+
+-- ── receta_ingredientes: policies (sin excepción de "cualquier admin") ──
+drop policy if exists "ingredientes: lectura para autenticados" on receta_ingredientes;
+drop policy if exists "ingredientes: gestion para autenticados" on receta_ingredientes;
+
+create policy "receta_ingredientes_select" on receta_ingredientes
+for select to authenticated using (
+  exists (
+    select 1 from recetas r
+    where r.id = receta_ingredientes.receta_id
+      and (
+        r.user_id is null
+        or r.user_id = auth.uid()
+        or exists (select 1 from perfiles where id = r.user_id and nutricionista_id = auth.uid())
+        or public.get_user_rol() = 'superadmin'
+      )
+  )
+);
+
+create policy "receta_ingredientes_insert" on receta_ingredientes
+for insert to authenticated with check (
+  exists (
+    select 1 from recetas r
+    where r.id = receta_ingredientes.receta_id
+      and (
+        (r.user_id is null and (r.created_by = auth.uid() or public.get_user_rol() = 'superadmin'))
+        or (r.user_id is not null and (
+          exists (select 1 from perfiles where id = r.user_id and nutricionista_id = auth.uid())
+          or public.get_user_rol() = 'superadmin'
+        ))
+      )
+  )
+);
+
+create policy "receta_ingredientes_update" on receta_ingredientes
+for update to authenticated using (
+  exists (
+    select 1 from recetas r
+    where r.id = receta_ingredientes.receta_id
+      and (
+        (r.user_id is null and (r.created_by = auth.uid() or public.get_user_rol() = 'superadmin'))
+        or (r.user_id is not null and (
+          exists (select 1 from perfiles where id = r.user_id and nutricionista_id = auth.uid())
+          or public.get_user_rol() = 'superadmin'
+        ))
+      )
+  )
+)
+with check (
+  exists (
+    select 1 from recetas r
+    where r.id = receta_ingredientes.receta_id
+      and (
+        (r.user_id is null and (r.created_by = auth.uid() or public.get_user_rol() = 'superadmin'))
+        or (r.user_id is not null and (
+          exists (select 1 from perfiles where id = r.user_id and nutricionista_id = auth.uid())
+          or public.get_user_rol() = 'superadmin'
+        ))
+      )
+  )
+);
+
+create policy "receta_ingredientes_delete" on receta_ingredientes
+for delete to authenticated using (
+  exists (
+    select 1 from recetas r
+    where r.id = receta_ingredientes.receta_id
+      and (
+        (r.user_id is null and (r.created_by = auth.uid() or public.get_user_rol() = 'superadmin'))
+        or (r.user_id is not null and (
+          exists (select 1 from perfiles where id = r.user_id and nutricionista_id = auth.uid())
+          or public.get_user_rol() = 'superadmin'
+        ))
+      )
+  )
+);
+
+-- ── receta_ingredientes: protección de columnas (solo alimento_id) ──
+create or replace function public.proteger_columnas_receta_ingredientes()
+returns trigger
+language plpgsql
+as $$
+begin
+  if current_user = 'service_role' then
+    return new;
+  end if;
+
+  if new.id is distinct from old.id
+     or new.receta_id is distinct from old.receta_id
+     or new.orden is distinct from old.orden
+     or new.descripcion is distinct from old.descripcion
+     or new.cantidad is distinct from old.cantidad
+     or new.unidad is distinct from old.unidad
+     or new.grupo is distinct from old.grupo
+  then
+    raise exception 'Solo puedes modificar alimento_id.';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_proteger_columnas_receta_ingredientes on public.receta_ingredientes;
+create trigger trg_proteger_columnas_receta_ingredientes
+  before update on public.receta_ingredientes
+  for each row
+  execute function public.proteger_columnas_receta_ingredientes();
+
+-- ── receta_pasos: policies (sin UPDATE, sin excepción de "cualquier admin") ──
+drop policy if exists "pasos: lectura para autenticados" on receta_pasos;
+drop policy if exists "pasos: gestion para autenticados" on receta_pasos;
+
+create policy "receta_pasos_select" on receta_pasos
+for select to authenticated using (
+  exists (
+    select 1 from recetas r
+    where r.id = receta_pasos.receta_id
+      and (
+        r.user_id is null
+        or r.user_id = auth.uid()
+        or exists (select 1 from perfiles where id = r.user_id and nutricionista_id = auth.uid())
+        or public.get_user_rol() = 'superadmin'
+      )
+  )
+);
+
+create policy "receta_pasos_insert" on receta_pasos
+for insert to authenticated with check (
+  exists (
+    select 1 from recetas r
+    where r.id = receta_pasos.receta_id
+      and (
+        (r.user_id is null and (r.created_by = auth.uid() or public.get_user_rol() = 'superadmin'))
+        or (r.user_id is not null and (
+          exists (select 1 from perfiles where id = r.user_id and nutricionista_id = auth.uid())
+          or public.get_user_rol() = 'superadmin'
+        ))
+      )
+  )
+);
+
+create policy "receta_pasos_delete" on receta_pasos
+for delete to authenticated using (
+  exists (
+    select 1 from recetas r
+    where r.id = receta_pasos.receta_id
+      and (
+        (r.user_id is null and (r.created_by = auth.uid() or public.get_user_rol() = 'superadmin'))
+        or (r.user_id is not null and (
+          exists (select 1 from perfiles where id = r.user_id and nutricionista_id = auth.uid())
+          or public.get_user_rol() = 'superadmin'
+        ))
+      )
+  )
+);
+
+-- ============================================================
+-- ROLLBACK Sección 52 (referencia — NO ejecutar salvo que se
+-- decida revertir esta sección). Reconstruido a partir de
+-- pg_policies real de producción (incluye permissive/roles),
+-- verificado el 2026-08-27:
+--
+-- drop trigger if exists trg_set_created_by_recetas on public.recetas;
+-- drop function if exists public.set_created_by_recetas();
+-- drop trigger if exists trg_proteger_columnas_recetas on public.recetas;
+-- drop function if exists public.proteger_columnas_recetas();
+-- drop trigger if exists trg_proteger_columnas_receta_ingredientes on public.receta_ingredientes;
+-- drop function if exists public.proteger_columnas_receta_ingredientes();
+--
+-- drop policy if exists "recetas_select" on recetas;
+-- drop policy if exists "recetas_insert" on recetas;
+-- drop policy if exists "recetas_update" on recetas;
+-- drop policy if exists "recetas_delete" on recetas;
+-- drop policy if exists "receta_ingredientes_select" on receta_ingredientes;
+-- drop policy if exists "receta_ingredientes_insert" on receta_ingredientes;
+-- drop policy if exists "receta_ingredientes_update" on receta_ingredientes;
+-- drop policy if exists "receta_ingredientes_delete" on receta_ingredientes;
+-- drop policy if exists "receta_pasos_select" on receta_pasos;
+-- drop policy if exists "receta_pasos_insert" on receta_pasos;
+-- drop policy if exists "receta_pasos_delete" on receta_pasos;
+--
+-- create policy "recetas: lectura para autenticados" on recetas
+--   as permissive for select to public
+--   using (auth.role() = 'authenticated'::text);
+--
+-- create policy "recetas: gestion para autenticados" on recetas
+--   as permissive for insert to public
+--   with check (auth.role() = 'authenticated'::text);
+--
+-- create policy "recetas: actualizacion para autenticados" on recetas
+--   as permissive for update to public
+--   using (auth.role() = 'authenticated'::text);
+--
+-- create policy "recetas: eliminacion para autenticados" on recetas
+--   as permissive for delete to public
+--   using (auth.role() = 'authenticated'::text);
+--
+-- create policy "recetas: usuario lee las suyas" on recetas
+--   as permissive for select to public
+--   using (auth.uid() = user_id);
+--
+-- create policy "recetas_select" on recetas
+--   as permissive for select to authenticated
+--   using (
+--     ((user_id is null) and (get_user_rol() = any (array['admin'::text, 'superadmin'::text])))
+--     or ((user_id is not null) and (exists (
+--       select 1 from perfiles p
+--       where (p.id = recetas.user_id) and (p.nutricionista_id = auth.uid())
+--     )))
+--   );
+--
+-- create policy "recetas_insert" on recetas
+--   as permissive for insert to authenticated
+--   with check (
+--     (get_user_rol() = any (array['admin'::text, 'superadmin'::text]))
+--     or (exists (
+--       select 1 from perfiles p
+--       where (p.id = recetas.user_id) and (p.nutricionista_id = auth.uid())
+--     ))
+--   );
+--
+-- create policy "recetas_update" on recetas
+--   as permissive for update to authenticated
+--   using (
+--     ((user_id is null) and (get_user_rol() = 'superadmin'::text))
+--     or ((user_id is null) and (get_user_rol() = 'admin'::text) and (created_by = auth.uid()))
+--     or ((user_id is not null) and (exists (
+--       select 1 from perfiles p
+--       where (p.id = recetas.user_id) and (p.nutricionista_id = auth.uid())
+--     )))
+--   );
+--
+-- create policy "recetas_delete" on recetas
+--   as permissive for delete to authenticated
+--   using (
+--     ((user_id is null) and (get_user_rol() = 'superadmin'::text))
+--     or ((user_id is null) and (get_user_rol() = 'admin'::text) and (created_by = auth.uid()))
+--     or ((user_id is not null) and (exists (
+--       select 1 from perfiles p
+--       where (p.id = recetas.user_id) and (p.nutricionista_id = auth.uid())
+--     )))
+--   );
+--
+-- create policy "ingredientes: lectura para autenticados" on receta_ingredientes
+--   as permissive for select to public
+--   using (auth.role() = 'authenticated'::text);
+--
+-- create policy "ingredientes: gestion para autenticados" on receta_ingredientes
+--   as permissive for all to public
+--   using (auth.role() = 'authenticated'::text)
+--   with check (auth.role() = 'authenticated'::text);
+--
+-- create policy "pasos: lectura para autenticados" on receta_pasos
+--   as permissive for select to public
+--   using (auth.role() = 'authenticated'::text);
+--
+-- create policy "pasos: gestion para autenticados" on receta_pasos
+--   as permissive for all to public
+--   using (auth.role() = 'authenticated'::text)
+--   with check (auth.role() = 'authenticated'::text);
+-- ============================================================
+
+-- ============================================================
+-- 53. MIGRACIÓN — Aislamiento multi-tenant real, invariante
+--     receta↔paciente, y protección de columnas en
+--     recetas_guardadas
+-- ============================================================
+-- Verificado contra código real (mobile-app + admin-web) y contra
+-- pg_policies real de producción el 2026-08-27.
+--
+-- mobile-app SOLO lee, vía embed anidado en fetchMisRecetas() — nunca
+-- escribe. admin-web (_data/recetas_guardadas.ts) hace DELETE+INSERT
+-- (saveRecetasAsignadas, reemplazo completo por paciente) y un UPDATE
+-- real pero acotado a una sola columna: personalizeReceta() redirige
+-- receta_id (nunca user_id ni tiempo_comida) cuando el nutriólogo
+-- personaliza una receta de catálogo para su paciente. Ninguna Edge
+-- Function usa esta tabla.
+--
+-- recetas_guardadas conservaba desde la Sección 6 una policy FOR ALL de
+-- "propio" nunca eliminada, y desde la Sección 14 una policy abierta a
+-- cualquier autenticado que dominaba por OR — cualquiera podía leer,
+-- crear, modificar o borrar las recetas guardadas de cualquier paciente.
+--
+-- Invariante agregada: la receta referenciada debe ser de catálogo
+-- (user_id IS NULL) o pertenecer al MISMO paciente que recetas_guardadas.
+-- user_id — nunca una receta personalizada de otro paciente. Se valida
+-- con una subconsulta directa contra recetas (sin SECURITY DEFINER):
+-- verificado que en los dos casos que deben permitirse (catálogo, o
+-- personalizada del paciente que el actor ya puede gestionar) la fila
+-- siempre es visible bajo recetas_select (Sección 52) para ese actor —
+-- la invisibilidad por RLS solo ocurre en el caso que de todos modos hay
+-- que bloquear (personalizada de un paciente ajeno), así que no hay
+-- riesgo de falso negativo como el que tuvo rutinas_insert.
+
+drop policy if exists "guardadas: usuario gestiona las suyas" on recetas_guardadas;
+drop policy if exists "guardadas: gestion para autenticados" on recetas_guardadas;
+
+create policy "recetas_guardadas_select" on recetas_guardadas
+for select to authenticated using (
+  auth.uid() = user_id
+  or exists (select 1 from perfiles where id = recetas_guardadas.user_id and nutricionista_id = auth.uid())
+  or public.get_user_rol() = 'superadmin'
+);
+
+create policy "recetas_guardadas_insert" on recetas_guardadas
+for insert to authenticated with check (
+  (
+    exists (select 1 from perfiles where id = recetas_guardadas.user_id and nutricionista_id = auth.uid())
+    or public.get_user_rol() = 'superadmin'
+  )
+  and exists (
+    select 1 from recetas r
+    where r.id = recetas_guardadas.receta_id
+      and (r.user_id is null or r.user_id = recetas_guardadas.user_id)
+  )
+);
+
+create policy "recetas_guardadas_update" on recetas_guardadas
+for update to authenticated using (
+  exists (select 1 from perfiles where id = recetas_guardadas.user_id and nutricionista_id = auth.uid())
+  or public.get_user_rol() = 'superadmin'
+)
+with check (
+  (
+    exists (select 1 from perfiles where id = recetas_guardadas.user_id and nutricionista_id = auth.uid())
+    or public.get_user_rol() = 'superadmin'
+  )
+  and exists (
+    select 1 from recetas r
+    where r.id = recetas_guardadas.receta_id
+      and (r.user_id is null or r.user_id = recetas_guardadas.user_id)
+  )
+);
+
+create policy "recetas_guardadas_delete" on recetas_guardadas
+for delete to authenticated using (
+  exists (select 1 from perfiles where id = recetas_guardadas.user_id and nutricionista_id = auth.uid())
+  or public.get_user_rol() = 'superadmin'
+);
+
+-- ── protección de columnas: solo receta_id es modificable ──────
+create or replace function public.proteger_columnas_recetas_guardadas()
+returns trigger
+language plpgsql
+as $$
+begin
+  if current_user = 'service_role' then
+    return new;
+  end if;
+
+  if new.user_id is distinct from old.user_id
+     or new.tiempo_comida is distinct from old.tiempo_comida
+     or new.created_at is distinct from old.created_at
+  then
+    raise exception 'Solo puedes modificar receta_id.';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_proteger_columnas_recetas_guardadas on public.recetas_guardadas;
+create trigger trg_proteger_columnas_recetas_guardadas
+  before update on public.recetas_guardadas
+  for each row
+  execute function public.proteger_columnas_recetas_guardadas();
+
+-- ============================================================
+-- ROLLBACK Sección 53 (referencia — NO ejecutar salvo que se
+-- decida revertir esta sección). Reconstruido a partir de
+-- pg_policies real de producción, verificado el 2026-08-27:
+--
+-- drop trigger if exists trg_proteger_columnas_recetas_guardadas on public.recetas_guardadas;
+-- drop function if exists public.proteger_columnas_recetas_guardadas();
+--
+-- drop policy if exists "recetas_guardadas_select" on recetas_guardadas;
+-- drop policy if exists "recetas_guardadas_insert" on recetas_guardadas;
+-- drop policy if exists "recetas_guardadas_update" on recetas_guardadas;
+-- drop policy if exists "recetas_guardadas_delete" on recetas_guardadas;
+--
+-- create policy "guardadas: gestion para autenticados" on recetas_guardadas
+--   as permissive for all to public
+--   using (auth.role() = 'authenticated'::text)
+--   with check (auth.role() = 'authenticated'::text);
+--
+-- create policy "guardadas: usuario gestiona las suyas" on recetas_guardadas
+--   as permissive for all to public
+--   using (auth.uid() = user_id);
+-- ============================================================
+
+-- ============================================================
+-- 54. MIGRACIÓN — Corrige el bug de nombres de la Sección 35 en
+--     ejercicios y alimentos; cierra suplementos; agrega
+--     created_by real a alimentos; hace explícito el WITH CHECK
+--     de ejercicios_update/alimentos_update
+-- ============================================================
+-- Verificado contra código real (mobile-app + admin-web + 4 Edge
+-- Functions) y contra pg_policies real de producción el 2026-08-27.
+--
+-- HALLAZGO: la Sección 35 intentó limpiar las legacy de ejercicios,
+-- recetas y alimentos en el mismo bloque, y cometió el mismo error de
+-- nombres en las tres (ya corregido para recetas en la Sección 52). Las
+-- 3 legacy de escritura de ejercicios ("gestion"/"actualizacion"/
+-- "eliminacion para autenticados") y las 2 de alimentos ("lectura"/
+-- "gestion para autenticados") seguían activas, dominando por OR sobre
+-- ejercicios_select/insert/update/delete y alimentos_select/insert/
+-- update/delete — cualquier autenticado podía insertar/actualizar/
+-- BORRAR cualquier fila de ambos catálogos.
+--
+-- "ejercicios: lectura para autenticados" se CONSERVA intencionalmente:
+-- rutina_ejercicios/ejercicio_logs embeben ejercicios(*) para pacientes
+-- (rol='usuario'), que ejercicios_select no cubre (solo admin/
+-- superadmin) — eliminarla rompería las pantallas de rutina/progreso.
+-- Esto significa que un paciente sigue viendo TODO el catálogo,
+-- incluidos ejercicios creados por cualquier admin — trade-off
+-- documentado, no un descuido.
+--
+-- "alimentos: lectura para autenticados" SÍ se elimina sin excepción:
+-- mobile-app no usa esta tabla (ni .from() directo ni embed).
+--
+-- "suplementos: lectura para autenticados" se conserva: mobile-app
+-- embebe suplementos(*) vía plan_suplementacion para cualquier
+-- paciente, y la tabla no tiene columna created_by ni noción de
+-- ownership — es un catálogo compartido por diseño. Confirmado también
+-- por la ausencia total de canEdit()/distinción de rol en
+-- suplementos/page.tsx (a diferencia de recetas/ejercicios/alimentos,
+-- que sí la tienen) — cualquier admin gestiona cualquier suplemento,
+-- intencionalmente.
+--
+-- alimentos.created_by nunca tuvo DEFAULT auth.uid() (a diferencia de
+-- ejercicios.created_by, Sección 40) y AlimentoInput lo excluye del
+-- payload — igual que recetas antes de la Sección 52, esto significa
+-- que ningún alimento creado por código real queda atribuido a su
+-- creador real. Además alimentos_insert.with_check no restringe
+-- created_by en absoluto (a diferencia de ejercicios_insert, que sí
+-- exige created_by=auth.uid() para admin) — un admin podría falsificar
+-- la autoría de otro admin al crear. Se agrega el mismo trigger BEFORE
+-- INSERT que ya usamos para recetas.
+--
+-- ejercicios_update y alimentos_update no declaraban WITH CHECK
+-- explícito (confirmado en pg_policies real: with_check=null) — Postgres
+-- usa el propio USING como CHECK implícito en ese caso (documentado),
+-- así que ya estaban protegidas contra reasignación de created_by; se
+-- hace explícito sin cambiar la semántica.
+--
+-- Ninguna Edge Function se ve afectada: import-workoutx,
+-- match-exercise-gifs, translate-exercises y migrate-gifs usan
+-- SUPABASE_SERVICE_ROLE_KEY (confirmado en las 4), que bypasea RLS.
+
+-- ── ejercicios: cerrar solo las 3 legacy de escritura ───────
+drop policy if exists "ejercicios: gestion para autenticados" on ejercicios;
+drop policy if exists "ejercicios: actualizacion para autenticados" on ejercicios;
+drop policy if exists "ejercicios: eliminacion para autenticados" on ejercicios;
+-- "ejercicios: lectura para autenticados" se conserva intencionalmente.
+
+drop policy if exists "ejercicios_update" on ejercicios;
+create policy "ejercicios_update" on ejercicios
+for update to authenticated using (
+  (public.get_user_rol() = 'superadmin' and (
+    created_by is null or
+    exists (select 1 from perfiles where id = ejercicios.created_by and rol = 'superadmin')
+  ))
+  or
+  (public.get_user_rol() = 'admin' and created_by = auth.uid())
+)
+with check (
+  (public.get_user_rol() = 'superadmin' and (
+    created_by is null or
+    exists (select 1 from perfiles where id = ejercicios.created_by and rol = 'superadmin')
+  ))
+  or
+  (public.get_user_rol() = 'admin' and created_by = auth.uid())
+);
+
+-- ── alimentos: cerrar las 2 legacy (incluida lectura) ───────
+drop policy if exists "alimentos: lectura para autenticados" on alimentos;
+drop policy if exists "alimentos: gestion para autenticados" on alimentos;
+
+drop policy if exists "alimentos_update" on alimentos;
+create policy "alimentos_update" on alimentos
+for update to authenticated using (
+  (public.get_user_rol() = 'superadmin' and (
+    created_by is null or
+    exists (select 1 from perfiles where id = alimentos.created_by and rol = 'superadmin')
+  ))
+  or
+  (public.get_user_rol() = 'admin' and created_by = auth.uid())
+)
+with check (
+  (public.get_user_rol() = 'superadmin' and (
+    created_by is null or
+    exists (select 1 from perfiles where id = alimentos.created_by and rol = 'superadmin')
+  ))
+  or
+  (public.get_user_rol() = 'admin' and created_by = auth.uid())
+);
+
+-- ── alimentos: created_by derivado siempre de auth.uid() ────
+create or replace function public.set_created_by_alimentos()
+returns trigger
+language plpgsql
+as $$
+begin
+  if current_user = 'service_role' then
+    return new;
+  end if;
+
+  if public.get_user_rol() in ('admin', 'superadmin') then
+    new.created_by := auth.uid();
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_set_created_by_alimentos on public.alimentos;
+create trigger trg_set_created_by_alimentos
+  before insert on public.alimentos
+  for each row
+  execute function public.set_created_by_alimentos();
+
+-- ── suplementos: cerrar la única legacy de escritura ────────
+drop policy if exists "suplementos: gestion para autenticados" on suplementos;
+-- "suplementos: lectura para autenticados" se conserva.
+
+create policy "suplementos_insert" on suplementos
+for insert to authenticated with check (
+  public.get_user_rol() in ('admin', 'superadmin')
+);
+
+create policy "suplementos_update" on suplementos
+for update to authenticated using (
+  public.get_user_rol() in ('admin', 'superadmin')
+)
+with check (
+  public.get_user_rol() in ('admin', 'superadmin')
+);
+
+create policy "suplementos_delete" on suplementos
+for delete to authenticated using (
+  public.get_user_rol() in ('admin', 'superadmin')
+);
+
+-- ============================================================
+-- ROLLBACK Sección 54 (referencia — NO ejecutar salvo que se
+-- decida revertir esta sección). Reconstruido a partir de
+-- pg_policies real de producción, verificado el 2026-08-27:
+--
+-- drop trigger if exists trg_set_created_by_alimentos on public.alimentos;
+-- drop function if exists public.set_created_by_alimentos();
+--
+-- drop policy if exists "ejercicios_update" on ejercicios;
+-- drop policy if exists "alimentos_update" on alimentos;
+-- drop policy if exists "suplementos_insert" on suplementos;
+-- drop policy if exists "suplementos_update" on suplementos;
+-- drop policy if exists "suplementos_delete" on suplementos;
+--
+-- create policy "ejercicios: gestion para autenticados" on ejercicios
+--   as permissive for insert to public
+--   with check (auth.role() = 'authenticated'::text);
+--
+-- create policy "ejercicios: actualizacion para autenticados" on ejercicios
+--   as permissive for update to public
+--   using (auth.role() = 'authenticated'::text);
+--
+-- create policy "ejercicios: eliminacion para autenticados" on ejercicios
+--   as permissive for delete to public
+--   using (auth.role() = 'authenticated'::text);
+--
+-- create policy "ejercicios_update" on ejercicios
+--   as permissive for update to authenticated
+--   using (
+--     ((get_user_rol() = 'superadmin'::text) AND ((created_by IS NULL) OR (EXISTS (SELECT 1 FROM perfiles WHERE ((perfiles.id = ejercicios.created_by) AND (perfiles.rol = 'superadmin'::text))))))
+--     OR ((get_user_rol() = 'admin'::text) AND (created_by = auth.uid()))
+--   );
+--
+-- create policy "alimentos: lectura para autenticados" on alimentos
+--   as permissive for select to public
+--   using (auth.role() = 'authenticated'::text);
+--
+-- create policy "alimentos: gestion para autenticados" on alimentos
+--   as permissive for all to public
+--   using (auth.role() = 'authenticated'::text)
+--   with check (auth.role() = 'authenticated'::text);
+--
+-- create policy "alimentos_update" on alimentos
+--   as permissive for update to authenticated
+--   using (
+--     ((get_user_rol() = 'superadmin'::text) AND ((created_by IS NULL) OR (EXISTS (SELECT 1 FROM perfiles WHERE ((perfiles.id = alimentos.created_by) AND (perfiles.rol = 'superadmin'::text))))))
+--     OR ((get_user_rol() = 'admin'::text) AND (created_by = auth.uid()))
+--   );
+--
+-- create policy "suplementos: gestion para autenticados" on suplementos
+--   as permissive for all to public
+--   using (auth.role() = 'authenticated'::text)
+--   with check (auth.role() = 'authenticated'::text);
+-- ============================================================
+
+-- ============================================================
+-- 56. MIGRACIÓN — Corrige el acceso SELECT de superadmin y cierra
+--     el directorio público/multi-tenant de perfiles
+-- ============================================================
+-- Verificado contra pg_policies + information_schema.role_table_grants
+-- reales de producción, y contra código real (mobile-app + admin-web +
+-- Edge Functions) el 2026-08-28.
+--
+-- HALLAZGO 1: "perfiles: lectura multi-tenant" no tenía cláusula de
+-- superadmin (a diferencia de todas las demás tablas de esta sesión) —
+-- un superadmin solo veía su propio perfil, filas rol='admin', y
+-- pacientes donde nutricionista_id=auth.uid(). Confirmado como bug
+-- funcional real: admin-web/app/(admin)/dashboard/page.tsx (conteos y
+-- listado de pacientes recientes) y fetchAdmins() en
+-- admin-web/app/_data/perfiles.ts quedaban incompletos para un
+-- superadmin sin relación directa de nutricionista_id.
+--
+-- HALLAZGO 2: "perfiles: admins publicos" (roles={anon}) y la cláusula
+-- "rol = 'admin'" de "perfiles: lectura multi-tenant" (roles={public},
+-- incluye anon) exponían perfiles COMPLETA (RLS filtra filas, no
+-- columnas) a cualquier no-autenticado y a cualquier autenticado
+-- (paciente incluido). Confirmado con information_schema.role_table_grants
+-- real: anon/authenticated tienen GRANT de tabla completo sobre
+-- perfiles — RLS era la única barrera, sin restricción de columna.
+--
+-- Único consumidor real de "rol='admin'" para anon: mobile-app
+-- nutricionistas.ts (pantalla de registro, pre-sesión), que solo
+-- necesita id/nombre_completo/email/avatar_url — se reemplaza por la
+-- view pública nutricionistas_publicos.
+--
+-- Único consumidor real de "rol IN (admin,superadmin)" para un
+-- autenticado no-superadmin: admin-web fetchAdmins() (/administradores).
+-- Decisión de producto aprobada: /administradores pasa a ser
+-- superadmin-only. Cambio de frontend en fase posterior, NO incluido
+-- aquí. Efecto transitorio esperado mientras tanto: un admin
+-- no-superadmin que visite /administradores verá la lista vacía (0
+-- filas, sin error) hasta que se aplique ese gate.
+--
+-- historia_clinica: decisión de producto explícita de NO agregar acceso
+-- superadmin (mínimo privilegio sobre información clínica) — fuera de
+-- alcance, no se toca.
+
+drop policy if exists "perfiles: lectura multi-tenant" on perfiles;
+create policy "perfiles: lectura multi-tenant" on perfiles
+for select to authenticated using (
+  auth.uid() = id
+  or auth.uid() = nutricionista_id
+  or public.get_user_rol() = 'superadmin'
+);
+
+drop policy if exists "perfiles: admins publicos" on perfiles;
+
+create view public.nutricionistas_publicos
+with (security_invoker = false, security_barrier = true)
+as
+select id, nombre_completo, email, avatar_url
+from public.perfiles
+where rol = 'admin';
+
+grant select on public.nutricionistas_publicos to anon, authenticated;
+
+-- ============================================================
+-- ROLLBACK Sección 56 (referencia — NO ejecutar salvo que se decida
+-- revertir esta sección). Reconstruido a partir de pg_policies real de
+-- producción, verificado el 2026-08-28:
+--
+-- drop view if exists public.nutricionistas_publicos;
+--
+-- drop policy if exists "perfiles: lectura multi-tenant" on perfiles;
+-- create policy "perfiles: lectura multi-tenant" on perfiles
+--   as permissive for select to public
+--   using (((auth.uid() = id) OR (rol = 'admin'::text) OR (auth.uid() = nutricionista_id)));
+--
+-- create policy "perfiles: admins publicos" on perfiles
+--   as permissive for select to anon
+--   using (rol = 'admin'::text);
+-- ============================================================

@@ -7,12 +7,11 @@ export type Nutricionista = {
   avatar_url: string | null
 }
 
-/** Fetches all admin profiles (nutritionists) — publicly accessible (no auth required). */
+/** Fetches all nutritionists — publicly accessible (no auth required). */
 export async function fetchNutricionistas(): Promise<Nutricionista[]> {
   const { data, error } = await supabase
-    .from('perfiles')
+    .from('nutricionistas_publicos')
     .select('id, nombre_completo, email, avatar_url')
-    .eq('rol', 'admin')
     .order('nombre_completo', { ascending: true })
   if (error) throw error
   return data as Nutricionista[]
