@@ -86,51 +86,20 @@ export async function fetchRutinaActiva(userId: string): Promise<Rutina | null> 
   return data ? normalizeRutina(data as Rutina) : null;
 }
 
-async function replaceDias(rutinaId: string, dias: DiaInput[]): Promise<void> {
-  const { error: deleteError } = await supabase.from("rutina_dias").delete().eq("rutina_id", rutinaId);
-  if (deleteError) throw deleteError;
-
-  for (const dia of dias) {
-    const { data: diaRow, error: diaError } = await supabase
-      .from("rutina_dias")
-      .insert({
-        rutina_id: rutinaId,
-        numero_dia: dia.numero_dia,
-        nombre_dia: dia.nombre_dia,
-        es_descanso: dia.es_descanso,
-      })
-      .select()
-      .single();
-    if (diaError) throw diaError;
-
-    if (dia.ejercicios.length > 0) {
-      const rows = dia.ejercicios.map((ej) => ({ ...ej, dia_id: diaRow.id }));
-      const { error: ejError } = await supabase.from("rutina_ejercicios").insert(rows);
-      if (ejError) throw ejError;
-    }
-  }
-}
-
+// Delega en la RPC atómica guardar_rutina_completa (supabase_schema.sql,
+// Sección 58): reemplaza al padre + TODOS sus días/ejercicios en una sola
+// transacción de servidor, en vez de la secuencia UPDATE/INSERT + DELETE +
+// INSERT por día que dejaba estados parciales si algún paso fallaba a
+// mitad de camino.
 export async function saveRutina(userId: string, input: RutinaInput, rutinaId?: string): Promise<Rutina> {
-  let id = rutinaId;
-
-  if (id) {
-    const { error } = await supabase
-      .from("rutinas")
-      .update({ nombre: input.nombre, unidad_peso: input.unidad_peso })
-      .eq("id", id);
-    if (error) throw error;
-  } else {
-    const { data, error } = await supabase
-      .from("rutinas")
-      .insert({ user_id: userId, nombre: input.nombre, unidad_peso: input.unidad_peso })
-      .select()
-      .single();
-    if (error) throw error;
-    id = data.id;
-  }
-
-  await replaceDias(id!, input.dias);
+  const { data: id, error } = await supabase.rpc("guardar_rutina_completa", {
+    p_user_id: userId,
+    p_rutina_id: rutinaId ?? null,
+    p_nombre: input.nombre,
+    p_unidad_peso: input.unidad_peso,
+    p_dias: input.dias,
+  });
+  if (error) throw error;
 
   const { data: full, error: fetchError } = await supabase
     .from("rutinas")

@@ -33,25 +33,20 @@ export async function fetchRecetasAsignadas(userId: string): Promise<RecetaAsign
   });
 }
 
+// Delega en la RPC atómica asignar_recetas_paciente (supabase_schema.sql,
+// Sección 60): reemplaza TODAS las recetas asignadas del paciente en una
+// sola transacción de servidor, en vez de DELETE + INSERT como llamadas
+// independientes que dejaban al paciente sin ninguna receta asignada si el
+// INSERT fallaba (ej. por el invariante receta↔paciente).
 export async function saveRecetasAsignadas(
   userId: string,
   asignadas: { receta_id: string; tiempo_comida: MealKey }[]
 ): Promise<void> {
-  const { error: deleteError } = await supabase
-    .from("recetas_guardadas")
-    .delete()
-    .eq("user_id", userId);
-  if (deleteError) throw deleteError;
-
-  if (asignadas.length > 0) {
-    const rows = asignadas.map(({ receta_id, tiempo_comida }) => ({
-      user_id: userId,
-      receta_id,
-      tiempo_comida,
-    }));
-    const { error } = await supabase.from("recetas_guardadas").insert(rows);
-    if (error) throw error;
-  }
+  const { error } = await supabase.rpc("asignar_recetas_paciente", {
+    p_user_id: userId,
+    p_asignadas: asignadas,
+  });
+  if (error) throw error;
 }
 
 /**

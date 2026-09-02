@@ -29,16 +29,15 @@ export async function fetchPlanSuplementacion(userId: string): Promise<PlanSuple
   return data as PlanSuplemento[];
 }
 
+// Delega en la RPC atómica guardar_plan_suplementacion (supabase_schema.sql,
+// Sección 61): reemplaza TODO el plan de suplementación del paciente en una
+// sola transacción de servidor, en vez de DELETE + INSERT como llamadas
+// independientes que dejaban al paciente sin plan si el INSERT fallaba
+// (ej. porque el paciente destino no está activo+aprobado).
 export async function savePlanSuplementacion(userId: string, items: PlanSuplementoInput[]): Promise<void> {
-  const { error: deleteError } = await supabase
-    .from("plan_suplementacion")
-    .delete()
-    .eq("user_id", userId);
-  if (deleteError) throw deleteError;
-
-  if (items.length > 0) {
-    const rows = items.map((item) => ({ ...item, user_id: userId }));
-    const { error } = await supabase.from("plan_suplementacion").insert(rows);
-    if (error) throw error;
-  }
+  const { error } = await supabase.rpc("guardar_plan_suplementacion", {
+    p_user_id: userId,
+    p_items: items,
+  });
+  if (error) throw error;
 }

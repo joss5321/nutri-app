@@ -9,7 +9,7 @@
 -- reales de producción.
 
 begin;
-select plan(67);
+select plan(82);
 
 -- ── Fixtures sintéticos ──────────────────────────────────────────────
 select tests.create_user('60000000-0000-4000-8000-000000000003'::uuid, 'admin-a@test.local',    'admin');
@@ -616,6 +616,133 @@ with actualizado as (
 )
 select is((select count(*) from actualizado)::int, 0, 'receta_pasos: UPDATE bloqueado para cualquier rol (sin policy)');
 reset role;
+
+-- ══════════════════ RPC actualizar_receta_completa (Sección 59) ══════════════════
+-- Cobertura de atomicidad: caso exitoso, error a mitad de camino
+-- (ingrediente con alimento_id inexistente), rollback total sin estado
+-- parcial, caller no autorizado bloqueado, caller autorizado permitido
+-- (catálogo y personalizada).
+
+-- Fixture dedicada: receta de catálogo creada por Admin A, con un
+-- ingrediente y un paso "viejos" que la RPC debe reemplazar por completo.
+insert into recetas (id, nombre, user_id, created_by)
+values ('60000000-0000-4000-8000-0000000000b1', 'Receta RPC catálogo', null, '60000000-0000-4000-8000-000000000003');
+insert into receta_ingredientes (id, receta_id, orden, descripcion)
+values ('60000000-0000-4000-8000-0000000000b2', '60000000-0000-4000-8000-0000000000b1', 1, 'Ingrediente viejo');
+insert into receta_pasos (id, receta_id, numero, descripcion)
+values ('60000000-0000-4000-8000-0000000000b3', '60000000-0000-4000-8000-0000000000b1', 1, 'Paso viejo');
+
+-- 68. Caso exitoso: Admin A (creador) actualiza nombre + reemplaza
+--     ingredientes y pasos en una sola llamada.
+select tests.authenticate_as('60000000-0000-4000-8000-000000000003'::uuid);
+set local role authenticated;
+select lives_ok(
+  $$ select public.actualizar_receta_completa(
+       '60000000-0000-4000-8000-0000000000b1'::uuid,
+       'Receta RPC catálogo (editada)', null, 'Desayuno', null, null, null, null, null, null, null, null, null, null, null,
+       '[{"descripcion":"Ingrediente nuevo 1"},{"descripcion":"Ingrediente nuevo 2"}]'::jsonb,
+       '["Paso nuevo 1", "Paso nuevo 2"]'::jsonb
+     ) $$,
+  'actualizar_receta_completa: admin creador actualiza catálogo completo = permitido');
+reset role;
+
+-- 69-71. El padre y los hijos quedaron reemplazados por completo.
+select is((select nombre from recetas where id = '60000000-0000-4000-8000-0000000000b1'),
+  'Receta RPC catálogo (editada)', 'actualizar_receta_completa: nombre del padre actualizado');
+select is((select count(*)::int from receta_ingredientes where receta_id = '60000000-0000-4000-8000-0000000000b1'), 2,
+  'actualizar_receta_completa: ingredientes viejos reemplazados por los 2 nuevos');
+select is((select count(*)::int from receta_pasos where receta_id = '60000000-0000-4000-8000-0000000000b1'), 2,
+  'actualizar_receta_completa: pasos viejos reemplazados por los 2 nuevos');
+
+-- 72. Error a mitad de camino: el segundo ingrediente referencia un
+--     alimento_id inexistente (viola el FK) — la llamada entera debe
+--     fallar, incluyendo el UPDATE del padre ya intentado.
+select tests.authenticate_as('60000000-0000-4000-8000-000000000003'::uuid);
+set local role authenticated;
+select throws_ok(
+  $$ select public.actualizar_receta_completa(
+       '60000000-0000-4000-8000-0000000000b1'::uuid,
+       'Nombre que no debería aplicarse', null, 'Desayuno', null, null, null, null, null, null, null, null, null, null, null,
+       '[{"descripcion":"ok"},{"descripcion":"bad","alimento_id":"60000000-0000-4000-8000-ffffffffffff"}]'::jsonb,
+       '["Paso ok"]'::jsonb
+     ) $$,
+  '23503', null, 'actualizar_receta_completa: alimento_id inexistente en ingrediente 2 = bloqueado (FK)');
+reset role;
+
+-- 73-75. Rollback total: nombre e hijos siguen siendo exactamente los del
+-- test 68 — ni el UPDATE del padre ni el DELETE+INSERT parcial de
+-- ingredientes/pasos quedaron aplicados.
+select is((select nombre from recetas where id = '60000000-0000-4000-8000-0000000000b1'),
+  'Receta RPC catálogo (editada)', 'actualizar_receta_completa: tras el error, el nombre del padre NO cambió (rollback total)');
+select is((select count(*)::int from receta_ingredientes where receta_id = '60000000-0000-4000-8000-0000000000b1'), 2,
+  'actualizar_receta_completa: tras el error, los ingredientes NO cambiaron (rollback total)');
+select is((select count(*)::int from receta_pasos where receta_id = '60000000-0000-4000-8000-0000000000b1'), 2,
+  'actualizar_receta_completa: tras el error, los pasos NO cambiaron (rollback total)');
+
+-- 76. Caller no autorizado: Admin B (no creador) intenta actualizar la
+--     receta de catálogo de Admin A = bloqueado.
+select tests.authenticate_as('60000000-0000-4000-8000-000000000004'::uuid);
+set local role authenticated;
+select throws_ok(
+  $$ select public.actualizar_receta_completa(
+       '60000000-0000-4000-8000-0000000000b1'::uuid,
+       'hack', null, null, null, null, null, null, null, null, null, null, null, null, null,
+       '[]'::jsonb, '[]'::jsonb
+     ) $$,
+  null, null, 'actualizar_receta_completa: admin no-creador UPDATE catálogo ajeno = bloqueado');
+reset role;
+
+-- 77-78. Caller autorizado permitido, sobre una receta personalizada:
+--     Admin A (dueño de Paciente A) actualiza la receta personalizada f2.
+select tests.authenticate_as('60000000-0000-4000-8000-000000000003'::uuid);
+set local role authenticated;
+select lives_ok(
+  $$ select public.actualizar_receta_completa(
+       '60000000-0000-4000-8000-0000000000f2'::uuid,
+       'Receta personalizada A (RPC)', null, null, null, null, null, null, null, null, null, null, null, null, null,
+       '[{"descripcion":"Ingrediente A vía RPC"}]'::jsonb,
+       '["Paso A vía RPC"]'::jsonb
+     ) $$,
+  'actualizar_receta_completa: admin dueño actualiza personalizada de su paciente = permitido');
+reset role;
+
+select is((select nombre from recetas where id = '60000000-0000-4000-8000-0000000000f2'),
+  'Receta personalizada A (RPC)', 'actualizar_receta_completa: nombre de la personalizada actualizado');
+
+-- ══════════════════ actualizar_receta_completa — grants y SECURITY INVOKER ══════════════════
+-- Corrección post-deploy: "revoke all ... from public" no bastó en
+-- producción (anon tenía EXECUTE explícito).
+
+-- 79. authenticated SÍ tiene EXECUTE.
+select ok(
+  has_function_privilege('authenticated',
+    'public.actualizar_receta_completa(uuid, text, text, text, text, text, int, int, int, text, int, text, numeric, numeric, numeric, jsonb, jsonb)',
+    'EXECUTE'),
+  'actualizar_receta_completa: authenticated tiene EXECUTE');
+
+-- 80. anon NO tiene EXECUTE.
+select ok(
+  not has_function_privilege('anon',
+    'public.actualizar_receta_completa(uuid, text, text, text, text, text, int, int, int, text, int, text, numeric, numeric, numeric, jsonb, jsonb)',
+    'EXECUTE'),
+  'actualizar_receta_completa: anon NO tiene EXECUTE');
+
+-- 81. PUBLIC NO tiene EXECUTE.
+select ok(
+  not exists (
+    select 1 from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    join lateral aclexplode(p.proacl) a on true
+    where n.nspname = 'public' and p.proname = 'actualizar_receta_completa'
+      and a.grantee = 0 and a.privilege_type = 'EXECUTE'
+  ),
+  'actualizar_receta_completa: PUBLIC NO tiene EXECUTE');
+
+-- 82. Sigue siendo SECURITY INVOKER (prosecdef = false).
+select is(
+  (select prosecdef from pg_proc where oid =
+    'public.actualizar_receta_completa(uuid, text, text, text, text, text, int, int, int, text, int, text, numeric, numeric, numeric, jsonb, jsonb)'::regprocedure),
+  false, 'actualizar_receta_completa: SECURITY INVOKER (prosecdef = false)');
 
 select * from finish();
 rollback;

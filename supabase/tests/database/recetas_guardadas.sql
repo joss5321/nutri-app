@@ -8,7 +8,7 @@
 -- reales de producción.
 
 begin;
-select plan(28);
+select plan(41);
 
 -- ── Fixtures sintéticos ──────────────────────────────────────────────
 select tests.create_user('70000000-0000-4000-8000-000000000003'::uuid, 'admin-a@test.local',    'admin');
@@ -313,6 +313,123 @@ select throws_ok(
      where user_id = '70000000-0000-4000-8000-000000000001' and receta_id = '70000000-0000-4000-8000-0000000000e1' $$,
   'P0001', null, 'recetas_guardadas: UPDATE created_at = bloqueado por trigger (RLS sí permite acceder a la fila)');
 reset role;
+
+-- ══════════════════ RPC asignar_recetas_paciente (Sección 60) ══════════════════
+-- Cobertura de atomicidad: caso exitoso, error a mitad de camino (invariante
+-- receta↔paciente violado), rollback total sin estado parcial, caller no
+-- autorizado bloqueado, aislamiento entre pacientes.
+
+-- Estado conocido antes de las pruebas de la RPC (el estado que va dejando
+-- el resto del archivo es válido pero frágil de referenciar a mano aquí).
+delete from recetas_guardadas where user_id in ('70000000-0000-4000-8000-000000000001', '70000000-0000-4000-8000-000000000002');
+insert into recetas_guardadas (user_id, receta_id, tiempo_comida)
+values ('70000000-0000-4000-8000-000000000001', '70000000-0000-4000-8000-0000000000e1', 'desayuno');
+insert into recetas_guardadas (user_id, receta_id, tiempo_comida)
+values ('70000000-0000-4000-8000-000000000002', '70000000-0000-4000-8000-0000000000e1', 'desayuno');
+
+-- 29. Caso exitoso: Admin A (dueño de Paciente A) reemplaza el set
+--     completo de recetas asignadas en una sola llamada.
+select tests.authenticate_as('70000000-0000-4000-8000-000000000003'::uuid);
+set local role authenticated;
+select lives_ok(
+  $$ select public.asignar_recetas_paciente(
+       '70000000-0000-4000-8000-000000000001'::uuid,
+       '[{"receta_id":"70000000-0000-4000-8000-0000000000e1","tiempo_comida":"desayuno"},
+         {"receta_id":"70000000-0000-4000-8000-0000000000e2","tiempo_comida":"comida"}]'::jsonb
+     ) $$,
+  'asignar_recetas_paciente: admin dueño reemplaza el set completo = permitido');
+reset role;
+
+-- 30-31. El set quedó reemplazado con el contenido correcto.
+select is((select count(*)::int from recetas_guardadas where user_id = '70000000-0000-4000-8000-000000000001'), 2,
+  'asignar_recetas_paciente: Paciente A queda con exactamente las 2 recetas nuevas');
+select is(
+  (select tiempo_comida from recetas_guardadas
+   where user_id = '70000000-0000-4000-8000-000000000001' and receta_id = '70000000-0000-4000-8000-0000000000e2'),
+  'comida', 'asignar_recetas_paciente: tiempo_comida correcto en la fila nueva');
+
+-- 32. Error a mitad de camino: el set incluye una receta personalizada de
+--     OTRO paciente (e3, de Paciente B) — viola el invariante
+--     receta↔paciente de recetas_guardadas_insert. La llamada entera debe
+--     fallar, incluyendo el DELETE ya aplicado al inicio de la función.
+select tests.authenticate_as('70000000-0000-4000-8000-000000000003'::uuid);
+set local role authenticated;
+select throws_ok(
+  $$ select public.asignar_recetas_paciente(
+       '70000000-0000-4000-8000-000000000001'::uuid,
+       '[{"receta_id":"70000000-0000-4000-8000-0000000000e1","tiempo_comida":"desayuno"},
+         {"receta_id":"70000000-0000-4000-8000-0000000000e3","tiempo_comida":"cena"}]'::jsonb
+     ) $$,
+  '42501', null, 'asignar_recetas_paciente: receta personalizada ajena en el set = bloqueado (invariante)');
+reset role;
+
+-- 33-34. Rollback total: Paciente A conserva exactamente el set del test
+-- 29 — el DELETE que sí se había ejecutado dentro de la función también se
+-- revirtió, no quedó sin recetas asignadas.
+select is((select count(*)::int from recetas_guardadas where user_id = '70000000-0000-4000-8000-000000000001'), 2,
+  'asignar_recetas_paciente: tras el error, Paciente A sigue con sus 2 recetas (rollback total)');
+select is(
+  (select count(*)::int from recetas_guardadas
+   where user_id = '70000000-0000-4000-8000-000000000001' and receta_id = '70000000-0000-4000-8000-0000000000e2'),
+  1, 'asignar_recetas_paciente: tras el error, la asignación previa (e2) sigue intacta (rollback total)');
+
+-- 35-36. Caller no autorizado: Admin B intenta asignar recetas para
+--     Paciente A (ajeno) = bloqueado, y el set de Paciente A no sufre
+--     ningún cambio (ni siquiera parcial).
+select tests.authenticate_as('70000000-0000-4000-8000-000000000004'::uuid);
+set local role authenticated;
+select throws_ok(
+  $$ select public.asignar_recetas_paciente(
+       '70000000-0000-4000-8000-000000000001'::uuid,
+       '[{"receta_id":"70000000-0000-4000-8000-0000000000e1","tiempo_comida":"desayuno"}]'::jsonb
+     ) $$,
+  '42501', null, 'asignar_recetas_paciente: admin ajeno = bloqueado');
+reset role;
+
+select is((select count(*)::int from recetas_guardadas where user_id = '70000000-0000-4000-8000-000000000001'), 2,
+  'asignar_recetas_paciente: Paciente A intacto tras el intento no autorizado');
+
+-- 37. Aislamiento entre pacientes: Admin A (dueño de Paciente A) no puede
+--     usar la RPC para tocar el set de Paciente B (ajeno).
+select tests.authenticate_as('70000000-0000-4000-8000-000000000003'::uuid);
+set local role authenticated;
+select throws_ok(
+  $$ select public.asignar_recetas_paciente(
+       '70000000-0000-4000-8000-000000000002'::uuid,
+       '[{"receta_id":"70000000-0000-4000-8000-0000000000e1","tiempo_comida":"desayuno"}]'::jsonb
+     ) $$,
+  '42501', null, 'asignar_recetas_paciente: admin dueño de Paciente A no puede asignar para Paciente B (aislamiento)');
+reset role;
+
+-- ══════════════════ asignar_recetas_paciente — grants y SECURITY INVOKER ══════════════════
+-- Corrección post-deploy: "revoke all ... from public" no bastó en
+-- producción (anon tenía EXECUTE explícito).
+
+-- 38. authenticated SÍ tiene EXECUTE.
+select ok(
+  has_function_privilege('authenticated', 'public.asignar_recetas_paciente(uuid, jsonb)', 'EXECUTE'),
+  'asignar_recetas_paciente: authenticated tiene EXECUTE');
+
+-- 39. anon NO tiene EXECUTE.
+select ok(
+  not has_function_privilege('anon', 'public.asignar_recetas_paciente(uuid, jsonb)', 'EXECUTE'),
+  'asignar_recetas_paciente: anon NO tiene EXECUTE');
+
+-- 40. PUBLIC NO tiene EXECUTE.
+select ok(
+  not exists (
+    select 1 from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    join lateral aclexplode(p.proacl) a on true
+    where n.nspname = 'public' and p.proname = 'asignar_recetas_paciente'
+      and a.grantee = 0 and a.privilege_type = 'EXECUTE'
+  ),
+  'asignar_recetas_paciente: PUBLIC NO tiene EXECUTE');
+
+-- 41. Sigue siendo SECURITY INVOKER (prosecdef = false).
+select is(
+  (select prosecdef from pg_proc where oid = 'public.asignar_recetas_paciente(uuid, jsonb)'::regprocedure),
+  false, 'asignar_recetas_paciente: SECURITY INVOKER (prosecdef = false)');
 
 select * from finish();
 rollback;

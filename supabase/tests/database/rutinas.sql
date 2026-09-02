@@ -7,7 +7,7 @@
 -- transacción (BEGIN ... ROLLBACK) — nunca se commitea nada.
 
 begin;
-select plan(38);
+select plan(58);
 
 -- ── Fixtures sintéticos ──────────────────────────────────────────────
 select tests.create_user('30000000-0000-4000-8000-000000000003'::uuid, 'admin-a@test.local',    'admin');
@@ -373,6 +373,186 @@ select is((select count(*) from borrado)::int, 1, 'rutina_dias: el DELETE del d�
 select is((select count(*) from rutina_ejercicios where id = '30000000-0000-4000-8000-0000000000a4')::int, 0,
   'rutina_ejercicios: desaparece por ON DELETE CASCADE al borrar el día');
 reset role;
+
+-- ══════════════════ RPC guardar_rutina_completa (Sección 58) ══════════════════
+-- Cobertura de atomicidad: caso exitoso, error a mitad de camino (día y
+-- ejercicio inválidos), rollback total sin estado parcial, caller no
+-- autorizado bloqueado, caller autorizado permitido.
+
+-- 36. Caso exitoso: admin dueño crea una rutina nueva completa (2 días, uno
+--     con 1 ejercicio) para su paciente, todo en una sola llamada.
+select tests.authenticate_as('30000000-0000-4000-8000-000000000003'::uuid);
+set local role authenticated;
+select lives_ok(
+  $$ select public.guardar_rutina_completa(
+       '30000000-0000-4000-8000-000000000001'::uuid,
+       null,
+       'Rutina RPC nueva',
+       'kg',
+       '[
+         {"numero_dia":1,"nombre_dia":"Lunes","es_descanso":false,"ejercicios":[
+           {"ejercicio_id":"30000000-0000-4000-8000-0000000000e1","orden":1,"series":3,"repeticiones":"10","peso_sugerido_kg":20,"descanso_seg":60,"rir":2,"rpe":7,"tipo_esfuerzo":"reps","series_detalle":null,"unidad_peso":"kg"}
+         ]},
+         {"numero_dia":2,"nombre_dia":"Martes","es_descanso":true,"ejercicios":[]}
+       ]'::jsonb
+     ) $$,
+  'guardar_rutina_completa: admin dueño crea rutina nueva completa = permitido');
+reset role;
+
+-- 37. Se crearon exactamente los 2 días esperados.
+select is(
+  (select count(*)::int from rutina_dias rd join rutinas r on r.id = rd.rutina_id
+   where r.user_id = '30000000-0000-4000-8000-000000000001' and r.nombre = 'Rutina RPC nueva'),
+  2, 'guardar_rutina_completa: crea los 2 días esperados en una sola llamada');
+
+-- 38. El ejercicio del día 1 se insertó correctamente.
+select is(
+  (select count(*)::int from rutina_ejercicios re
+   join rutina_dias rd on rd.id = re.dia_id join rutinas r on r.id = rd.rutina_id
+   where r.nombre = 'Rutina RPC nueva' and rd.numero_dia = 1),
+  1, 'guardar_rutina_completa: inserta el ejercicio del día 1');
+
+-- 39. Error en día N: numero_dia=9 en el segundo día viola el CHECK
+--     (1..7) sobre la rutina existente f1 (Paciente A) — la llamada entera
+--     debe fallar, no solo el día inválido.
+select tests.authenticate_as('30000000-0000-4000-8000-000000000003'::uuid);
+set local role authenticated;
+select throws_ok(
+  $$ select public.guardar_rutina_completa(
+       '30000000-0000-4000-8000-000000000001'::uuid,
+       '30000000-0000-4000-8000-0000000000f1'::uuid,
+       'Rutina A',
+       'kg',
+       '[
+         {"numero_dia":1,"nombre_dia":"Lunes","es_descanso":false,"ejercicios":[]},
+         {"numero_dia":9,"nombre_dia":"Invalido","es_descanso":false,"ejercicios":[]}
+       ]'::jsonb
+     ) $$,
+  '23514', null, 'guardar_rutina_completa: numero_dia inválido en día 2 = bloqueado (CHECK)');
+reset role;
+
+-- 40-41. Rollback total tras el error de día: el día original (f2) de la
+-- rutina f1 sigue existiendo intacto y el nombre del padre no cambió — el
+-- DELETE + el día 1 ya insertado antes del error también se revirtieron.
+select is((select count(*)::int from rutina_dias where id = '30000000-0000-4000-8000-0000000000f2'), 1,
+  'guardar_rutina_completa: tras el error de día, el día original NO se perdió (rollback total)');
+select is((select nombre from rutinas where id = '30000000-0000-4000-8000-0000000000f1'), 'Rutina A',
+  'guardar_rutina_completa: tras el error de día, el nombre del padre NO cambió (rollback total)');
+
+-- 42. Error en ejercicio N: ejercicio_id inexistente en el día 2 viola el
+--     FK — misma rutina f1, la llamada entera debe fallar.
+select tests.authenticate_as('30000000-0000-4000-8000-000000000003'::uuid);
+set local role authenticated;
+select throws_ok(
+  $$ select public.guardar_rutina_completa(
+       '30000000-0000-4000-8000-000000000001'::uuid,
+       '30000000-0000-4000-8000-0000000000f1'::uuid,
+       'Rutina A',
+       'kg',
+       '[
+         {"numero_dia":1,"nombre_dia":"Lunes","es_descanso":false,"ejercicios":[]},
+         {"numero_dia":2,"nombre_dia":"Martes","es_descanso":false,"ejercicios":[
+           {"ejercicio_id":"30000000-0000-4000-8000-ffffffffffff","orden":1,"series":3,"repeticiones":"10","peso_sugerido_kg":20,"descanso_seg":60,"rir":2,"rpe":7,"tipo_esfuerzo":"reps","series_detalle":null,"unidad_peso":"kg"}
+         ]}
+       ]'::jsonb
+     ) $$,
+  '23503', null, 'guardar_rutina_completa: ejercicio_id inexistente en día 2 = bloqueado (FK)');
+reset role;
+
+-- 43-44. Rollback total tras el error de ejercicio: la rutina f1 sigue con
+-- exactamente 1 día (el original), y ese día sigue siendo f2 (mismo id) —
+-- ni el DELETE ni el INSERT del día 1 (que sí habría tenido éxito solo)
+-- quedaron aplicados.
+select is((select count(*)::int from rutina_dias where rutina_id = '30000000-0000-4000-8000-0000000000f1'), 1,
+  'guardar_rutina_completa: tras el error de ejercicio, la rutina sigue con exactamente 1 día (rollback total)');
+select is((select count(*)::int from rutina_dias where id = '30000000-0000-4000-8000-0000000000f2'), 1,
+  'guardar_rutina_completa: tras el error de ejercicio, el día original (f2) sigue intacto (rollback total)');
+
+-- 45. Caller no autorizado: Admin B intenta editar (UPDATE branch) la
+--     rutina f1 de un paciente que no gestiona = bloqueado, con mensaje
+--     explícito (RLS filtra el UPDATE, RETURNING no produce fila).
+select tests.authenticate_as('30000000-0000-4000-8000-000000000004'::uuid);
+set local role authenticated;
+select throws_ok(
+  $$ select public.guardar_rutina_completa(
+       '30000000-0000-4000-8000-000000000001'::uuid,
+       '30000000-0000-4000-8000-0000000000f1'::uuid,
+       'hack', 'kg', '[]'::jsonb
+     ) $$,
+  null, null, 'guardar_rutina_completa: admin ajeno UPDATE = bloqueado (rutina no editable, error explícito)');
+reset role;
+
+-- 46. Caller no autorizado: el propio paciente intenta crear una rutina
+--     para sí mismo (INSERT branch) = bloqueado por rutinas_insert real.
+select tests.authenticate_as('30000000-0000-4000-8000-000000000001'::uuid);
+set local role authenticated;
+select throws_ok(
+  $$ select public.guardar_rutina_completa(
+       '30000000-0000-4000-8000-000000000001'::uuid,
+       null, 'Hack rutina', 'kg', '[]'::jsonb
+     ) $$,
+  '42501', null, 'guardar_rutina_completa: paciente INSERT para sí mismo = bloqueado (RLS real)');
+reset role;
+
+-- 47-50. Caller autorizado permitido (UPDATE branch), sobre una fixture
+-- dedicada: admin dueño reemplaza nombre/unidad_peso/días de su paciente.
+insert into rutinas (id, user_id, nombre)
+values ('30000000-0000-4000-8000-0000000000c1', '30000000-0000-4000-8000-000000000001', 'Rutina RPC update fixture');
+insert into rutina_dias (id, rutina_id, numero_dia, nombre_dia)
+values ('30000000-0000-4000-8000-0000000000c2', '30000000-0000-4000-8000-0000000000c1', 1, 'Lunes');
+
+select tests.authenticate_as('30000000-0000-4000-8000-000000000003'::uuid);
+set local role authenticated;
+select lives_ok(
+  $$ select public.guardar_rutina_completa(
+       '30000000-0000-4000-8000-000000000001'::uuid,
+       '30000000-0000-4000-8000-0000000000c1'::uuid,
+       'Rutina RPC update fixture (editada)',
+       'lbs',
+       '[{"numero_dia":3,"nombre_dia":"Miercoles","es_descanso":false,"ejercicios":[]}]'::jsonb
+     ) $$,
+  'guardar_rutina_completa: admin dueño UPDATE (caller autorizado) = permitido');
+reset role;
+
+select is((select nombre from rutinas where id = '30000000-0000-4000-8000-0000000000c1'),
+  'Rutina RPC update fixture (editada)', 'guardar_rutina_completa: nombre del padre actualizado');
+select is((select unidad_peso from rutinas where id = '30000000-0000-4000-8000-0000000000c1'),
+  'lbs', 'guardar_rutina_completa: unidad_peso del padre actualizada');
+select is((select count(*)::int from rutina_dias where rutina_id = '30000000-0000-4000-8000-0000000000c1' and numero_dia = 1), 0,
+  'guardar_rutina_completa: el día viejo (numero_dia=1) fue reemplazado');
+select is((select count(*)::int from rutina_dias where rutina_id = '30000000-0000-4000-8000-0000000000c1' and numero_dia = 3), 1,
+  'guardar_rutina_completa: el día nuevo (numero_dia=3) quedó insertado');
+
+-- ══════════════════ guardar_rutina_completa — grants y SECURITY INVOKER ══════════════════
+-- Corrección post-deploy: "revoke all ... from public" no bastó en
+-- producción (anon tenía EXECUTE explícito). Se verifica aquí de forma
+-- explícita el estado real de privilegios, no solo que la función exista.
+
+-- 51. authenticated SÍ tiene EXECUTE.
+select ok(
+  has_function_privilege('authenticated', 'public.guardar_rutina_completa(uuid, uuid, text, text, jsonb)', 'EXECUTE'),
+  'guardar_rutina_completa: authenticated tiene EXECUTE');
+
+-- 52. anon NO tiene EXECUTE.
+select ok(
+  not has_function_privilege('anon', 'public.guardar_rutina_completa(uuid, uuid, text, text, jsonb)', 'EXECUTE'),
+  'guardar_rutina_completa: anon NO tiene EXECUTE');
+
+-- 53. PUBLIC NO tiene EXECUTE (sin fila de ACL con grantee=0).
+select ok(
+  not exists (
+    select 1 from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    join lateral aclexplode(p.proacl) a on true
+    where n.nspname = 'public' and p.proname = 'guardar_rutina_completa'
+      and a.grantee = 0 and a.privilege_type = 'EXECUTE'
+  ),
+  'guardar_rutina_completa: PUBLIC NO tiene EXECUTE');
+
+-- 54. Sigue siendo SECURITY INVOKER (prosecdef = false).
+select is(
+  (select prosecdef from pg_proc where oid = 'public.guardar_rutina_completa(uuid, uuid, text, text, jsonb)'::regprocedure),
+  false, 'guardar_rutina_completa: SECURITY INVOKER (prosecdef = false)');
 
 select * from finish();
 rollback;

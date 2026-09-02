@@ -274,16 +274,34 @@ export async function createReceta(input: RecetaInput): Promise<Receta> {
   return fetchRecetaById(receta.id);
 }
 
+// Delega en la RPC atómica actualizar_receta_completa (supabase_schema.sql,
+// Sección 59): reemplaza al padre + TODOS sus ingredientes/pasos en una
+// sola transacción de servidor, en vez del UPDATE del padre seguido de dos
+// DELETE+INSERT en paralelo que dejaba estados parciales si algo fallaba a
+// mitad de camino.
 export async function updateReceta(id: string, input: RecetaInput): Promise<Receta> {
   const { ingredientes, pasos, ...recetaData } = input;
 
-  const { error } = await supabase.from("recetas").update(recetaData).eq("id", id);
+  const { error } = await supabase.rpc("actualizar_receta_completa", {
+    p_receta_id: id,
+    p_nombre: recetaData.nombre,
+    p_emoji: recetaData.emoji,
+    p_tipo: recetaData.tipo,
+    p_categoria_nutricional: recetaData.categoria_nutricional,
+    p_tags: recetaData.tags,
+    p_tiempo_prep_min: recetaData.tiempo_prep_min,
+    p_tiempo_coccion_min: recetaData.tiempo_coccion_min,
+    p_tiempo_min: recetaData.tiempo_min,
+    p_nivel: recetaData.nivel,
+    p_calorias: recetaData.calorias,
+    p_porciones: recetaData.porciones,
+    p_proteinas_g: recetaData.proteinas_g,
+    p_carbohidratos_g: recetaData.carbohidratos_g,
+    p_grasas_g: recetaData.grasas_g,
+    p_ingredientes: ingredientes,
+    p_pasos: pasos,
+  });
   if (error) throw error;
-
-  await Promise.all([
-    replaceIngredientes(id, ingredientes),
-    replacePasos(id, pasos),
-  ]);
 
   return fetchRecetaById(id);
 }

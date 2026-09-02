@@ -3160,6 +3160,18 @@ select id, nombre_completo, email, avatar_url
 from public.perfiles
 where rol = 'admin';
 
+-- Supabase concede automáticamente ALL PRIVILEGES a anon/authenticated
+-- sobre cualquier objeto nuevo de public (confirmado también para views,
+-- no solo tablas) — sin este REVOKE explícito, la view queda con
+-- INSERT/UPDATE/DELETE abiertos. Como es una vista auto-updatable
+-- (select simple de una sola tabla, sin agregados/DISTINCT) con
+-- security_invoker=false, un UPDATE/DELETE ejecutado a través de ella
+-- corre con el contexto del dueño (postgres, dueño también de perfiles)
+-- y bypasea por completo la RLS de perfiles — hallazgo real detectado
+-- tras aplicar esta sección en producción. Se deja explícito aquí para
+-- que sea reproducible desde cero: un futuro "supabase db reset" no debe
+-- reintroducir los grants amplios por defecto.
+revoke all privileges on public.nutricionistas_publicos from public, anon, authenticated;
 grant select on public.nutricionistas_publicos to anon, authenticated;
 
 -- ============================================================
@@ -3177,4 +3189,416 @@ grant select on public.nutricionistas_publicos to anon, authenticated;
 -- create policy "perfiles: admins publicos" on perfiles
 --   as permissive for select to anon
 --   using (rol = 'admin'::text);
+-- ============================================================
+
+-- ============================================================
+-- 58. MIGRACIÓN — RPC atómica: guardar_rutina_completa
+-- ============================================================
+-- Reemplaza a saveRutina()/replaceDias() (admin-web/app/_data/rutinas.ts),
+-- que hacían UPDATE/INSERT del padre + DELETE de todos los rutina_dias +
+-- INSERT día por día + INSERT de rutina_ejercicios como llamadas HTTP
+-- independientes: si cualquier paso a mitad de camino fallaba (ej. un
+-- ejercicio con dia_id inválido, o un error de red), la rutina quedaba con
+-- ejercicios ya borrados y solo una parte de los días nuevos insertados.
+--
+-- Diseño: función plpgsql única, SECURITY INVOKER (corre con los
+-- privilegios/RLS del que llama — nunca eleva permisos), que envuelve todo
+-- el flujo en la transacción implícita de la función: cualquier excepción
+-- (constraint, RLS, o "raise exception" explícito) revierte automáticamente
+-- todo lo hecho hasta ese punto. No cambia el modelo de datos ni las reglas
+-- de negocio existentes — solo las hace atómicas.
+--
+-- Verificado contra el schema real antes de escribir esto:
+--   * rutinas: nombre, unidad_peso son las únicas columnas que saveRutina()
+--     actualiza en UPDATE (Sección 3 + 28).
+--   * rutina_dias: numero_dia (check 1..7), nombre_dia, es_descanso
+--     (Sección 3). Sin policy UPDATE — por eso el flujo real siempre borra
+--     e inserta de nuevo, nunca actualiza una fila existente.
+--   * rutina_ejercicios: ejercicio_id, orden, series, repeticiones,
+--     peso_sugerido_kg, descanso_seg, rir, rpe, series_detalle,
+--     tipo_esfuerzo, unidad_peso (Secciones 3+25+28+33), con CHECK
+--     peso_sugerido_kg/descanso_seg/rir/rpe >= 0 (Sección 37). Sin policy
+--     UPDATE/DELETE — se limpian por cascada al borrar el rutina_dia padre.
+--   * RLS activa (Sección 48/49): rutinas_insert exige paciente
+--     activo+aprobado (get_perfil_activo_aprobado); rutinas_update exige
+--     nutricionista_id=auth.uid() o superadmin; rutina_dias_insert y
+--     rutina_ejercicios_insert validan ownership vía el mismo join a
+--     rutinas. La función NO duplica esta lógica — al correr como
+--     SECURITY INVOKER, cada INSERT/UPDATE que hace dentro sigue sujeto a
+--     estas policies exactamente igual que si el cliente las llamara
+--     directo. Un error de permiso real (RLS) se propaga tal cual — nunca
+--     se atrapa ni se oculta.
+--   * El caso "UPDATE no afectó ninguna fila" (rutina inexistente, o
+--     visible-pero-no-editable por RLS) no es un error de Postgres por sí
+--     mismo (UPDATE de 0 filas no lanza excepción) — se detecta a mano
+--     comprobando que RETURNING produjo una fila, y se convierte en un
+--     "raise exception" explícito para que el cliente reciba un error real
+--     en vez de un éxito silencioso sobre nada.
+--
+-- set search_path = public: fijación defensiva estándar (recomendada para
+-- toda función SQL/plpgsql de Postgres, no solo SECURITY DEFINER) — evita
+-- que un search_path manipulado en la sesión cambie a qué tabla resuelven
+-- los nombres sin schema dentro de la función.
+create or replace function public.guardar_rutina_completa(
+  p_user_id uuid,
+  p_rutina_id uuid,
+  p_nombre text,
+  p_unidad_peso text,
+  p_dias jsonb
+) returns uuid
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_rutina_id uuid;
+  v_dia jsonb;
+  v_dia_id uuid;
+  v_ejercicio jsonb;
+begin
+  if p_rutina_id is null then
+    insert into public.rutinas (user_id, nombre, unidad_peso)
+    values (p_user_id, p_nombre, p_unidad_peso)
+    returning id into v_rutina_id;
+  else
+    update public.rutinas
+    set nombre = p_nombre, unidad_peso = p_unidad_peso
+    where id = p_rutina_id
+    returning id into v_rutina_id;
+
+    if v_rutina_id is null then
+      raise exception 'Rutina no encontrada o sin permiso para modificarla';
+    end if;
+  end if;
+
+  delete from public.rutina_dias where rutina_id = v_rutina_id;
+
+  for v_dia in select * from jsonb_array_elements(coalesce(p_dias, '[]'::jsonb))
+  loop
+    insert into public.rutina_dias (rutina_id, numero_dia, nombre_dia, es_descanso)
+    values (
+      v_rutina_id,
+      (v_dia->>'numero_dia')::int,
+      v_dia->>'nombre_dia',
+      coalesce((v_dia->>'es_descanso')::boolean, false)
+    )
+    returning id into v_dia_id;
+
+    for v_ejercicio in select * from jsonb_array_elements(coalesce(v_dia->'ejercicios', '[]'::jsonb))
+    loop
+      insert into public.rutina_ejercicios (
+        dia_id, ejercicio_id, orden, series, repeticiones,
+        peso_sugerido_kg, descanso_seg, rir, rpe, tipo_esfuerzo,
+        series_detalle, unidad_peso
+      ) values (
+        v_dia_id,
+        (v_ejercicio->>'ejercicio_id')::uuid,
+        (v_ejercicio->>'orden')::int,
+        (v_ejercicio->>'series')::int,
+        v_ejercicio->>'repeticiones',
+        (v_ejercicio->>'peso_sugerido_kg')::numeric,
+        (v_ejercicio->>'descanso_seg')::int,
+        (v_ejercicio->>'rir')::int,
+        (v_ejercicio->>'rpe')::numeric,
+        coalesce(v_ejercicio->>'tipo_esfuerzo', 'reps'),
+        v_ejercicio->'series_detalle',
+        v_ejercicio->>'unidad_peso'
+      );
+    end loop;
+  end loop;
+
+  return v_rutina_id;
+end;
+$$;
+
+-- Postgres concede EXECUTE a PUBLIC automáticamente al crear una función
+-- (comportamiento estándar del motor, no específico de Supabase). Como esta
+-- es la primera función pensada para ser invocada directo por el cliente
+-- vía .rpc() en todo el proyecto (antes no existía ningún precedente que
+-- revisar), se estableció aquí el patrón: cerrar PUBLIC explícitamente y
+-- abrir solo a "authenticated".
+--
+-- CORRECCIÓN (verificado en producción tras el primer deploy): "revoke all
+-- ... from public" NO fue suficiente — information_schema.routine_privileges
+-- en producción mostró EXECUTE concedido también a "anon" de forma
+-- explícita, no solo heredado de PUBLIC. Mismo hallazgo de fondo que la
+-- Sección 56 (Supabase concede privilegios amplios por defecto a
+-- anon/authenticated/service_role sobre objetos nuevos de "public", esta
+-- vez confirmado también para funciones, no solo tablas/views) — un REVOKE
+-- de PUBLIC no retira un grant que ya está explícito sobre un rol nombrado.
+-- Se agrega "anon" explícitamente al REVOKE. anon nunca necesita llamar
+-- esto (ninguna pantalla de rutinas es accesible sin sesión), y
+-- "authenticated" de todas formas queda sujeto a la RLS interna de cada
+-- INSERT/UPDATE que la función ejecuta. No se tocan los privilegios de
+-- postgres/service_role (contexto administrativo/servidor de confianza,
+-- decisión de producto explícita — no es necesario ni se busca cerrarlos).
+revoke execute on function public.guardar_rutina_completa(uuid, uuid, text, text, jsonb) from public, anon;
+grant execute on function public.guardar_rutina_completa(uuid, uuid, text, text, jsonb) to authenticated;
+
+-- ============================================================
+-- ROLLBACK Sección 58 (referencia — NO ejecutar salvo que se decida
+-- revertir esta sección):
+--
+-- drop function if exists public.guardar_rutina_completa(uuid, uuid, text, text, jsonb);
+-- ============================================================
+
+-- ============================================================
+-- 59. MIGRACIÓN — RPC atómica: actualizar_receta_completa
+-- ============================================================
+-- Reemplaza a updateReceta() (admin-web/app/_data/recetas.ts), que hacía
+-- UPDATE del padre + replaceIngredientes() + replacePasos() como llamadas
+-- independientes (las dos últimas incluso en paralelo vía Promise.all): si
+-- el UPDATE del padre tenía éxito pero cualquiera de las dos fallaba
+-- después, la receta quedaba con datos nuevos pero ingredientes/pasos
+-- borrados a medias — o, por el paralelismo, con una mezcla de estados
+-- parciales entre ambas listas.
+--
+-- Fuera de alcance (no tocado aquí, por instrucción explícita): createReceta(),
+-- saveRecetaPersonalizada() en su rama de creación, personalizeReceta() y
+-- duplicateReceta() — todos quedan pendientes como P2/P3 en una ronda
+-- posterior. saveRecetaPersonalizada() SÍ se beneficia indirectamente de
+-- este fix en su rama de "ya existe copia personal", porque esa rama llama
+-- a updateReceta() tal cual.
+--
+-- Verificado contra el schema real:
+--   * recetas: columnas editables por updateReceta() = nombre, emoji, tipo,
+--     categoria_nutricional, tags, tiempo_prep_min, tiempo_coccion_min,
+--     tiempo_min, nivel, calorias, porciones, proteinas_g, carbohidratos_g,
+--     grasas_g (Sección 6). id/user_id/receta_base_id/created_by/created_at
+--     están protegidas por el trigger proteger_columnas_recetas (Sección
+--     52) — la función NO las toca, igual que el código actual.
+--   * receta_ingredientes: descripcion, alimento_id, cantidad, unidad
+--     (Secciones 6+24); "grupo" (Sección 31) nunca lo escribe replaceIngredientes()
+--     actual, así que tampoco lo escribe esta función (queda NULL en cada
+--     fila nueva, mismo comportamiento de hoy). El trigger
+--     proteger_columnas_receta_ingredientes (Sección 52) solo permite
+--     UPDATE de alimento_id — irrelevante aquí porque el flujo real siempre
+--     hace DELETE+INSERT de filas nuevas, nunca UPDATE de una existente.
+--     CHECK cantidad >= 0 (Sección 37).
+--   * receta_pasos: descripcion + numero autogenerado por posición
+--     (Sección 6) — sin policy UPDATE en absoluto (Sección 52), coherente
+--     con que el flujo real tampoco intenta actualizar pasos existentes.
+--   * RLS activa (Sección 52): recetas_update exige, para catálogo
+--     (user_id is null), created_by=auth.uid() o superadmin; para
+--     personalizada (user_id is not null), nutricionista_id=auth.uid() o
+--     superadmin. receta_ingredientes_insert/receta_pasos_insert validan la
+--     MISMA condición vía join a recetas — por eso basta con que el UPDATE
+--     del padre tenga éxito para saber que los INSERT de hijos, hechos por
+--     el mismo caller en la misma transacción, también la cumplirán.
+create or replace function public.actualizar_receta_completa(
+  p_receta_id uuid,
+  p_nombre text,
+  p_emoji text,
+  p_tipo text,
+  p_categoria_nutricional text,
+  p_tags text,
+  p_tiempo_prep_min int,
+  p_tiempo_coccion_min int,
+  p_tiempo_min int,
+  p_nivel text,
+  p_calorias int,
+  p_porciones text,
+  p_proteinas_g numeric,
+  p_carbohidratos_g numeric,
+  p_grasas_g numeric,
+  p_ingredientes jsonb,
+  p_pasos jsonb
+) returns uuid
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_receta_id uuid;
+  v_ing jsonb;
+  v_paso jsonb;
+  v_descripcion text;
+  v_orden int := 0;
+  v_numero int := 0;
+begin
+  update public.recetas set
+    nombre = p_nombre,
+    emoji = p_emoji,
+    tipo = p_tipo,
+    categoria_nutricional = p_categoria_nutricional,
+    tags = p_tags,
+    tiempo_prep_min = p_tiempo_prep_min,
+    tiempo_coccion_min = p_tiempo_coccion_min,
+    tiempo_min = p_tiempo_min,
+    nivel = p_nivel,
+    calorias = p_calorias,
+    porciones = p_porciones,
+    proteinas_g = p_proteinas_g,
+    carbohidratos_g = p_carbohidratos_g,
+    grasas_g = p_grasas_g
+  where id = p_receta_id
+  returning id into v_receta_id;
+
+  if v_receta_id is null then
+    raise exception 'Receta no encontrada o sin permiso para modificarla';
+  end if;
+
+  delete from public.receta_ingredientes where receta_id = v_receta_id;
+  for v_ing in select * from jsonb_array_elements(coalesce(p_ingredientes, '[]'::jsonb))
+  loop
+    if coalesce(trim(v_ing->>'descripcion'), '') = '' then
+      continue;
+    end if;
+    v_orden := v_orden + 1;
+    insert into public.receta_ingredientes (receta_id, orden, descripcion, alimento_id, cantidad, unidad)
+    values (
+      v_receta_id,
+      v_orden,
+      trim(v_ing->>'descripcion'),
+      (v_ing->>'alimento_id')::uuid,
+      (v_ing->>'cantidad')::numeric,
+      v_ing->>'unidad'
+    );
+  end loop;
+
+  delete from public.receta_pasos where receta_id = v_receta_id;
+  for v_paso in select * from jsonb_array_elements(coalesce(p_pasos, '[]'::jsonb))
+  loop
+    v_descripcion := trim(v_paso #>> '{}');
+    if coalesce(v_descripcion, '') = '' then
+      continue;
+    end if;
+    v_numero := v_numero + 1;
+    insert into public.receta_pasos (receta_id, numero, descripcion)
+    values (v_receta_id, v_numero, v_descripcion);
+  end loop;
+
+  return v_receta_id;
+end;
+$$;
+
+-- Mismo patrón corregido de la Sección 58: "from public" solo no basta,
+-- anon necesita quedar explícito en el REVOKE.
+revoke execute on function public.actualizar_receta_completa(
+  uuid, text, text, text, text, text, int, int, int, text, int, text, numeric, numeric, numeric, jsonb, jsonb
+) from public, anon;
+grant execute on function public.actualizar_receta_completa(
+  uuid, text, text, text, text, text, int, int, int, text, int, text, numeric, numeric, numeric, jsonb, jsonb
+) to authenticated;
+
+-- ============================================================
+-- ROLLBACK Sección 59 (referencia — NO ejecutar salvo que se decida
+-- revertir esta sección):
+--
+-- drop function if exists public.actualizar_receta_completa(
+--   uuid, text, text, text, text, text, int, int, int, text, int, text, numeric, numeric, numeric, jsonb, jsonb
+-- );
+-- ============================================================
+
+-- ============================================================
+-- 60. MIGRACIÓN — RPC atómica: asignar_recetas_paciente
+-- ============================================================
+-- Reemplaza a saveRecetasAsignadas() (admin-web/app/_data/recetas_guardadas.ts):
+-- DELETE de todas las recetas_guardadas del paciente + INSERT del nuevo
+-- set, como dos llamadas independientes. Si el INSERT fallaba (ej. porque
+-- el nutricionista intentó asignar una receta personalizada de OTRO
+-- paciente — bloqueado por el invariante de recetas_guardadas_insert,
+-- Sección 53), el paciente quedaba sin ninguna receta asignada: el DELETE
+-- ya se había aplicado y confirmado por separado.
+--
+-- Verificado contra el schema real: recetas_guardadas solo tiene
+-- (user_id, receta_id, tiempo_comida, created_at) (Secciones 6+29) — sin
+-- policy UPDATE utilizable aquí (el trigger proteger_columnas_recetas_guardadas
+-- de la Sección 53 solo permite cambiar receta_id vía UPDATE, no aplica a
+-- un DELETE+INSERT). RLS activa (Sección 53):
+-- recetas_guardadas_delete y recetas_guardadas_insert exigen
+-- nutricionista_id=auth.uid() o superadmin; recetas_guardadas_insert
+-- además valida el invariante receta↔paciente (catálogo, o personalizada
+-- del mismo paciente). Un DELETE sobre filas que el caller no puede tocar
+-- simplemente afecta 0 filas (no es error) — mismo comportamiento que hoy;
+-- lo que cambia es que si el INSERT posterior falla por RLS, el DELETE de
+-- ese mismo caller se revierte junto con él en vez de quedar aplicado.
+create or replace function public.asignar_recetas_paciente(
+  p_user_id uuid,
+  p_asignadas jsonb
+) returns void
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_item jsonb;
+begin
+  delete from public.recetas_guardadas where user_id = p_user_id;
+
+  for v_item in select * from jsonb_array_elements(coalesce(p_asignadas, '[]'::jsonb))
+  loop
+    insert into public.recetas_guardadas (user_id, receta_id, tiempo_comida)
+    values (p_user_id, (v_item->>'receta_id')::uuid, v_item->>'tiempo_comida');
+  end loop;
+end;
+$$;
+
+-- Mismo patrón corregido de la Sección 58: "from public" solo no basta,
+-- anon necesita quedar explícito en el REVOKE.
+revoke execute on function public.asignar_recetas_paciente(uuid, jsonb) from public, anon;
+grant execute on function public.asignar_recetas_paciente(uuid, jsonb) to authenticated;
+
+-- ============================================================
+-- ROLLBACK Sección 60 (referencia — NO ejecutar salvo que se decida
+-- revertir esta sección):
+--
+-- drop function if exists public.asignar_recetas_paciente(uuid, jsonb);
+-- ============================================================
+
+-- ============================================================
+-- 61. MIGRACIÓN — RPC atómica: guardar_plan_suplementacion
+-- ============================================================
+-- Reemplaza a savePlanSuplementacion() (admin-web/app/_data/plan_suplementacion.ts):
+-- mismo patrón y mismo riesgo que la Sección 60, aplicado a
+-- plan_suplementacion. Si el INSERT fallaba (ej. porque get_perfil_activo_aprobado()
+-- rechazó al paciente destino — Sección 51), el plan de suplementación del
+-- paciente quedaba completamente vacío en vez de conservar el anterior.
+--
+-- Verificado contra el schema real: plan_suplementacion tiene id, user_id,
+-- suplemento_id, dosis, hora, momento, notas (Secciones 7+31). RLS activa
+-- (Sección 51): plan_suplementacion_delete exige nutricionista_id=auth.uid()
+-- o superadmin (sin condición de estado del paciente); plan_suplementacion_insert
+-- exige lo mismo MÁS get_perfil_activo_aprobado(user_id). Nótese que
+-- plan_suplementacion_update solo permite auth.uid()=user_id (el propio
+-- paciente) — irrelevante aquí porque esta función nunca actualiza, solo
+-- borra e inserta, igual que el código actual.
+create or replace function public.guardar_plan_suplementacion(
+  p_user_id uuid,
+  p_items jsonb
+) returns void
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_item jsonb;
+begin
+  delete from public.plan_suplementacion where user_id = p_user_id;
+
+  for v_item in select * from jsonb_array_elements(coalesce(p_items, '[]'::jsonb))
+  loop
+    insert into public.plan_suplementacion (user_id, suplemento_id, dosis, hora, momento, notas)
+    values (
+      p_user_id,
+      (v_item->>'suplemento_id')::uuid,
+      v_item->>'dosis',
+      nullif(v_item->>'hora', '')::time,
+      v_item->>'momento',
+      v_item->>'notas'
+    );
+  end loop;
+end;
+$$;
+
+-- Mismo patrón corregido de la Sección 58: "from public" solo no basta,
+-- anon necesita quedar explícito en el REVOKE.
+revoke execute on function public.guardar_plan_suplementacion(uuid, jsonb) from public, anon;
+grant execute on function public.guardar_plan_suplementacion(uuid, jsonb) to authenticated;
+
+-- ============================================================
+-- ROLLBACK Sección 61 (referencia — NO ejecutar salvo que se decida
+-- revertir esta sección):
+--
+-- drop function if exists public.guardar_plan_suplementacion(uuid, jsonb);
 -- ============================================================

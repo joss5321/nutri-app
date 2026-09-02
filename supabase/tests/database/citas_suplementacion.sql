@@ -8,7 +8,7 @@
 -- reales de producción.
 
 begin;
-select plan(66);
+select plan(79);
 
 -- ── Fixtures sintéticos ──────────────────────────────────────────────
 select tests.create_user('50000000-0000-4000-8000-000000000003'::uuid, 'admin-a@test.local',    'admin');
@@ -581,6 +581,120 @@ select throws_ok(
   $$ update citas set fecha = current_date + 30 where id = '50000000-0000-4000-8000-0000000000f4' $$,
   null, null, 'citas: superadmin UPDATE fecha en paciente ajeno = bloqueado');
 reset role;
+
+-- ══════════════════ RPC guardar_plan_suplementacion (Sección 61) ══════════════════
+-- Cobertura de atomicidad: caso exitoso, error a mitad de camino
+-- (suplemento_id inexistente), rollback total sin estado parcial, caller
+-- no autorizado bloqueado (cruce entre pacientes y regla de negocio de
+-- estado del paciente destino).
+
+-- Estado conocido antes de las pruebas de la RPC.
+delete from plan_suplementacion where user_id in ('50000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000002');
+insert into plan_suplementacion (user_id, suplemento_id, dosis)
+values ('50000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-0000000000e1', '1 tableta');
+insert into plan_suplementacion (user_id, suplemento_id, dosis)
+values ('50000000-0000-4000-8000-000000000002', '50000000-0000-4000-8000-0000000000e1', '1 tableta');
+
+-- 67. Caso exitoso: Admin A reemplaza el plan completo de Paciente A (2
+--     suplementos) en una sola llamada.
+select tests.authenticate_as('50000000-0000-4000-8000-000000000003'::uuid);
+set local role authenticated;
+select lives_ok(
+  $$ select public.guardar_plan_suplementacion(
+       '50000000-0000-4000-8000-000000000001'::uuid,
+       '[{"suplemento_id":"50000000-0000-4000-8000-0000000000e1","dosis":"2 tabletas","hora":"08:00","momento":"Ayuno","notas":null},
+         {"suplemento_id":"50000000-0000-4000-8000-0000000000e2","dosis":"1 cápsula","hora":null,"momento":"Noche","notas":"con agua"}]'::jsonb
+     ) $$,
+  'guardar_plan_suplementacion: admin dueño reemplaza el plan completo = permitido');
+reset role;
+
+-- 68-69. El plan quedó reemplazado con el contenido correcto.
+select is((select count(*)::int from plan_suplementacion where user_id = '50000000-0000-4000-8000-000000000001'), 2,
+  'guardar_plan_suplementacion: Paciente A queda con exactamente los 2 suplementos nuevos');
+select is(
+  (select dosis from plan_suplementacion
+   where user_id = '50000000-0000-4000-8000-000000000001' and suplemento_id = '50000000-0000-4000-8000-0000000000e2'),
+  '1 cápsula', 'guardar_plan_suplementacion: dosis correcta en la fila nueva');
+
+-- 70. Error a mitad de camino: el segundo ítem referencia un suplemento_id
+--     inexistente (viola el FK) — la llamada entera debe fallar.
+select tests.authenticate_as('50000000-0000-4000-8000-000000000003'::uuid);
+set local role authenticated;
+select throws_ok(
+  $$ select public.guardar_plan_suplementacion(
+       '50000000-0000-4000-8000-000000000001'::uuid,
+       '[{"suplemento_id":"50000000-0000-4000-8000-0000000000e1","dosis":"ok"},
+         {"suplemento_id":"50000000-0000-4000-8000-ffffffffffff","dosis":"bad"}]'::jsonb
+     ) $$,
+  '23503', null, 'guardar_plan_suplementacion: suplemento_id inexistente en ítem 2 = bloqueado (FK)');
+reset role;
+
+-- 71-72. Rollback total: Paciente A conserva exactamente el plan del test
+-- 67 — el DELETE ya ejecutado dentro de la función también se revirtió.
+select is((select count(*)::int from plan_suplementacion where user_id = '50000000-0000-4000-8000-000000000001'), 2,
+  'guardar_plan_suplementacion: tras el error, Paciente A sigue con sus 2 suplementos (rollback total)');
+select is(
+  (select dosis from plan_suplementacion
+   where user_id = '50000000-0000-4000-8000-000000000001' and suplemento_id = '50000000-0000-4000-8000-0000000000e2'),
+  '1 cápsula', 'guardar_plan_suplementacion: tras el error, la fila previa (e2) sigue intacta (rollback total)');
+
+-- 73-74. Caller no autorizado: Admin B intenta asignar plan para Paciente A
+--     (ajeno) = bloqueado, y el plan de Paciente A no sufre ningún cambio.
+select tests.authenticate_as('50000000-0000-4000-8000-000000000004'::uuid);
+set local role authenticated;
+select throws_ok(
+  $$ select public.guardar_plan_suplementacion(
+       '50000000-0000-4000-8000-000000000001'::uuid,
+       '[{"suplemento_id":"50000000-0000-4000-8000-0000000000e1","dosis":"hack"}]'::jsonb
+     ) $$,
+  '42501', null, 'guardar_plan_suplementacion: admin ajeno = bloqueado');
+reset role;
+
+select is((select count(*)::int from plan_suplementacion where user_id = '50000000-0000-4000-8000-000000000001'), 2,
+  'guardar_plan_suplementacion: Paciente A intacto tras el intento no autorizado');
+
+-- 75. Regla de negocio preservada atómicamente: Admin A intenta asignar un
+--     plan para su paciente pendiente (no activo+aprobado) = bloqueado,
+--     igual que antes de la RPC (get_perfil_activo_aprobado, Sección 51).
+select tests.authenticate_as('50000000-0000-4000-8000-000000000003'::uuid);
+set local role authenticated;
+select throws_ok(
+  $$ select public.guardar_plan_suplementacion(
+       '50000000-0000-4000-8000-000000000006'::uuid,
+       '[{"suplemento_id":"50000000-0000-4000-8000-0000000000e1","dosis":"x"}]'::jsonb
+     ) $$,
+  '42501', null, 'guardar_plan_suplementacion: paciente pendiente = bloqueado (regla de negocio preservada)');
+reset role;
+
+-- ══════════════════ guardar_plan_suplementacion — grants y SECURITY INVOKER ══════════════════
+-- Corrección post-deploy: "revoke all ... from public" no bastó en
+-- producción (anon tenía EXECUTE explícito).
+
+-- 76. authenticated SÍ tiene EXECUTE.
+select ok(
+  has_function_privilege('authenticated', 'public.guardar_plan_suplementacion(uuid, jsonb)', 'EXECUTE'),
+  'guardar_plan_suplementacion: authenticated tiene EXECUTE');
+
+-- 77. anon NO tiene EXECUTE.
+select ok(
+  not has_function_privilege('anon', 'public.guardar_plan_suplementacion(uuid, jsonb)', 'EXECUTE'),
+  'guardar_plan_suplementacion: anon NO tiene EXECUTE');
+
+-- 78. PUBLIC NO tiene EXECUTE.
+select ok(
+  not exists (
+    select 1 from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    join lateral aclexplode(p.proacl) a on true
+    where n.nspname = 'public' and p.proname = 'guardar_plan_suplementacion'
+      and a.grantee = 0 and a.privilege_type = 'EXECUTE'
+  ),
+  'guardar_plan_suplementacion: PUBLIC NO tiene EXECUTE');
+
+-- 79. Sigue siendo SECURITY INVOKER (prosecdef = false).
+select is(
+  (select prosecdef from pg_proc where oid = 'public.guardar_plan_suplementacion(uuid, jsonb)'::regprocedure),
+  false, 'guardar_plan_suplementacion: SECURITY INVOKER (prosecdef = false)');
 
 select * from finish();
 rollback;
