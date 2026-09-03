@@ -11,7 +11,8 @@
  *   minSimilarity — umbral Jaccard mínimo (default: 0.50)
  */
 
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { requireSuperadmin } from "../_shared/auth.ts";
 
 const GIF_DB_URL =
   "https://cdn.jsdelivr.net/gh/JahelCuadrado/ExerciseGymGifsDB@v1.1.0/api/es/exercises.json";
@@ -81,7 +82,7 @@ function jaccard(wordsA: Set<string>, wordsB: Set<string>): number {
 
 // Actualizar BD en lotes paralelos con concurrencia limitada
 async function batchUpdate(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   updates: { id: string; gif_url: string | null }[],
   concurrency = 40,
 ): Promise<number> {
@@ -98,10 +99,16 @@ async function batchUpdate(
   return done;
 }
 
-Deno.serve(async (req) => {
+export async function handler(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
+
+  // Herramienta manual/interna: solo superadmin puede dispararla. Nunca se
+  // usa service_role para decidir esto — requireSuperadmin usa un cliente
+  // anon+Authorization reenviado.
+  const auth = await requireSuperadmin(req);
+  if (!auth.ok) return auth.response;
 
   const reqUrl    = new URL(req.url);
   const startOff  = Math.max(0, parseInt(reqUrl.searchParams.get("startOffset") ?? "0", 10));
@@ -258,4 +265,6 @@ Deno.serve(async (req) => {
     status: 200,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-});
+}
+
+Deno.serve(handler);

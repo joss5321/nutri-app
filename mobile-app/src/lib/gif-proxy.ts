@@ -1,7 +1,8 @@
 /**
  * Resuelve la URL final de un GIF de ejercicio.
- * Post-migración: gif_url apunta a Supabase Storage → se devuelve directo.
- * Pre-migración: gif_url apunta a WorkoutX → se redirige al proxy.
+ * - gif_url en Supabase Storage: se usa directo (público, sin requests a WorkoutX).
+ * - gif_url en WorkoutX (plan agotado): no hay forma de servirlo → null (fallback a emoji).
+ *   Ya no existe ni se usa ninguna Edge Function gif-proxy — se retiró de producción.
  */
 const SUPABASE_URL = "https://uvfdbvzydbogfkntfuix.supabase.co";
 

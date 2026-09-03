@@ -6,7 +6,7 @@ import * as NavigationBar from 'expo-navigation-bar';
 import { useEffect } from 'react';
 
 export default function Index() {
-  const { session, initialized } = useAuthStore()
+  const { session, initialized, isPasswordRecovery } = useAuthStore()
 
   useEffect(() => {
     NavigationBar.setVisibilityAsync('hidden');
@@ -20,6 +20,8 @@ export default function Index() {
       </View>
     )
   }
+
+  if (isPasswordRecovery) return <Redirect href="/reset-password" />
 
   if (session) return <Redirect href="/(app)/progreso" />
 

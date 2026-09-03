@@ -1444,6 +1444,17 @@ create index if not exists ejercicios_nombre_trgm_idx   on ejercicios using gin 
 --
 -- No requiere políticas INSERT/UPDATE/DELETE en prod (solo migrate-gifs escribe,
 -- y lo hace con service_role que bypasea RLS).
+--
+-- ESTADO REAL (verificado en producción durante el barrido final de
+-- auditoría, H2, 2026-09-02): el bucket "exercise-gifs" NO EXISTE — nunca
+-- se creó manualmente en el Dashboard como indican las instrucciones de
+-- arriba. No es una exposición activa (no hay nada que asegurar: sin
+-- bucket no hay objetos ni políticas que auditar), así que H2 no lo toca.
+-- migrate-gifs (supabase/functions/migrate-gifs/index.ts) SÍ asume que el
+-- bucket existe — si se invoca hoy, fallaría al intentar subir el primer
+-- GIF. Drift documentado como P3 en el backlog de la auditoría: crear el
+-- bucket (si migrate-gifs se vuelve a necesitar) o retirar la función si
+-- ya no aplica, es una decisión de producto separada, no de seguridad.
 
 -- ============================================================
 -- 43. MIGRACIÓN — Registro de pacientes desde admin-web (sin app móvil)
@@ -3601,4 +3612,217 @@ grant execute on function public.guardar_plan_suplementacion(uuid, jsonb) to aut
 -- revertir esta sección):
 --
 -- drop function if exists public.guardar_plan_suplementacion(uuid, jsonb);
+-- ============================================================
+
+-- ============================================================
+-- 63. MIGRACIÓN — RPC atómica: crear_receta_completa
+-- ============================================================
+-- Parte del reemplazo de supabase/seed_recetas.sql (H1 del barrido final
+-- de auditoría) por scripts/seed-recetas.mjs. El seed viejo hacía
+-- "DELETE FROM recetas WHERE user_id IS NULL" + reinserción completa del
+-- catálogo con IDs nuevos en cada corrida — el nuevo script hace upsert
+-- por (nombre, tipo): actualiza in-place las recetas que ya existen (vía
+-- actualizar_receta_completa, Sección 59) y usa ESTA función para las que
+-- son genuinamente nuevas. actualizar_receta_completa no sirve para este
+-- caso porque su UPDATE ... WHERE id = p_receta_id no puede crear una fila
+-- que no existe (lanza "Receta no encontrada" si RETURNING no produce
+-- fila) — hace falta una función de INSERT dedicada con la misma
+-- atomicidad (padre + ingredientes + pasos en una sola transacción).
+--
+-- Mismo diseño que actualizar_receta_completa: SECURITY INVOKER, respeta
+-- el trigger set_created_by_recetas (Sección 52) y todas las policies de
+-- recetas_insert/receta_ingredientes_insert/receta_pasos_insert
+-- existentes sin duplicarlas — quien llame a esta función queda sujeto a
+-- las mismas reglas que si hiciera el INSERT directo.
+--
+-- Único consumidor real hoy: scripts/seed-recetas.mjs, vía
+-- SUPABASE_SERVICE_ROLE_KEY (bypasea RLS igual que cualquier otra
+-- operación de service_role en este proyecto). Por eso el grant es más
+-- estricto que el de las Secciones 58-61: ni siquiera "authenticated" lo
+-- necesita hoy (createReceta() en admin-web sigue usando su flujo actual,
+-- sin tocar — fuera de alcance de H1), así que se revoca también de
+-- authenticated, no solo de public/anon — mismo criterio "cero
+-- privilegios salvo necesidad real demostrada" aplicado a suscripciones
+-- en la Sección 62.
+create or replace function public.crear_receta_completa(
+  p_user_id uuid,
+  p_nombre text,
+  p_emoji text,
+  p_tipo text,
+  p_categoria_nutricional text,
+  p_tags text,
+  p_tiempo_prep_min int,
+  p_tiempo_coccion_min int,
+  p_tiempo_min int,
+  p_nivel text,
+  p_calorias int,
+  p_porciones text,
+  p_proteinas_g numeric,
+  p_carbohidratos_g numeric,
+  p_grasas_g numeric,
+  p_ingredientes jsonb,
+  p_pasos jsonb
+) returns uuid
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_receta_id uuid;
+  v_ing jsonb;
+  v_paso jsonb;
+  v_descripcion text;
+  v_orden int := 0;
+  v_numero int := 0;
+begin
+  insert into public.recetas (
+    user_id, nombre, emoji, tipo, categoria_nutricional, tags,
+    tiempo_prep_min, tiempo_coccion_min, tiempo_min, nivel, calorias,
+    porciones, proteinas_g, carbohidratos_g, grasas_g
+  ) values (
+    p_user_id, p_nombre, p_emoji, p_tipo, p_categoria_nutricional, p_tags,
+    p_tiempo_prep_min, p_tiempo_coccion_min, p_tiempo_min, p_nivel, p_calorias,
+    p_porciones, p_proteinas_g, p_carbohidratos_g, p_grasas_g
+  )
+  returning id into v_receta_id;
+
+  for v_ing in select * from jsonb_array_elements(coalesce(p_ingredientes, '[]'::jsonb))
+  loop
+    if coalesce(trim(v_ing->>'descripcion'), '') = '' then
+      continue;
+    end if;
+    v_orden := v_orden + 1;
+    insert into public.receta_ingredientes (receta_id, orden, descripcion, alimento_id, cantidad, unidad)
+    values (
+      v_receta_id,
+      v_orden,
+      trim(v_ing->>'descripcion'),
+      (v_ing->>'alimento_id')::uuid,
+      (v_ing->>'cantidad')::numeric,
+      v_ing->>'unidad'
+    );
+  end loop;
+
+  for v_paso in select * from jsonb_array_elements(coalesce(p_pasos, '[]'::jsonb))
+  loop
+    v_descripcion := trim(v_paso #>> '{}');
+    if coalesce(v_descripcion, '') = '' then
+      continue;
+    end if;
+    v_numero := v_numero + 1;
+    insert into public.receta_pasos (receta_id, numero, descripcion)
+    values (v_receta_id, v_numero, v_descripcion);
+  end loop;
+
+  return v_receta_id;
+end;
+$$;
+
+revoke all on function public.crear_receta_completa(
+  uuid, text, text, text, text, text, int, int, int, text, int, text, numeric, numeric, numeric, jsonb, jsonb
+) from public, anon, authenticated;
+
+-- ============================================================
+-- ROLLBACK Sección 63 (referencia — NO ejecutar salvo que se decida
+-- revertir esta sección):
+--
+-- drop function if exists public.crear_receta_completa(
+--   uuid, text, text, text, text, text, int, int, int, text, int, text, numeric, numeric, numeric, jsonb, jsonb
+-- );
+-- ============================================================
+
+-- ============================================================
+-- 64. MIGRACIÓN — Storage: cierra "cualquier authenticated" en
+--     avatars y videos-ejercicios (H2 del barrido final de auditoría)
+-- ============================================================
+-- Verificado en producción: ambos buckets son public=true (diseño
+-- intencional — avatares y videos de ejercicios son contenido no
+-- sensible pensado para lectura pública, eso NO cambia aquí). El
+-- problema real es la policy de ESCRITURA: "gestion autenticados" en
+-- ambos buckets solo exige auth.role() = 'authenticated' — cualquier
+-- paciente logueado puede, llamando directo a la Storage API (no
+-- expuesto por la UI, pero la policy no lo impide), sobrescribir o
+-- borrar el avatar de OTRO usuario o cualquier video de ejercicio del
+-- catálogo.
+--
+-- IMPORTANTE: esta sección NO toca grants de tabla sobre storage.objects
+-- (ese objeto es compartido por todos los buckets del proyecto — un
+-- REVOKE ahí afectaría buckets fuera de este alcance). La corrección es
+-- exclusivamente a nivel de policy, específica por bucket_id.
+--
+-- Paths reales verificados en código (no asumidos):
+--   * avatars, autogestión: mobile-app perfil.tsx y admin-web
+--     mi-perfil/page.tsx suben siempre a "${auth.uid()}.${ext}" — el
+--     propio usuario, nunca uno ajeno.
+--   * avatars, gestión cruzada real: admin-web administradores/page.tsx
+--     (página ya gated a superadmin en el frontend, Sección 56) sube a
+--     "${editing.id}.${ext}" donde editing es OTRO admin — flujo legítimo
+--     que la policy debe seguir permitiendo, solo para superadmin.
+--   * avatars, reutilizado como bucket genérico de imágenes públicas:
+--     admin-web _data/suplementos.ts sube bajo el prefijo
+--     "suplementos/${...}" — sin relación con ningún user_id. La tabla
+--     suplementos ya restringe INSERT/UPDATE/DELETE a admin/superadmin
+--     (verificado); la policy de Storage debe reflejar el mismo criterio.
+--   * videos-ejercicios: admin-web _data/ejercicios.ts sube a
+--     "${crypto.randomUUID()}.${ext}" — sin ninguna codificación de
+--     ownership en el path, coherente con que el criterio de acceso es
+--     puramente por rol (admin/superadmin), igual que ejercicios_insert/
+--     update/delete sobre la tabla ejercicios.
+--
+-- Se separan las capacidades en policies distintas (una por cada caso de
+-- uso real) en vez de una sola policy "ALL" gigante con un OR largo —
+-- más clara de leer, de testear, y de desactivar individualmente si algún
+-- caso de uso cambia en el futuro.
+
+-- ── avatars ──────────────────────────────────────────────────
+drop policy if exists "avatars: gestion autenticados" on storage.objects;
+-- "avatars: lectura publica" se conserva sin cambios (diseño público intencional).
+
+create policy "avatars: gestion propia" on storage.objects
+  for all to authenticated
+  using (bucket_id = 'avatars' and name like (auth.uid()::text || '.%'))
+  with check (bucket_id = 'avatars' and name like (auth.uid()::text || '.%'));
+
+create policy "avatars: gestion suplementos admin" on storage.objects
+  for all to authenticated
+  using (
+    bucket_id = 'avatars' and name like 'suplementos/%'
+    and public.get_user_rol() in ('admin', 'superadmin')
+  )
+  with check (
+    bucket_id = 'avatars' and name like 'suplementos/%'
+    and public.get_user_rol() in ('admin', 'superadmin')
+  );
+
+create policy "avatars: gestion superadmin" on storage.objects
+  for all to authenticated
+  using (bucket_id = 'avatars' and public.get_user_rol() = 'superadmin')
+  with check (bucket_id = 'avatars' and public.get_user_rol() = 'superadmin');
+
+-- ── videos-ejercicios ────────────────────────────────────────
+drop policy if exists "videos-ejercicios: gestion autenticados" on storage.objects;
+-- "videos-ejercicios: lectura publica" se conserva sin cambios.
+
+create policy "videos-ejercicios: gestion admin superadmin" on storage.objects
+  for all to authenticated
+  using (bucket_id = 'videos-ejercicios' and public.get_user_rol() in ('admin', 'superadmin'))
+  with check (bucket_id = 'videos-ejercicios' and public.get_user_rol() in ('admin', 'superadmin'));
+
+-- ============================================================
+-- ROLLBACK Sección 64 (referencia — NO ejecutar salvo que se decida
+-- revertir esta sección):
+--
+-- drop policy if exists "avatars: gestion propia" on storage.objects;
+-- drop policy if exists "avatars: gestion suplementos admin" on storage.objects;
+-- drop policy if exists "avatars: gestion superadmin" on storage.objects;
+-- create policy "avatars: gestion autenticados" on storage.objects
+--   for all
+--   using (bucket_id = 'avatars' and auth.role() = 'authenticated')
+--   with check (bucket_id = 'avatars' and auth.role() = 'authenticated');
+--
+-- drop policy if exists "videos-ejercicios: gestion admin superadmin" on storage.objects;
+-- create policy "videos-ejercicios: gestion autenticados" on storage.objects
+--   for all
+--   using (bucket_id = 'videos-ejercicios' and auth.role() = 'authenticated')
+--   with check (bucket_id = 'videos-ejercicios' and auth.role() = 'authenticated');
 -- ============================================================

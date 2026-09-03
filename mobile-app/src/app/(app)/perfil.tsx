@@ -68,7 +68,7 @@ export default function PerfilScreen() {
     setPayingPlan(planKey)
     try {
       const priceId = STRIPE_PRICE_IDS[planKey]
-      const { url } = await crearCheckout(priceId, userId)
+      const { url } = await crearCheckout(priceId)
 
       const result = await WebBrowser.openBrowserAsync(url, {
         dismissButtonStyle: 'cancel',

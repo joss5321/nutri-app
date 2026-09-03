@@ -1,10 +1,10 @@
--- Pruebas RLS de public.perfiles (Secciones 45, 46 y 56 de
+-- Pruebas RLS de public.perfiles (Secciones 45, 46, 56 y 57 de
 -- supabase_schema.sql).
 -- Fixtures 100% sintéticos, creados y descartados dentro de esta misma
 -- transacción (BEGIN ... ROLLBACK) — nunca se commitea nada.
 
 begin;
-select plan(25);
+select plan(42);
 
 -- ── Fixtures sintéticos ──────────────────────────────────────────────
 -- Ninguno de estos UUIDs/emails corresponde a datos reales.
@@ -278,6 +278,186 @@ select is(
   (select count(*) from perfiles where id = '10000000-0000-4000-8000-000000000006')::int,
   1,
   'SUPERADMIN: SELECT otro superadmin = permitido'
+);
+reset role;
+
+-- ══════════════════════════════════════════════════════════════════
+-- SECCIÓN 56 (hardening) — GRANTS explícitos de nutricionistas_publicos.
+-- Supabase concede ALL PRIVILEGES por defecto a anon/authenticated sobre
+-- cualquier objeto nuevo de public; sin el REVOKE explícito de la
+-- migración, la view (auto-updatable, security_invoker=false) permitía
+-- UPDATE/DELETE que bypaseaban por completo la RLS de perfiles al correr
+-- con el contexto de su dueño. Se prueba con intentos reales (no solo
+-- has_table_privilege()) para confirmar el comportamiento efectivo, no
+-- solo el catálogo de permisos.
+-- ══════════════════════════════════════════════════════════════════
+
+-- ── ANON ──────────────────────────────────────────────────────────
+select set_config('request.jwt.claims', '', true);
+set local role anon;
+
+-- 26. ANON SELECT nutricionistas_publicos = permitido
+select is(
+  (select count(*) from nutricionistas_publicos where id = '10000000-0000-4000-8000-000000000003')::int,
+  1,
+  'ANON: SELECT nutricionistas_publicos = permitido'
+);
+
+-- 27. ANON INSERT en nutricionistas_publicos = bloqueado
+select throws_ok(
+  $$ insert into nutricionistas_publicos (id, nombre_completo, email, avatar_url) values ('10000000-0000-4000-8000-000000000099', 'Intruso', 'intruso@test.local', null) $$,
+  '42501',
+  null,
+  'ANON: INSERT en nutricionistas_publicos = bloqueado'
+);
+
+-- 28. ANON UPDATE en nutricionistas_publicos = bloqueado
+select throws_ok(
+  $$ update nutricionistas_publicos set nombre_completo = 'hack' where id = '10000000-0000-4000-8000-000000000003' $$,
+  '42501',
+  null,
+  'ANON: UPDATE en nutricionistas_publicos = bloqueado'
+);
+
+-- 29. ANON DELETE en nutricionistas_publicos = bloqueado
+select throws_ok(
+  $$ delete from nutricionistas_publicos where id = '10000000-0000-4000-8000-000000000003' $$,
+  '42501',
+  null,
+  'ANON: DELETE en nutricionistas_publicos = bloqueado'
+);
+reset role;
+
+-- ── AUTHENTICATED ─────────────────────────────────────────────────
+select tests.authenticate_as('10000000-0000-4000-8000-000000000001'::uuid);
+set local role authenticated;
+
+-- 30. AUTHENTICATED SELECT nutricionistas_publicos = permitido
+select is(
+  (select count(*) from nutricionistas_publicos where id = '10000000-0000-4000-8000-000000000003')::int,
+  1,
+  'AUTHENTICATED: SELECT nutricionistas_publicos = permitido'
+);
+
+-- 31. AUTHENTICATED INSERT en nutricionistas_publicos = bloqueado
+select throws_ok(
+  $$ insert into nutricionistas_publicos (id, nombre_completo, email, avatar_url) values ('10000000-0000-4000-8000-000000000098', 'Intruso 2', 'intruso2@test.local', null) $$,
+  '42501',
+  null,
+  'AUTHENTICATED: INSERT en nutricionistas_publicos = bloqueado'
+);
+
+-- 32. AUTHENTICATED UPDATE en nutricionistas_publicos = bloqueado
+select throws_ok(
+  $$ update nutricionistas_publicos set nombre_completo = 'hack' where id = '10000000-0000-4000-8000-000000000003' $$,
+  '42501',
+  null,
+  'AUTHENTICATED: UPDATE en nutricionistas_publicos = bloqueado'
+);
+
+-- 33. AUTHENTICATED DELETE en nutricionistas_publicos = bloqueado
+select throws_ok(
+  $$ delete from nutricionistas_publicos where id = '10000000-0000-4000-8000-000000000003' $$,
+  '42501',
+  null,
+  'AUTHENTICATED: DELETE en nutricionistas_publicos = bloqueado'
+);
+reset role;
+
+-- ══════════════════════════════════════════════════════════════════
+-- SECCIÓN 57 — UNIQUE en perfiles.stripe_customer_id
+-- ══════════════════════════════════════════════════════════════════
+
+-- 34. Existe la constraint UNIQUE (catálogo, sin efectos secundarios)
+select is(
+  (select count(*)::int from pg_constraint
+    where conrelid = 'public.perfiles'::regclass
+      and conname = 'perfiles_stripe_customer_id_key'
+      and contype = 'u'),
+  1,
+  'Sección 57: existe constraint UNIQUE perfiles_stripe_customer_id_key'
+);
+
+-- 35. Dos valores NO-NULL iguales son rechazados — usando UPDATE sobre
+-- fixtures ya creados vía tests.create_user() (nunca INSERT manual, para
+-- no confundir el UNIQUE que probamos con otras restricciones/triggers de
+-- perfiles que no vienen al caso aquí). service_role bypasea el trigger
+-- de columnas sensibles de la Sección 45, que restringe stripe_customer_id
+-- a superadmin — no es lo que este test evalúa.
+select tests.create_user('10000000-0000-4000-8000-000000000007'::uuid, 'stripe-unique-a@test.local', 'usuario');
+select tests.create_user('10000000-0000-4000-8000-000000000008'::uuid, 'stripe-unique-b@test.local', 'usuario');
+
+set role service_role;
+update perfiles set stripe_customer_id = 'cus_test_unique_dup' where id = '10000000-0000-4000-8000-000000000007';
+select throws_ok(
+  $$ update perfiles set stripe_customer_id = 'cus_test_unique_dup' where id = '10000000-0000-4000-8000-000000000008' $$,
+  '23505',
+  null,
+  'Sección 57: UNIQUE rechaza un stripe_customer_id duplicado'
+);
+reset role;
+
+-- ══════════════════════════════════════════════════════════════════
+-- SECCIÓN 62 — Defensa en profundidad: grants de tabla en suscripciones
+-- ══════════════════════════════════════════════════════════════════
+
+-- 36. RLS habilitada en suscripciones (ya lo estaba en producción; se
+-- confirma que sigue siéndolo tras la migración de esta sección).
+select ok(
+  (select relrowsecurity from pg_class where oid = 'public.suscripciones'::regclass),
+  'Sección 62: suscripciones tiene RLS habilitada'
+);
+
+-- 37. Cero policies — deny-by-default total, ningún consumidor de cliente
+-- real lo necesita (el plan del paciente se sirve desde perfiles.plan_membresia).
+select is(
+  (select count(*)::int from pg_policy where polrelid = 'public.suscripciones'::regclass),
+  0,
+  'Sección 62: suscripciones no tiene ninguna policy'
+);
+
+-- 38. anon sin ningún privilegio de tabla.
+select ok(
+  not has_table_privilege('anon', 'public.suscripciones', 'SELECT')
+  and not has_table_privilege('anon', 'public.suscripciones', 'INSERT')
+  and not has_table_privilege('anon', 'public.suscripciones', 'UPDATE')
+  and not has_table_privilege('anon', 'public.suscripciones', 'DELETE'),
+  'Sección 62: anon sin privilegios de tabla en suscripciones'
+);
+
+-- 39. authenticated sin ningún privilegio de tabla.
+select ok(
+  not has_table_privilege('authenticated', 'public.suscripciones', 'SELECT')
+  and not has_table_privilege('authenticated', 'public.suscripciones', 'INSERT')
+  and not has_table_privilege('authenticated', 'public.suscripciones', 'UPDATE')
+  and not has_table_privilege('authenticated', 'public.suscripciones', 'DELETE'),
+  'Sección 62: authenticated sin privilegios de tabla en suscripciones'
+);
+
+-- 40. Un usuario autenticado real (incluso dueño de una fila) no puede ni
+-- intentar el SELECT — falla por falta de grant de tabla, ni siquiera
+-- llega a evaluarse RLS.
+select tests.authenticate_as('10000000-0000-4000-8000-000000000001'::uuid);
+set local role authenticated;
+select throws_ok(
+  $$ select * from suscripciones $$,
+  '42501', null,
+  'Sección 62: authenticated SELECT en suscripciones = bloqueado (sin grant de tabla)'
+);
+reset role;
+
+-- 41-42. service_role sigue operando con normalidad — el REVOKE de esta
+-- sección solo apunta a anon/authenticated, el backend real
+-- (stripe-webhook / reconcile-stripe.mjs) no se ve afectado.
+set local role service_role;
+select lives_ok(
+  $$ insert into suscripciones (id, user_id, stripe_subscription_id, stripe_price_id, status)
+     values ('10000000-0000-4000-8000-0000000000f1', '10000000-0000-4000-8000-000000000001', 'sub_test_seccion62', 'price_test', 'active') $$,
+  'Sección 62: service_role INSERT en suscripciones = permitido (backend)'
+);
+select lives_ok(
+  $$ update suscripciones set status = 'canceled' where id = '10000000-0000-4000-8000-0000000000f1' $$,
+  'Sección 62: service_role UPDATE en suscripciones = permitido (backend)'
 );
 reset role;
 

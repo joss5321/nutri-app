@@ -31,6 +31,7 @@
  */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { requireSuperadmin } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -45,10 +46,16 @@ function sleep(ms: number) {
   return new Promise<void>((r) => setTimeout(r, ms));
 }
 
-Deno.serve(async (req) => {
+export async function handler(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
+
+  // Herramienta manual/interna: solo superadmin puede dispararla. Nunca se
+  // usa service_role para decidir esto — requireSuperadmin usa un cliente
+  // anon+Authorization reenviado.
+  const auth = await requireSuperadmin(req);
+  if (!auth.ok) return auth.response;
 
   if (!WORKOUTX_KEY) {
     return new Response(
@@ -177,4 +184,6 @@ Deno.serve(async (req) => {
     status: 200,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-});
+}
+
+Deno.serve(handler);

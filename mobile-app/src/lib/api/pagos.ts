@@ -4,9 +4,9 @@ export type CheckoutResponse = {
   url: string
 }
 
-export async function crearCheckout(priceId: string, userId: string): Promise<CheckoutResponse> {
+export async function crearCheckout(priceId: string): Promise<CheckoutResponse> {
   const { data, error } = await supabase.functions.invoke('crear-checkout', {
-    body: { priceId, userId },
+    body: { priceId },
   })
   if (error) throw error
   return data as CheckoutResponse

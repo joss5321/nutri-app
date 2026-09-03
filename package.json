@@ -3,6 +3,11 @@
   "private": true,
   "description": "Infraestructura de testing de RLS (pgTAP). No es el proyecto admin-web ni mobile-app, que mantienen sus propios package.json.",
   "scripts": {
-    "test:rls": "node scripts/test-rls.mjs"
+    "test:rls": "node scripts/test-rls.mjs",
+    "seed:recetas": "node scripts/seed-recetas.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.112.4",
+    "stripe": "^22.6.0"
   }
 }

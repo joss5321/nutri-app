@@ -9,7 +9,7 @@
 -- reales de producción.
 
 begin;
-select plan(82);
+select plan(91);
 
 -- ── Fixtures sintéticos ──────────────────────────────────────────────
 select tests.create_user('60000000-0000-4000-8000-000000000003'::uuid, 'admin-a@test.local',    'admin');
@@ -743,6 +743,85 @@ select is(
   (select prosecdef from pg_proc where oid =
     'public.actualizar_receta_completa(uuid, text, text, text, text, text, int, int, int, text, int, text, numeric, numeric, numeric, jsonb, jsonb)'::regprocedure),
   false, 'actualizar_receta_completa: SECURITY INVOKER (prosecdef = false)');
+
+-- ══════════════════ crear_receta_completa (Sección 63, H1) ══════════════════
+-- Único consumidor real: scripts/seed-recetas.mjs vía service_role — cero
+-- clientes autenticados la necesitan hoy, así que el grant es más estricto
+-- que actualizar_receta_completa (revocado también de authenticated, no
+-- solo de public/anon).
+
+-- 83. Caso exitoso: service_role crea una receta de catálogo completa
+-- (padre + ingredientes + pasos) en una sola llamada.
+set local role service_role;
+select lives_ok(
+  $$ select public.crear_receta_completa(
+       null,
+       'Receta RPC catálogo nueva', '🍽️', 'Comida', null, null, null, null, null, 'Fácil', null, '1', null, null, null,
+       '[{"descripcion":"Ingrediente nuevo 1"},{"descripcion":"Ingrediente nuevo 2"}]'::jsonb,
+       '["Paso nuevo 1"]'::jsonb
+     ) $$,
+  'crear_receta_completa: service_role crea receta de catálogo completa = permitido');
+reset role;
+
+-- 84-85. Ingredientes y pasos quedaron insertados.
+select is((select count(*)::int from receta_ingredientes ri join recetas r on r.id = ri.receta_id where r.nombre = 'Receta RPC catálogo nueva'), 2,
+  'crear_receta_completa: se insertaron los 2 ingredientes');
+select is((select count(*)::int from receta_pasos rp join recetas r on r.id = rp.receta_id where r.nombre = 'Receta RPC catálogo nueva'), 1,
+  'crear_receta_completa: se insertó el paso');
+
+-- 86. Error a mitad de camino: el segundo ingrediente referencia un
+-- alimento_id inexistente (FK) — la llamada entera debe fallar, incluida
+-- la receta padre ya insertada.
+set local role service_role;
+select throws_ok(
+  $$ select public.crear_receta_completa(
+       null,
+       'Receta RPC con error', null, 'Comida', null, null, null, null, null, 'Fácil', null, '1', null, null, null,
+       '[{"descripcion":"ok"},{"descripcion":"bad","alimento_id":"60000000-0000-4000-8000-ffffffffffff"}]'::jsonb,
+       '[]'::jsonb
+     ) $$,
+  '23503', null, 'crear_receta_completa: alimento_id inexistente en ingrediente 2 = bloqueado (FK)');
+reset role;
+
+-- 87. Rollback total: la receta padre del intento fallido NO quedó
+-- huérfana en el catálogo.
+select is((select count(*)::int from recetas where nombre = 'Receta RPC con error'), 0,
+  'crear_receta_completa: tras el error, la receta padre NO quedó huérfana (rollback total)');
+
+-- 88. authenticated (incluso admin) SIN EXECUTE en absoluto — bloqueado
+-- antes de siquiera evaluar RLS.
+select tests.authenticate_as('60000000-0000-4000-8000-000000000003'::uuid);
+set local role authenticated;
+select throws_ok(
+  $$ select public.crear_receta_completa(
+       null, 'hack', null, 'Comida', null, null, null, null, null, null, null, '1', null, null, null, '[]'::jsonb, '[]'::jsonb
+     ) $$,
+  '42501', null, 'crear_receta_completa: authenticated (incluso admin) sin EXECUTE = bloqueado');
+reset role;
+
+-- 89. anon sin EXECUTE.
+select ok(
+  not has_function_privilege('anon',
+    'public.crear_receta_completa(uuid, text, text, text, text, text, int, int, int, text, int, text, numeric, numeric, numeric, jsonb, jsonb)',
+    'EXECUTE'),
+  'crear_receta_completa: anon NO tiene EXECUTE');
+
+-- 90. PUBLIC sin EXECUTE.
+select ok(
+  not exists (
+    select 1 from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    join lateral aclexplode(p.proacl) a on true
+    where n.nspname = 'public' and p.proname = 'crear_receta_completa'
+      and a.grantee = 0 and a.privilege_type = 'EXECUTE'
+  ),
+  'crear_receta_completa: PUBLIC NO tiene EXECUTE');
+
+-- 91. Sigue siendo SECURITY INVOKER (prosecdef = false).
+select is(
+  (select prosecdef from pg_proc where oid =
+    'public.crear_receta_completa(uuid, text, text, text, text, text, int, int, int, text, int, text, numeric, numeric, numeric, jsonb, jsonb)'::regprocedure),
+  false, 'crear_receta_completa: SECURITY INVOKER (prosecdef = false)');
 
 select * from finish();
 rollback;

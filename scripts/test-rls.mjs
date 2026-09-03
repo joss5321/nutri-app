@@ -17,11 +17,11 @@
 // supabase/migrations/ son generados y desechables: no se editan a mano y
 // no se commitean como fuente — se regeneran en cada corrida.
 //
-// pgTAP y los helpers de test SOLO existen en 00000000000001_pgtap_local_only.sql,
+// pgTAP y los helpers de test SOLO existen en 00000000000000_pgtap_local_only.sql,
 // que nunca se copia a supabase_schema.sql ni se aplica a producción.
 
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -83,15 +83,28 @@ function syncTestMigrations() {
   const migrationsDir = join(ROOT, 'supabase', 'migrations');
   mkdirSync(migrationsDir, { recursive: true });
 
-  // 1) Copia literal de la fuente de verdad de producción, sin modificarla.
-  const schemaDest = join(migrationsDir, '00000000000000_schema.sql');
-  copyFileSync(join(ROOT, 'supabase_schema.sql'), schemaDest);
-  console.log(`supabase_schema.sql copiado a ${schemaDest}`);
+  // Directorio 100% generado/desechable (ver comentario del encabezado) —
+  // se limpia por completo en cada corrida para no dejar archivos huérfanos
+  // de nombres/orden anteriores (ej. si cambia la numeración de los
+  // migrations, como ocurrió al mover pgtap_local_only antes de schema.sql).
+  for (const f of readdirSync(migrationsDir)) {
+    rmSync(join(migrationsDir, f), { force: true });
+  }
 
-  // 2) pgTAP + helpers de test — SOLO existen aquí, nunca en supabase_schema.sql.
-  const pgtapDest = join(migrationsDir, '00000000000001_pgtap_local_only.sql');
+  // 1) pgTAP + helpers de test — SOLO existen aquí, nunca en supabase_schema.sql.
+  // Corre ANTES que supabase_schema.sql (ver comentario dentro de
+  // PGTAP_LOCAL_ONLY_SQL): el ALTER DEFAULT PRIVILEGES de aquí necesita
+  // preceder a la creación de las tablas/views reales para aplicarles su
+  // efecto por defecto, y para que cualquier REVOKE explícito dentro de
+  // supabase_schema.sql (ej. Sección 56) sea la última palabra.
+  const pgtapDest = join(migrationsDir, '00000000000000_pgtap_local_only.sql');
   writeFileSync(pgtapDest, PGTAP_LOCAL_ONLY_SQL);
   console.log(`Infra de test (pgTAP + helpers) escrita en ${pgtapDest}`);
+
+  // 2) Copia literal de la fuente de verdad de producción, sin modificarla.
+  const schemaDest = join(migrationsDir, '00000000000001_schema.sql');
+  copyFileSync(join(ROOT, 'supabase_schema.sql'), schemaDest);
+  console.log(`supabase_schema.sql copiado a ${schemaDest}`);
 
   // 3) Copia literal de supabase_stripe_schema.sql. En producción esta
   // columna/tabla (stripe_customer_id, suscripciones) ya existe porque este
@@ -110,15 +123,27 @@ const PGTAP_LOCAL_ONLY_SQL = `-- Generado automáticamente por scripts/test-rls.
 
 create extension if not exists pgtap with schema extensions;
 
--- En producción, Supabase concede automáticamente estos GRANTs a los
--- roles de la Data API (anon/authenticated/service_role) sobre las tablas
--- de "public" al crear el proyecto ("auto-expose" legado) — nunca vivió en
+-- En producción, Supabase concede automáticamente estos privilegios a los
+-- roles de la Data API (anon/authenticated/service_role) sobre CUALQUIER
+-- tabla/view de "public" al crearse, vía ALTER DEFAULT PRIVILEGES fijado
+-- al crear el proyecto ("auto-expose" legado) — nunca vivió en
 -- supabase_schema.sql porque lo hacía la plataforma, no el SQL. Un reset
--- local desde cero no lo replica (el default actual de "supabase start" ya
--- no auto-expone), así que lo reproducimos aquí para que el entorno de
--- test se comporte igual que producción. Esto es exclusivo del entorno
--- local/CI de pruebas.
-grant select, insert, update, delete on all tables in schema public to anon, authenticated, service_role;
+-- local desde cero no lo replica, así que lo reproducimos aquí para que
+-- el entorno de test se comporte igual que producción.
+--
+-- Usamos ALTER DEFAULT PRIVILEGES (no un GRANT puntual sobre las tablas
+-- ya existentes) porque esta migración corre ANTES que 00000000000001
+-- (supabase_schema.sql, donde todavía no existe ninguna tabla) — así
+-- replicamos el mecanismo real (aplica a objetos futuros), no solo un
+-- snapshot del momento en que corre este archivo. Esto también es lo que
+-- permite que una sección como la 56 haga su propio REVOKE explícito
+-- sobre un objeto puntual (nutricionistas_publicos) inmediatamente
+-- después de crearlo, y que ese REVOKE sea la última palabra — si este
+-- grant corriera DESPUÉS de supabase_schema.sql (como antes), un GRANT
+-- ON ALL TABLES puntual habría revertido cualquier REVOKE hecho dentro
+-- del propio schema. Exclusivo del entorno local/CI de pruebas.
+alter default privileges in schema public
+  grant select, insert, update, delete on tables to anon, authenticated, service_role;
 
 -- Helpers propios (no son una dependencia externa, son funciones nuestras)
 -- para reducir el boilerplate de crear usuarios sintéticos e impersonar

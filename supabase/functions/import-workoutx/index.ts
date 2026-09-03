@@ -30,6 +30,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import Anthropic         from "npm:@anthropic-ai/sdk";
+import { requireSuperadmin } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -211,10 +212,16 @@ function sleep(ms: number) {
 }
 
 // ── Handler principal ──────────────────────────────────────────────────────
-Deno.serve(async (req) => {
+export async function handler(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
+
+  // Herramienta manual/interna: solo superadmin puede dispararla. Nunca se
+  // usa service_role para decidir esto — requireSuperadmin usa un cliente
+  // anon+Authorization reenviado.
+  const auth = await requireSuperadmin(req);
+  if (!auth.ok) return auth.response;
 
   // Validar que la API key está configurada (sin imprimirla)
   if (!WORKOUTX_API_KEY) {
@@ -407,4 +414,6 @@ Deno.serve(async (req) => {
     status: 200,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-});
+}
+
+Deno.serve(handler);

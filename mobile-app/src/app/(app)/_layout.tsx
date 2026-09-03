@@ -42,15 +42,21 @@ function TabIcon({
 }
 
 export default function AppLayout() {
-  const { session, initialized, user } = useAuthStore()
+  const { session, initialized, user, isPasswordRecovery } = useAuthStore()
   const router = useRouter()
   const { hasNewRutinas, hasNewNutricion, checkAll } = useNewsStore()
 
   useEffect(() => {
+    // Defensa adicional: una sesión de recuperación nunca debe quedar
+    // navegando dentro de (app), aunque session sea verdadero.
+    if (initialized && isPasswordRecovery) {
+      router.replace('/reset-password')
+      return
+    }
     if (initialized && !session) {
       router.replace('/(auth)/welcome')
     }
-  }, [session, initialized])
+  }, [session, initialized, isPasswordRecovery])
 
   useEffect(() => {
     if (user?.id) {

@@ -415,7 +415,7 @@ enabled = true
 
 [functions.crear-checkout]
 enabled = true
-verify_jwt = false
+verify_jwt = true
 import_map = "./functions/crear-checkout/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
@@ -423,3 +423,36 @@ entrypoint = "./functions/crear-checkout/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/crear-checkout/*.html" ]
+
+# Las siguientes 4 son herramientas manuales/internas (superadmin-only, ver
+# supabase/functions/_shared/auth.ts). verify_jwt=true ya era el default,
+# se deja explícito para no depender de un default implícito.
+[functions.import-workoutx]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/import-workoutx/index.ts"
+
+[functions.match-exercise-gifs]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/match-exercise-gifs/index.ts"
+
+[functions.migrate-gifs]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/migrate-gifs/index.ts"
+
+[functions.translate-exercises]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/translate-exercises/index.ts"
+
+# Stripe nunca envía un JWT de Supabase en sus webhooks — autentica
+# exclusivamente vía el header Stripe-Signature, verificado
+# criptográficamente dentro del propio código (stripe.webhooks.
+# constructEventAsync). verify_jwt=true en el gateway rechazaría el 100%
+# de las llamadas reales de Stripe antes de llegar al código.
+[functions.stripe-webhook]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/stripe-webhook/index.ts"

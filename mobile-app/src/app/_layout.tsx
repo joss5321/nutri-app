@@ -49,7 +49,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, EBState> {
 export default function RootLayout() {
   console.log('[APP] RootLayout render')
   const colorScheme = useColorScheme()
-  const { setSession, setInitialized, initialized } = useAuthStore()
+  const { setSession, setInitialized, initialized, setPasswordRecovery } = useAuthStore()
 
   // Inicializa sesión y escucha cambios de auth
   useEffect(() => {
@@ -123,6 +123,15 @@ export default function RootLayout() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         console.log('[APP] Auth state changed:', _event)
+        // PASSWORD_RECOVERY trae una sesión válida (el usuario SÍ queda
+        // autenticado — es el comportamiento estándar de Supabase Auth,
+        // necesario para poder llamar updateUser({password}) después), pero
+        // NO es un login normal: no debe mandar al usuario a /(app). El flag
+        // isPasswordRecovery es lo que index.tsx y los layouts de (auth)/(app)
+        // revisan antes de redirigir automáticamente por tener session.
+        if (_event === 'PASSWORD_RECOVERY') {
+          setPasswordRecovery(true)
+        }
         setSession(session)
       },
     )
