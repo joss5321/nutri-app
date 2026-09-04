@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
+import { Ionicons } from '@expo/vector-icons'
 import { AppHeader } from '@/components/ui/AppHeader'
 import { COLORS } from '@/constants/colors'
 import { useAuthStore } from '@/store/auth'
@@ -262,7 +263,7 @@ export default function ProgresoScreen() {
     return (
       <View style={s.container}>
         <AppHeader title="Mi Progreso" />
-        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
+        <ScrollView style={s.wideScroll} contentContainerStyle={{ padding: 16, paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
           <View style={s.card}>
             <Text style={s.cardNote}>
               Antes de comenzar es necesario que proporciones los siguientes datos para poder monitorear mejor tu progreso.
@@ -336,7 +337,7 @@ export default function ProgresoScreen() {
   return (
     <View style={s.container}>
       <AppHeader title="Mi Progreso" />
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}
+      <ScrollView style={s.wideScroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true)} colors={[COLORS.primary]} tintColor={COLORS.primary} />}>
         <Text style={s.tableNote}>
           Aquí puedes ver el resumen de tus datos del{'\n'}monitoreo de tu progreso.
@@ -380,7 +381,9 @@ export default function ProgresoScreen() {
 
         {/* Card motivacional */}
         <View style={s.motivCard}>
-          <Text style={{ fontSize: 18 }}>📈</Text>
+          <View style={s.motivIcon}>
+            <Ionicons name="trending-up-outline" size={18} color={COLORS.primary} />
+          </View>
           <View style={{ flex: 1 }}>
             <Text style={{ fontWeight: '700', color: COLORS.text }}>¡Sigue así!</Text>
             <Text style={{ fontSize: 12, color: COLORS.muted }}>
@@ -447,7 +450,9 @@ export default function ProgresoScreen() {
 
         {values.length <= 1 && (
           <View style={[s.card, { marginTop: 20, alignItems: 'center', paddingVertical: 32 }]}>
-            <Text style={{ fontSize: 32 }}>📊</Text>
+            <View style={s.emptyIcon}>
+              <Ionicons name="bar-chart-outline" size={28} color={COLORS.primary} />
+            </View>
             <Text style={{ color: COLORS.muted, fontSize: 13, textAlign: 'center', marginTop: 8 }}>
               Aún no hay suficientes datos para mostrar gráficas.{'\n'}Las gráficas aparecerán cuando tengas más registros.
             </Text>
@@ -461,6 +466,7 @@ export default function ProgresoScreen() {
 // ─── Estilos ────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
+  wideScroll: { flex: 1, width: '100%', maxWidth: 720, alignSelf: 'center' },
 
   // ── Formulario inicial ──
   card: {
@@ -546,4 +552,13 @@ const s = StyleSheet.create({
 
   chartArea: { minHeight: 150 },
   unitLabel: { textAlign: 'right', fontSize: 10, color: COLORS.muted, marginTop: -4 },
+
+  motivIcon: {
+    width: 32, height: 32, borderRadius: 10,
+    backgroundColor: COLORS.primaryLight, justifyContent: 'center', alignItems: 'center',
+  },
+  emptyIcon: {
+    width: 56, height: 56, borderRadius: 28,
+    backgroundColor: COLORS.primaryLight, justifyContent: 'center', alignItems: 'center',
+  },
 })

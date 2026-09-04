@@ -14,9 +14,11 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import * as Linking from 'expo-linking'
 import { Image } from 'expo-image'
+import { Ionicons } from '@expo/vector-icons'
+import Animated, { FadeIn } from 'react-native-reanimated'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/auth'
-import { COLORS } from '@/constants/colors'
+import { AUTH_COLORS as PALETTE } from '@/constants/colors'
 
 // Longitud mínima alineada con register.tsx (8) — más estricta que el
 // mínimo real configurado en Supabase Auth (6), a propósito: nunca puede
@@ -153,151 +155,171 @@ export default function ResetPasswordScreen() {
 
   if (status === 'loading') {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-        </View>
-      </SafeAreaView>
+      <View style={styles.screen}>
+        <SafeAreaView style={styles.container}>
+          <View style={styles.centered}>
+            <ActivityIndicator size="large" color={PALETTE.mint} />
+          </View>
+        </SafeAreaView>
+      </View>
     )
   }
 
   if (status === 'linkError') {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.centered}>
-          <Text style={styles.errorIcon}>⚠️</Text>
-          <Text style={styles.title}>Enlace no disponible</Text>
-          <Text style={styles.subtitle}>{linkErrorMessage}</Text>
-          <TouchableOpacity
-            style={styles.primaryBtn}
-            onPress={() => router.replace('/(auth)/forgot-password')}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.primaryBtnText}>Solicitar nuevo enlace</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.replace('/(auth)/login')} style={{ marginTop: 12 }}>
-            <Text style={styles.link}>Volver al inicio de sesión</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
+      <View style={styles.screen}>
+        <SafeAreaView style={styles.container}>
+          <Animated.View entering={FadeIn.duration(400)} style={styles.centered}>
+            <View style={styles.iconCircle}>
+              <Ionicons name="alert-circle-outline" size={40} color={PALETTE.error} />
+            </View>
+            <Text style={styles.title}>Enlace no disponible</Text>
+            <Text style={styles.subtitle}>{linkErrorMessage}</Text>
+            <TouchableOpacity
+              style={styles.primaryBtn}
+              onPress={() => router.replace('/(auth)/forgot-password')}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.primaryBtnText}>Solicitar nuevo enlace</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => router.replace('/(auth)/login')} style={{ marginTop: 12 }}>
+              <Text style={styles.link}>Volver al inicio de sesión</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </SafeAreaView>
+      </View>
     )
   }
 
   if (status === 'success') {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.centered}>
-          <View style={styles.envelopeCircle}>
-            <Text style={styles.envelopeIcon}>✅</Text>
-          </View>
-          <Text style={styles.title}>¡Contraseña actualizada!</Text>
-          <Text style={styles.subtitle}>Ya puedes iniciar sesión con tu nueva contraseña.</Text>
-          <TouchableOpacity
-            style={styles.primaryBtn}
-            onPress={() => router.replace('/(auth)/login')}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.primaryBtnText}>Ir a iniciar sesión</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
+      <View style={styles.screen}>
+        <SafeAreaView style={styles.container}>
+          <Animated.View entering={FadeIn.duration(400)} style={styles.centered}>
+            <View style={styles.envelopeCircle}>
+              <Ionicons name="checkmark-circle-outline" size={40} color={PALETTE.mint} />
+            </View>
+            <Text style={styles.title}>¡Contraseña actualizada!</Text>
+            <Text style={styles.subtitle}>Ya puedes iniciar sesión con tu nueva contraseña.</Text>
+            <TouchableOpacity
+              style={styles.primaryBtn}
+              onPress={() => router.replace('/(auth)/login')}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.primaryBtnText}>Ir a iniciar sesión</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </SafeAreaView>
+      </View>
     )
   }
 
   // status === 'ready' | 'submitting'
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
-          <View style={styles.inner}>
-            <View style={styles.header}>
-              <Image source={require('@/assets/images/icon.png')} style={styles.logo} />
-              <Text style={styles.title}>Crea tu nueva{'\n'}contraseña</Text>
-              <Text style={styles.subtitle}>Debe tener al menos {MIN_PASSWORD_LENGTH} caracteres.</Text>
-            </View>
+    <View style={styles.screen}>
+      <SafeAreaView style={styles.container}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+          <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
+            <View style={styles.inner}>
+              <Animated.View entering={FadeIn.duration(450)} style={styles.header}>
+                <Image source={require('@/assets/branding/icon.png')} style={styles.logo} />
+                <Text style={styles.title}>Crea tu nueva{'\n'}contraseña</Text>
+                <Text style={styles.subtitle}>Debe tener al menos {MIN_PASSWORD_LENGTH} caracteres.</Text>
+              </Animated.View>
 
-            <View style={styles.form}>
-              <View style={[styles.inputWrapper, formError ? styles.inputError : null]}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Nueva contraseña"
-                  placeholderTextColor="#9CA3AF"
-                  value={password}
-                  onChangeText={(t) => { setPassword(t); setFormError(undefined) }}
-                  secureTextEntry
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-              </View>
-              <View style={[styles.inputWrapper, formError ? styles.inputError : null]}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Confirmar contraseña"
-                  placeholderTextColor="#9CA3AF"
-                  value={confirmPassword}
-                  onChangeText={(t) => { setConfirmPassword(t); setFormError(undefined) }}
-                  secureTextEntry
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-              </View>
-              {formError && <Text style={styles.error}>{formError}</Text>}
-              {submitError && <Text style={styles.error}>{submitError}</Text>}
+              <View style={styles.form}>
+                <View style={[styles.inputWrapper, formError ? styles.inputError : null]}>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Nueva contraseña"
+                    placeholderTextColor={PALETTE.mutedMint}
+                    value={password}
+                    onChangeText={(t) => { setPassword(t); setFormError(undefined) }}
+                    secureTextEntry
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+                <View style={[styles.inputWrapper, formError ? styles.inputError : null]}>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Confirmar contraseña"
+                    placeholderTextColor={PALETTE.mutedMint}
+                    value={confirmPassword}
+                    onChangeText={(t) => { setConfirmPassword(t); setFormError(undefined) }}
+                    secureTextEntry
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+                {formError && <Text style={styles.error}>{formError}</Text>}
+                {submitError && <Text style={styles.error}>{submitError}</Text>}
 
-              <TouchableOpacity
-                style={styles.primaryBtn}
-                onPress={handleSubmit}
-                disabled={status === 'submitting'}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.primaryBtnText}>
-                  {status === 'submitting' ? 'Guardando...' : 'Guardar contraseña'}
-                </Text>
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.primaryBtn}
+                  onPress={handleSubmit}
+                  disabled={status === 'submitting'}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.primaryBtnText}>
+                    {status === 'submitting' ? 'Guardando...' : 'Guardar contraseña'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  centered: { flex: 1, paddingHorizontal: 24, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  inner: { flex: 1, paddingHorizontal: 24, paddingTop: 40, gap: 24 },
+  screen: {
+    flex: 1,
+    backgroundColor: PALETTE.bg,
+    experimental_backgroundImage:
+      'radial-gradient(circle at 15% -8%, rgba(61,220,151,0.16), transparent 55%), radial-gradient(circle at 100% 105%, rgba(18,61,48,0.9), transparent 60%)',
+  },
+  container: { flex: 1 },
+  centered: { flex: 1, width: '100%', maxWidth: 480, alignSelf: 'center', paddingHorizontal: 24, alignItems: 'center', justifyContent: 'center', gap: 12 },
+  inner: { flex: 1, width: '100%', maxWidth: 480, alignSelf: 'center', paddingHorizontal: 24, paddingTop: 40, gap: 24 },
 
   header: { gap: 10, alignItems: 'center' },
-  logo: { width: 64, height: 64, borderRadius: 20, marginBottom: 4 },
-  title: { fontSize: 24, fontWeight: '800', color: COLORS.text, lineHeight: 32, letterSpacing: -0.5, textAlign: 'center' },
-  subtitle: { fontSize: 14, color: COLORS.muted, lineHeight: 20, textAlign: 'center' },
+  logo: { width: 56, height: 56, borderRadius: 18, marginBottom: 4 },
+  title: { fontSize: 24, fontWeight: '800', color: PALETTE.warmWhite, lineHeight: 32, letterSpacing: -0.5, textAlign: 'center' },
+  subtitle: { fontSize: 14, color: PALETTE.mutedMint, lineHeight: 20, textAlign: 'center' },
 
   form: { gap: 12 },
   inputWrapper: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: COLORS.white, borderRadius: 16,
+    backgroundColor: 'rgba(247,245,240,0.06)', borderRadius: 16,
     paddingHorizontal: 20, height: 54,
-    borderWidth: 1, borderColor: COLORS.border,
+    borderWidth: 1, borderColor: PALETTE.hairline,
   },
-  inputError: { borderColor: COLORS.error },
-  input: { flex: 1, fontSize: 15, color: COLORS.text },
-  error: { color: COLORS.error, fontSize: 12, marginTop: -6, paddingLeft: 4 },
+  inputError: { borderColor: PALETTE.error },
+  input: { flex: 1, fontSize: 15, color: PALETTE.warmWhite },
+  error: { color: PALETTE.error, fontSize: 12, marginTop: -6, paddingLeft: 4 },
 
   primaryBtn: {
-    backgroundColor: COLORS.primary, borderRadius: 16,
+    backgroundColor: PALETTE.mint, borderRadius: 16,
     height: 54, justifyContent: 'center', alignItems: 'center', marginTop: 4,
-    shadowColor: COLORS.primary, shadowOpacity: 0.3, shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 }, elevation: 3,
+    shadowColor: PALETTE.mint, shadowOpacity: 0.3, shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 }, elevation: 3,
   },
-  primaryBtnText: { color: COLORS.white, fontWeight: '700', fontSize: 17 },
-  link: { color: COLORS.primary, fontWeight: '600', fontSize: 14 },
+  primaryBtnText: { color: PALETTE.onMint, fontWeight: '800', fontSize: 16 },
+  link: { color: PALETTE.mint, fontWeight: '600', fontSize: 14 },
 
   envelopeCircle: {
-    width: 96, height: 96, borderRadius: 48,
-    backgroundColor: COLORS.completed,
-    borderWidth: 2, borderColor: '#BBF7D0',
+    width: 92, height: 92, borderRadius: 46,
+    backgroundColor: PALETTE.mintSoft,
+    borderWidth: 1.5, borderColor: PALETTE.hairline,
     alignItems: 'center', justifyContent: 'center', marginBottom: 8,
   },
-  envelopeIcon: { fontSize: 48 },
-  errorIcon: { fontSize: 48, marginBottom: 8 },
+  iconCircle: {
+    width: 92, height: 92, borderRadius: 46,
+    backgroundColor: PALETTE.errorBg,
+    borderWidth: 1.5, borderColor: PALETTE.hairline,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 8,
+  },
 })

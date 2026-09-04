@@ -343,9 +343,14 @@ function ExerciseDetailModal({ exercise, userId, onClose }: { exercise: Exercise
                 </View>
               ))}
               {bestWeight != null && (
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: COLORS.border }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: COLORS.border }}>
                   <Text style={{ fontSize: 12, color: COLORS.muted }}>Mejor peso registrado</Text>
-                  <Text style={{ fontSize: 14, fontWeight: '800', color: COLORS.primary }}>{bestWeight} kg 🏆</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '800', color: COLORS.text }}>{bestWeight} kg</Text>
+                    <View style={s.trophyBadge}>
+                      <Ionicons name="trophy" size={11} color={COLORS.highlight} />
+                    </View>
+                  </View>
                 </View>
               )}
               <TouchableOpacity onPress={handleSaveSeries} disabled={savingPeso} activeOpacity={0.85}
@@ -662,10 +667,10 @@ export default function RutinasScreen() {
         </View>
         {showNewBanner && (
           <View style={s.newsBanner}>
-            <Ionicons name="sparkles" size={14} color="#1D4ED8" />
+            <Ionicons name="sparkles" size={14} color={COLORS.infoText} />
             <Text style={s.newsBannerText}>Tu nutriólogo actualizó tu rutina</Text>
             <TouchableOpacity onPress={() => setShowNewBanner(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close" size={14} color="#1D4ED8" />
+              <Ionicons name="close" size={14} color={COLORS.infoText} />
             </TouchableOpacity>
           </View>
         )}
@@ -686,8 +691,10 @@ export default function RutinasScreen() {
         </View>
       ) : days.length === 0 ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
-          <Text style={{ fontSize: 48, marginBottom: 16 }}>🏋️</Text>
-          <Text style={{ fontWeight: '700', fontSize: 16, color: COLORS.text, textAlign: 'center' }}>
+          <View style={s.emptyIcon}>
+            <Ionicons name="barbell-outline" size={30} color={COLORS.primary} />
+          </View>
+          <Text style={{ fontWeight: '700', fontSize: 16, color: COLORS.text, textAlign: 'center', marginTop: 16 }}>
             Tu coach aún no ha asignado una rutina
           </Text>
           <Text style={{ fontSize: 13, color: COLORS.muted, textAlign: 'center', marginTop: 8, lineHeight: 20 }}>
@@ -811,7 +818,10 @@ export default function RutinasScreen() {
                       <Text style={{ fontSize: 12, color: COLORS.muted }}>{ex.reps}</Text>
                     </View>
                     <View style={s.progressBadge}>
-                      <Text style={{ fontSize: 11, color: COLORS.muted }}>Mejor</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Ionicons name="trophy-outline" size={11} color={COLORS.muted} />
+                        <Text style={{ fontSize: 11, color: COLORS.muted }}>Mejor</Text>
+                      </View>
                       <Text style={{ fontWeight: '800', fontSize: 15, color: COLORS.primary }}>{ex.best}</Text>
                     </View>
                   </View>
@@ -876,13 +886,13 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#DBEAFE',
+    backgroundColor: COLORS.info,
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderTopWidth: 1,
-    borderTopColor: '#BFDBFE',
+    borderTopColor: COLORS.infoBorder,
   },
-  newsBannerText: { flex: 1, fontSize: 13, color: '#1D4ED8', fontWeight: '500' },
+  newsBannerText: { flex: 1, fontSize: 13, color: COLORS.infoText, fontWeight: '500' },
 
   // ── Tabs ──
   tabs: {
@@ -893,7 +903,7 @@ const s = StyleSheet.create({
   tabActive: { borderBottomWidth: 2, borderBottomColor: COLORS.primary },
   tabText: { fontSize: 14, color: '#94A3B8', fontWeight: '600' },
   tabTextActive: { color: COLORS.primary },
-  body: { flex: 1, backgroundColor: COLORS.background },
+  body: { flex: 1, width: '100%', maxWidth: 720, alignSelf: 'center', backgroundColor: COLORS.background },
 
   // ── Info banner ──
   infoBanner: {
@@ -972,6 +982,15 @@ const s = StyleSheet.create({
   progressFooter: {
     flexDirection: 'row', justifyContent: 'space-between',
     borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 10, marginTop: 10,
+  },
+
+  emptyIcon: {
+    width: 64, height: 64, borderRadius: 32,
+    backgroundColor: COLORS.primaryLight, justifyContent: 'center', alignItems: 'center',
+  },
+  trophyBadge: {
+    width: 20, height: 20, borderRadius: 10,
+    backgroundColor: COLORS.ink, justifyContent: 'center', alignItems: 'center',
   },
 })
 

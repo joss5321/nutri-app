@@ -4,8 +4,9 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { Link, useRouter } from 'expo-router'
 import { Image } from 'expo-image'
 import { Ionicons } from '@expo/vector-icons'
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated'
 import { supabase } from '@/lib/supabase'
-import { COLORS } from '@/constants/colors'
+import { AUTH_COLORS as PALETTE } from '@/constants/colors'
 
 type Errors = { email?: string; password?: string }
 
@@ -21,7 +22,7 @@ function AuthInput({
       <TextInput
         style={styles.input}
         placeholder={placeholder}
-        placeholderTextColor="#9CA3AF"
+        placeholderTextColor={PALETTE.mutedMint}
         value={value}
         onChangeText={onChangeText}
         secureTextEntry={secureTextEntry && !show}
@@ -30,8 +31,8 @@ function AuthInput({
         autoCorrect={false}
       />
       {secureTextEntry && (
-        <TouchableOpacity onPress={() => setShow(v => !v)} style={styles.eyeBtn}>
-          <Ionicons name={show ? 'eye-off' : 'eye'} size={20} color={COLORS.muted} />
+        <TouchableOpacity onPress={() => setShow(v => !v)} style={styles.eyeBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Ionicons name={show ? 'eye-off' : 'eye'} size={20} color={PALETTE.mutedMint} />
         </TouchableOpacity>
       )}
     </View>
@@ -103,98 +104,109 @@ export default function LoginScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-          <View style={styles.inner}>
+    <View style={styles.screen}>
+      <SafeAreaView style={styles.container}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+          <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            <View style={styles.inner}>
 
-            <View style={styles.header}>
-              <Image source={require('@/assets/images/icon.png')} style={styles.logo} />
-              <Text style={styles.title}>Iniciar Sesión</Text>
+              <Animated.View entering={FadeIn.duration(450)} style={styles.brand}>
+                <Image source={require('@/assets/branding/icon.png')} style={styles.brandLogo} />
+                <Text style={styles.brandName}>MyFitTrack</Text>
+              </Animated.View>
+
+              <Animated.View entering={FadeInDown.duration(500).delay(80)} style={styles.header}>
+                <Text style={styles.title}>Bienvenido de vuelta</Text>
+                <Text style={styles.subtitle}>Inicia sesión para continuar tu seguimiento.</Text>
+              </Animated.View>
+
+              <Animated.View entering={FadeInDown.duration(500).delay(140)} style={styles.form}>
+                <View>
+                  <View style={styles.inputWrapper}>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Correo electrónico"
+                      placeholderTextColor={PALETTE.mutedMint}
+                      value={email}
+                      onChangeText={t => { setEmail(t); if (errors.email) setErrors(e => ({ ...e, email: undefined })) }}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                  </View>
+                  {errors.email && <Text style={styles.error}>{errors.email}</Text>}
+                </View>
+
+                <View>
+                  <AuthInput
+                    placeholder="Contraseña"
+                    value={password}
+                    onChangeText={t => { setPassword(t); if (errors.password) setErrors(e => ({ ...e, password: undefined })) }}
+                    secureTextEntry
+                  />
+                  {errors.password && <Text style={styles.error}>{errors.password}</Text>}
+                </View>
+
+                <TouchableOpacity style={styles.primaryBtn} onPress={handleLogin} disabled={loading} activeOpacity={0.85}>
+                  <Text style={styles.primaryBtnText}>{loading ? 'Ingresando...' : 'Ingresar'}</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity onPress={() => router.push('/(auth)/forgot-password')} style={{ alignSelf: 'center', marginTop: 4 }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Text style={styles.link}>Olvidé mi contraseña</Text>
+                </TouchableOpacity>
+              </Animated.View>
+
+              <Animated.View entering={FadeInDown.duration(500).delay(200)} style={styles.footer}>
+                <Text style={styles.footerText}>¿No tienes cuenta? </Text>
+                <Link href="/(auth)/register" asChild>
+                  <TouchableOpacity><Text style={styles.link}>Regístrate</Text></TouchableOpacity>
+                </Link>
+              </Animated.View>
+
             </View>
-
-            <View style={styles.form}>
-              <View style={styles.inputWrapper}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Correo electrónico"
-                  placeholderTextColor="#9CA3AF"
-                  value={email}
-                  onChangeText={t => { setEmail(t); if (errors.email) setErrors(e => ({ ...e, email: undefined })) }}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-              </View>
-              {errors.email && <Text style={styles.error}>{errors.email}</Text>}
-
-              <AuthInput
-                placeholder="Contraseña"
-                value={password}
-                onChangeText={t => { setPassword(t); if (errors.password) setErrors(e => ({ ...e, password: undefined })) }}
-                secureTextEntry
-              />
-              {errors.password && <Text style={styles.error}>{errors.password}</Text>}
-
-              <TouchableOpacity style={styles.primaryBtn} onPress={handleLogin} disabled={loading} activeOpacity={0.85}>
-                <Text style={styles.primaryBtnText}>{loading ? 'Ingresando...' : 'Ingresar'}</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity onPress={() => router.push('/(auth)/forgot-password')} style={{ alignSelf: 'flex-end', marginTop: 4 }}>
-                <Text style={styles.link}>Olvide mi contraseña</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.footer}>
-              <Text style={styles.footerText}>¿No tienes cuenta? </Text>
-              <Link href="/(auth)/register" asChild>
-                <TouchableOpacity><Text style={styles.link}>Regístrate</Text></TouchableOpacity>
-              </Link>
-            </View>
-
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  inner: { flex: 1, paddingHorizontal: 24, paddingTop: 36, paddingBottom: 24, gap: 24 },
+  screen: {
+    flex: 1,
+    backgroundColor: PALETTE.bg,
+    experimental_backgroundImage:
+      'radial-gradient(circle at 15% -8%, rgba(61,220,151,0.16), transparent 55%), radial-gradient(circle at 100% 105%, rgba(18,61,48,0.9), transparent 60%)',
+  },
+  container: { flex: 1 },
+  inner: { flex: 1, width: '100%', maxWidth: 480, alignSelf: 'center', paddingHorizontal: 24, paddingTop: 8, paddingBottom: 24, gap: 28 },
+
+  brand: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  brandLogo: { width: 32, height: 32, borderRadius: 10 },
+  brandName: { color: PALETTE.warmWhite, fontSize: 15, fontWeight: '700', letterSpacing: 0.2 },
+
   header: { gap: 8 },
-  logo: { width: 64, height: 64, borderRadius: 20, marginBottom: 4 },
-  title: { fontSize: 28, fontWeight: '800', color: COLORS.text, letterSpacing: -0.5 },
-  subtitle: { fontSize: 14, color: COLORS.muted, lineHeight: 20 },
-  form: { gap: 12 },
+  title: { fontSize: 28, fontWeight: '800', color: PALETTE.warmWhite, letterSpacing: -0.6 },
+  subtitle: { fontSize: 15, color: PALETTE.mutedMint, lineHeight: 21 },
+
+  form: { gap: 14 },
   inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.white,
-    borderRadius: 16,
-    paddingHorizontal: 20,
-    height: 54,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: 'rgba(247,245,240,0.06)', borderRadius: 16, paddingHorizontal: 20, height: 54,
+    borderWidth: 1, borderColor: PALETTE.hairline,
   },
-  input: { flex: 1, fontSize: 15, color: COLORS.text },
+  input: { flex: 1, fontSize: 15, color: PALETTE.warmWhite },
   eyeBtn: { paddingLeft: 8 },
-  error: { color: COLORS.error, fontSize: 12, marginTop: -6, paddingLeft: 4 },
+  error: { color: PALETTE.error, fontSize: 12, marginTop: 6, paddingLeft: 4 },
+
   primaryBtn: {
-    backgroundColor: COLORS.primary,
-    borderRadius: 16,
-    height: 54,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 4,
-    shadowColor: COLORS.primary,
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
+    backgroundColor: PALETTE.mint, borderRadius: 16, height: 54,
+    justifyContent: 'center', alignItems: 'center', marginTop: 6,
+    shadowColor: PALETTE.mint, shadowOpacity: 0.3, shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 }, elevation: 3,
   },
-  primaryBtnText: { color: COLORS.white, fontWeight: '700', fontSize: 17 },
-  link: { color: COLORS.primary, fontWeight: '600', fontSize: 14 },
+  primaryBtnText: { color: PALETTE.onMint, fontWeight: '800', fontSize: 16 },
+  link: { color: PALETTE.mint, fontWeight: '600', fontSize: 14 },
   footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 4 },
-  footerText: { color: COLORS.muted, fontSize: 14 },
+  footerText: { color: PALETTE.mutedMint, fontSize: 14 },
 })

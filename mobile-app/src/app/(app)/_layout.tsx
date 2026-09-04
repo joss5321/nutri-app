@@ -12,22 +12,24 @@ function TabIcon({
   name,
   color,
   size,
+  focused,
   badge,
 }: {
   name: IoniconsName
   color: string
   size: number
+  focused: boolean
   badge?: boolean
 }) {
   return (
-    <View>
+    <View style={[styles.tabIconWrap, focused && styles.tabIconWrapActive]}>
       <Ionicons name={name} size={size} color={color} />
       {badge && (
         <View
           style={{
             position: 'absolute',
             top: -1,
-            right: -5,
+            right: -3,
             width: 9,
             height: 9,
             borderRadius: 4.5,
@@ -78,8 +80,8 @@ export default function AppLayout() {
         name="progreso"
         options={{
           title: 'Progreso',
-          tabBarIcon: ({ color, size }) => (
-            <TabIcon name="trending-up" color={color} size={size} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <TabIcon name="trending-up" color={color} size={size} focused={focused} />
           ),
         }}
       />
@@ -87,8 +89,8 @@ export default function AppLayout() {
         name="rutinas"
         options={{
           title: 'Rutinas',
-          tabBarIcon: ({ color, size }) => (
-            <TabIcon name="barbell" color={color} size={size} badge={hasNewRutinas} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <TabIcon name="barbell" color={color} size={size} focused={focused} badge={hasNewRutinas} />
           ),
         }}
       />
@@ -96,8 +98,8 @@ export default function AppLayout() {
         name="nutricion"
         options={{
           title: 'Plan Nutricional',
-          tabBarIcon: ({ color, size }) => (
-            <TabIcon name="restaurant" color={color} size={size} badge={hasNewNutricion} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <TabIcon name="restaurant" color={color} size={size} focused={focused} badge={hasNewNutricion} />
           ),
           tabBarLabelStyle: { ...styles.tabLabel, fontSize: 9 },
         }}
@@ -106,8 +108,8 @@ export default function AppLayout() {
         name="perfil"
         options={{
           title: 'Perfil',
-          tabBarIcon: ({ color, size }) => (
-            <TabIcon name="person-circle" color={color} size={size} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <TabIcon name="person-circle" color={color} size={size} focused={focused} />
           ),
         }}
       />
@@ -131,4 +133,14 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
   tabLabel: { fontSize: 10, fontWeight: '600' },
+  tabIconWrap: {
+    width: 40,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tabIconWrapActive: {
+    backgroundColor: COLORS.primaryLight,
+  },
 })

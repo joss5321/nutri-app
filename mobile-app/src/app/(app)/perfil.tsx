@@ -40,15 +40,15 @@ const ESTADO_COLORS: Record<string, { bg: string; text: string }> = {
 
 const PLANS = [
   {
-    key: 'basico' as const, icon: '🌱', name: 'Plan Básico', price: '$199 MXN', period: 'al mes',
+    key: 'basico' as const, icon: 'leaf-outline' as const, name: 'Plan Básico', price: '$199 MXN', period: 'al mes',
     features: ['Recetas saludables', 'Plan semanal básico', 'Recordatorio de agua', 'Soporte por email'],
   },
   {
-    key: 'pro' as const, icon: '👑', name: 'Plan Pro', price: '$349 MXN', period: 'al mes',
+    key: 'pro' as const, icon: 'ribbon-outline' as const, name: 'Plan Pro', price: '$349 MXN', period: 'al mes',
     features: ['Todo lo del plan Básico', 'Planes personalizados', 'Seguimiento de progreso', 'Soporte prioritario'],
   },
   {
-    key: 'premium' as const, icon: '💎', name: 'Plan Premium', price: '$599 MXN', period: 'al mes',
+    key: 'premium' as const, icon: 'diamond-outline' as const, name: 'Plan Premium', price: '$599 MXN', period: 'al mes',
     features: ['Todo lo del plan Pro', 'Consultas 1:1 con nutriólogo', 'Ajustes ilimitados de plan', 'Soporte 24/7'],
   },
 ]
@@ -209,7 +209,7 @@ export default function PerfilScreen() {
   return (
     <View style={s.container}>
       <AppHeader title="Perfil" />
-      <ScrollView showsVerticalScrollIndicator={false}
+      <ScrollView style={s.wideScroll} showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true)} colors={[COLORS.primary]} tintColor={COLORS.primary} />}>
         <View style={{ padding: 16, gap: 16, paddingBottom: 32 }}>
 
@@ -315,7 +315,9 @@ export default function PerfilScreen() {
           <Text style={s.sectionTitle}>Próximas citas</Text>
           {citas.length === 0 ? (
             <View style={s.emptyCard}>
-              <Text style={{ fontSize: 32 }}>📅</Text>
+              <View style={s.emptyIcon}>
+                <Ionicons name="calendar-outline" size={26} color={COLORS.primary} />
+              </View>
               <Text style={{ fontSize: 13, color: COLORS.muted, textAlign: 'center', marginTop: 4 }}>
                 No tienes citas programadas.
               </Text>
@@ -342,14 +344,18 @@ export default function PerfilScreen() {
                           </Text>
                         </View>
                       </View>
-                      <Text style={{ fontSize: 12, color: COLORS.primary, fontWeight: '600', marginTop: 2 }}>
-                        🕐 {c.hora}
-                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                        <Ionicons name="time-outline" size={12} color={COLORS.primary} />
+                        <Text style={{ fontSize: 12, color: COLORS.primary, fontWeight: '600' }}>{c.hora}</Text>
+                      </View>
                       {c.profesional && (
                         <Text style={{ fontSize: 12, color: COLORS.muted, marginTop: 1 }}>{c.profesional}</Text>
                       )}
                       {c.modalidad && (
-                        <Text style={{ fontSize: 11, color: COLORS.muted }}>📍 {c.modalidad}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <Ionicons name="location-outline" size={11} color={COLORS.muted} />
+                          <Text style={{ fontSize: 11, color: COLORS.muted }}>{c.modalidad}</Text>
+                        </View>
                       )}
                       {c.estado === 'pendiente' && (
                         <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
@@ -388,7 +394,7 @@ export default function PerfilScreen() {
           <Text style={s.sectionTitle}>Mi membresía actual</Text>
           <View style={s.premiumCard}>
             <View style={s.premiumIcon}>
-              <Text style={{ fontSize: 24 }}>{isPremium ? '⭐' : '🌱'}</Text>
+              <Ionicons name={isPremium ? 'diamond-outline' : 'leaf-outline'} size={22} color={COLORS.primary} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={s.premiumName}>{isPremium ? 'Plan Premium' : 'Plan Básico'}</Text>
@@ -404,7 +410,7 @@ export default function PerfilScreen() {
             {PLANS.map((plan) => (
               <View key={plan.key} style={[s.planCard, { flex: 1 }]}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                  <Text style={{ fontSize: 20 }}>{plan.icon}</Text>
+                  <Ionicons name={plan.icon} size={18} color={COLORS.primary} />
                   <Text style={s.planName}>{plan.name}</Text>
                 </View>
                 <Text style={s.planPrice}>{plan.price}</Text>
@@ -448,6 +454,7 @@ export default function PerfilScreen() {
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
+  wideScroll: { flex: 1, width: '100%', maxWidth: 720, alignSelf: 'center' },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text, letterSpacing: -0.2 },
 
   // ── Avatar / profile card ──
@@ -490,6 +497,10 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: COLORS.border, alignItems: 'center',
     shadowColor: '#0F172A', shadowOpacity: 0.04, shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 }, elevation: 1,
+  },
+  emptyIcon: {
+    width: 56, height: 56, borderRadius: 28,
+    backgroundColor: COLORS.primaryLight, justifyContent: 'center', alignItems: 'center',
   },
   citaCard: {
     flexDirection: 'row', gap: 12, alignItems: 'flex-start',

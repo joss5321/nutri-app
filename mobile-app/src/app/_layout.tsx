@@ -6,6 +6,7 @@ import * as SplashScreen from 'expo-splash-screen'
 import { useColorScheme } from 'react-native'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/auth'
+import { COLORS } from '@/constants/colors'
 import '../global.css'
 
 console.log('[APP] _layout module loaded')
@@ -32,11 +33,11 @@ class ErrorBoundary extends Component<{ children: ReactNode }, EBState> {
   render() {
     if (this.state.error) {
       return (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-          <Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 8 }}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, backgroundColor: COLORS.background }}>
+          <Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 8, color: COLORS.ink }}>
             Error al iniciar la app
           </Text>
-          <Text style={{ fontSize: 13, color: '#6B7280', textAlign: 'center' }}>
+          <Text style={{ fontSize: 13, color: COLORS.muted, textAlign: 'center' }}>
             {this.state.error.message}
           </Text>
         </View>

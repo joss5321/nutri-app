@@ -103,8 +103,10 @@ function EquivalentesTab() {
   if (groups.length === 0) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32, paddingVertical: 48 }}>
-        <Text style={{ fontSize: 48, marginBottom: 16 }}>🥗</Text>
-        <Text style={{ fontWeight: '700', fontSize: 16, color: COLORS.text, textAlign: 'center' }}>
+        <View style={s.emptyIcon}>
+          <Ionicons name="nutrition-outline" size={28} color={COLORS.primary} />
+        </View>
+        <Text style={{ fontWeight: '700', fontSize: 16, color: COLORS.text, textAlign: 'center', marginTop: 16 }}>
           Tu nutriólogo aún no ha asignado un plan de equivalentes
         </Text>
         <Text style={{ fontSize: 13, color: COLORS.muted, textAlign: 'center', marginTop: 8, lineHeight: 20 }}>
@@ -116,6 +118,7 @@ function EquivalentesTab() {
 
   return (
     <ScrollView
+      style={s.wideScroll}
       showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl
@@ -131,7 +134,7 @@ function EquivalentesTab() {
           <Text style={s.objetivoTitle}>Objetivo del mes</Text>
           <View style={s.objetivoRow}>
             <View style={s.objetivoIcon}>
-              <Text style={{ fontSize: 22 }}>🎯</Text>
+              <Ionicons name="flag-outline" size={22} color={COLORS.primary} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={{ fontWeight: '700', color: COLORS.text }}>Plan de equivalentes</Text>
@@ -340,7 +343,10 @@ function RecipeDetailModal({ recipe, onClose }: { recipe: Recipe; onClose: () =>
             ) : null}
 
             <View style={rm.section}>
-              <Text style={rm.sectionTitle}>🛒 Ingredientes</Text>
+              <View style={rm.sectionTitleRow}>
+                <Ionicons name="basket-outline" size={16} color={COLORS.primary} />
+                <Text style={rm.sectionTitle}>Ingredientes</Text>
+              </View>
               <View style={rm.ingredientsList}>
                 {recipe.ingredients.map((ing, i) => (
                   <View key={i} style={rm.ingredientRow}>
@@ -357,7 +363,10 @@ function RecipeDetailModal({ recipe, onClose }: { recipe: Recipe; onClose: () =>
             </View>
 
             <View style={rm.section}>
-              <Text style={rm.sectionTitle}>👨‍🍳 Preparación</Text>
+              <View style={rm.sectionTitleRow}>
+                <Ionicons name="restaurant-outline" size={16} color={COLORS.primary} />
+                <Text style={rm.sectionTitle}>Preparación</Text>
+              </View>
               <View style={{ gap: 12 }}>
                 {recipe.steps.map((step, i) => (
                   <View key={i} style={rm.stepRow}>
@@ -393,9 +402,15 @@ function RecipeCard({ recipe, onPress }: { recipe: Recipe; onPress: () => void }
             ))}
           </View>
         ) : null}
-        <View style={{ flexDirection: 'row', gap: 12 }}>
-          <Text style={{ fontSize: 11, color: COLORS.muted }}>⏱ {recipe.time}</Text>
-          <Text style={{ fontSize: 11, color: COLORS.muted }}>🔥 {recipe.calories}</Text>
+        <View style={{ flexDirection: 'row', gap: 14 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+            <Ionicons name="time-outline" size={12} color={COLORS.muted} />
+            <Text style={{ fontSize: 11, color: COLORS.muted }}>{recipe.time}</Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+            <Ionicons name="flame-outline" size={12} color={COLORS.muted} />
+            <Text style={{ fontSize: 11, color: COLORS.muted }}>{recipe.calories}</Text>
+          </View>
         </View>
       </View>
       <Ionicons name="chevron-forward" size={18} color={COLORS.primary} />
@@ -458,8 +473,10 @@ function RecetasTab() {
   if (recipes.length === 0) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32, paddingVertical: 48 }}>
-        <Text style={{ fontSize: 48, marginBottom: 16 }}>🍽</Text>
-        <Text style={{ fontWeight: '700', fontSize: 16, color: COLORS.text, textAlign: 'center' }}>
+        <View style={s.emptyIcon}>
+          <Ionicons name="restaurant-outline" size={28} color={COLORS.primary} />
+        </View>
+        <Text style={{ fontWeight: '700', fontSize: 16, color: COLORS.text, textAlign: 'center', marginTop: 16 }}>
           Tu nutriólogo aún no ha asignado recetas
         </Text>
         <Text style={{ fontSize: 13, color: COLORS.muted, textAlign: 'center', marginTop: 8, lineHeight: 20 }}>
@@ -475,6 +492,7 @@ function RecetasTab() {
         <RecipeDetailModal recipe={selectedRecipe} onClose={() => setSelectedRecipe(null)} />
       )}
       <ScrollView
+        style={s.wideScroll}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -534,7 +552,7 @@ function RecetasTab() {
 
           {filtered.length === 0 && (
             <View style={{ alignItems: 'center', paddingVertical: 32 }}>
-              <Text style={{ fontSize: 36 }}>🔍</Text>
+              <Ionicons name="search-outline" size={30} color={COLORS.muted} />
               <Text style={{ color: COLORS.muted, marginTop: 8 }}>
                 Sin resultados para "{search}"
               </Text>
@@ -723,8 +741,10 @@ function SuplementacionTab() {
   if (suplementos.length === 0) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32, paddingVertical: 48 }}>
-        <Text style={{ fontSize: 48, marginBottom: 16 }}>💊</Text>
-        <Text style={{ fontWeight: '700', fontSize: 16, color: COLORS.text, textAlign: 'center' }}>
+        <View style={s.emptyIcon}>
+          <Ionicons name="medkit-outline" size={28} color={COLORS.primary} />
+        </View>
+        <Text style={{ fontWeight: '700', fontSize: 16, color: COLORS.text, textAlign: 'center', marginTop: 16 }}>
           Tu nutriólogo aún no ha asignado suplementos
         </Text>
         <Text style={{ fontSize: 13, color: COLORS.muted, textAlign: 'center', marginTop: 8, lineHeight: 20 }}>
@@ -740,6 +760,7 @@ function SuplementacionTab() {
 
   return (
     <ScrollView
+      style={s.wideScroll}
       showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl
@@ -765,7 +786,9 @@ function SuplementacionTab() {
               </Text>
               <Text style={{ fontSize: 12, color: COLORS.muted }}>suplementos tomados</Text>
             </View>
-            <Text style={{ fontSize: 40 }}>💊</Text>
+            <View style={s.suppHeaderIcon}>
+              <Ionicons name="medkit-outline" size={26} color={COLORS.primary} />
+            </View>
           </View>
         </View>
 
@@ -821,7 +844,7 @@ function SuplementacionTab() {
             <View key={item.id}>
               <View style={[s.suppCard, done && s.suppCardDone]}>
                 <View style={[s.suppIcon, done && { backgroundColor: '#DCFCE7' }]}>
-                  <Text style={{ fontSize: 24 }}>💊</Text>
+                  <Ionicons name="medkit-outline" size={20} color={done ? COLORS.completedText : COLORS.primary} />
                 </View>
 
                 <View style={{ flex: 1, gap: 4 }}>
@@ -838,9 +861,12 @@ function SuplementacionTab() {
                     </Text>
                   ) : null}
                   {item.notas ? (
-                    <Text style={{ fontSize: 11, color: '#6366F1', fontStyle: 'italic' }} numberOfLines={1}>
-                      📝 {item.notas}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Ionicons name="document-text-outline" size={11} color="#6366F1" />
+                      <Text style={{ fontSize: 11, color: '#6366F1', fontStyle: 'italic', flexShrink: 1 }} numberOfLines={1}>
+                        {item.notas}
+                      </Text>
+                    </View>
                   ) : null}
 
                   {/* Chips */}
@@ -1037,13 +1063,13 @@ export default function NutricionScreen() {
 
       {showNewBanner && (
         <View style={s.newsBanner}>
-          <Ionicons name="sparkles" size={14} color="#1D4ED8" />
+          <Ionicons name="sparkles" size={14} color={COLORS.infoText} />
           <Text style={s.newsBannerText}>Tu nutriólogo actualizó tu plan nutricional</Text>
           <TouchableOpacity
             onPress={() => setShowNewBanner(false)}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Ionicons name="close" size={14} color="#1D4ED8" />
+            <Ionicons name="close" size={14} color={COLORS.infoText} />
           </TouchableOpacity>
         </View>
       )}
@@ -1072,18 +1098,19 @@ export default function NutricionScreen() {
 // ─── Estilos ──────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
+  wideScroll: { flex: 1, width: '100%', maxWidth: 720, alignSelf: 'center' },
 
   newsBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#DBEAFE',
+    backgroundColor: COLORS.info,
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#BFDBFE',
+    borderBottomColor: COLORS.infoBorder,
   },
-  newsBannerText: { flex: 1, fontSize: 13, color: '#1D4ED8', fontWeight: '500' },
+  newsBannerText: { flex: 1, fontSize: 13, color: COLORS.infoText, fontWeight: '500' },
 
   innerTabs: {
     flexDirection: 'row',
@@ -1402,6 +1429,15 @@ const s = StyleSheet.create({
     minHeight: 80,
     textAlignVertical: 'top',
   },
+
+  emptyIcon: {
+    width: 56, height: 56, borderRadius: 28,
+    backgroundColor: COLORS.primaryLight, justifyContent: 'center', alignItems: 'center',
+  },
+  suppHeaderIcon: {
+    width: 52, height: 52, borderRadius: 16,
+    backgroundColor: COLORS.primaryLight, justifyContent: 'center', alignItems: 'center',
+  },
 })
 
 const rm = StyleSheet.create({
@@ -1467,6 +1503,7 @@ const rm = StyleSheet.create({
     borderColor: COLORS.border,
     gap: 10,
   },
+  sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   sectionTitle: { fontSize: 15, fontWeight: '700', color: COLORS.text, letterSpacing: -0.2 },
   ingredientsList: { gap: 10 },
   ingredientRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
