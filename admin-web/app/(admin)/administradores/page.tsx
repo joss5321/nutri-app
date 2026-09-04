@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { fetchAdmins, updatePerfil, type AdminListItem } from "@/app/_data/perfiles";
 import ConfirmModal from "@/app/_components/ConfirmModal";
+import { X, ShieldCheck, Check, Pencil, Trash2, Camera } from "lucide-react";
 
 export default function AdministradoresPage() {
   const router = useRouter();
@@ -233,7 +234,8 @@ export default function AdministradoresPage() {
           onClick={() => { setShowForm(!showForm); setFeedback(null); }}
           className="flex items-center gap-2 h-10 px-4 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary-dark transition-colors"
         >
-          {showForm ? "✕ Cancelar" : "🛡️ Nuevo administrador"}
+          {showForm ? <X size={16} /> : <ShieldCheck size={16} />}
+          {showForm ? "Cancelar" : "Nuevo administrador"}
         </button>
       </div>
 
@@ -271,7 +273,8 @@ export default function AdministradoresPage() {
           <div className="flex justify-end">
             <button onClick={handleCreate} disabled={saving}
               className="flex items-center gap-2 px-5 h-10 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-dark disabled:opacity-50">
-              {saving ? "Creando..." : "✓ Crear administrador"}
+              {!saving && <Check size={15} />}
+              {saving ? "Creando..." : "Crear administrador"}
             </button>
           </div>
         </div>
@@ -290,6 +293,7 @@ export default function AdministradoresPage() {
         <p className="text-sm text-gray-400 py-10 text-center">Cargando administradores...</p>
       ) : (
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50/50">
@@ -316,7 +320,7 @@ export default function AdministradoresPage() {
                         <div>
                           <span className="font-medium text-gray-900">{adminNombre}</span>
                           {isSelf && (
-                            <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-semibold">Tú</span>
+                            <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-brand-soft text-primary font-semibold">Tú</span>
                           )}
                           {a.rol === "superadmin" && (
                             <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-semibold">SuperAdmin</span>
@@ -330,13 +334,13 @@ export default function AdministradoresPage() {
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-2">
                         <button onClick={() => openEdit(a)}
-                          className="w-9 h-9 rounded-xl border border-gray-200 hover:border-primary hover:bg-primary/5 flex items-center justify-center transition-colors" title="Editar">
-                          ✏️
+                          className="w-9 h-9 rounded-xl border border-gray-200 hover:border-primary hover:bg-primary/5 flex items-center justify-center transition-colors text-gray-500 hover:text-primary" title="Editar">
+                          <Pencil size={15} />
                         </button>
                         {!isSelf && a.rol !== "superadmin" && (
                           <button onClick={() => setConfirmRemove(a)}
-                            className="w-9 h-9 rounded-xl border border-red-200 hover:border-red-400 hover:bg-red-50 flex items-center justify-center transition-colors" title="Quitar acceso">
-                            🗑️
+                            className="w-9 h-9 rounded-xl border border-red-200 hover:border-red-400 hover:bg-red-50 flex items-center justify-center transition-colors text-red-500" title="Quitar acceso">
+                            <Trash2 size={15} />
                           </button>
                         )}
                       </div>
@@ -353,6 +357,7 @@ export default function AdministradoresPage() {
               )}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
@@ -362,7 +367,7 @@ export default function AdministradoresPage() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-6 border-b border-gray-100">
               <h2 className="font-bold text-gray-900 text-lg">Editar administrador</h2>
-              <button onClick={() => setEditing(null)} className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 text-xl">×</button>
+              <button onClick={() => setEditing(null)} className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400"><X size={18} /></button>
             </div>
             <div className="p-6 space-y-5">
               {/* Avatar */}
@@ -376,7 +381,7 @@ export default function AdministradoresPage() {
                     </div>
                   )}
                   <div className="absolute inset-0 rounded-full bg-black/0 group-hover:bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
-                    <span className="text-white text-sm font-semibold">{uploadingAvatar ? "..." : "📷"}</span>
+                    <span className="text-white text-sm font-semibold">{uploadingAvatar ? "..." : <Camera size={16} />}</span>
                   </div>
                 </div>
                 <input ref={editFileRef} type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" />

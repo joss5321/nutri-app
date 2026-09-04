@@ -167,24 +167,28 @@ export default function Sidebar() {
         `}
       >
         {collapsed ? (
-          <div className="relative w-9 h-9 rounded-lg overflow-hidden shrink-0">
-            <Image
-              src="/myFitTrackLogo.PNG"
+          <div className="w-9 h-9 rounded-lg bg-white shrink-0 flex items-center justify-center p-1">
+            {/* eslint-disable-next-line @next/next/no-img-element -- SVG local, next/image requiere dangerouslyAllowSVG */}
+            <img
+              src="/branding/isotipo-myfittrack.svg"
               alt="MyFitTrack"
-              fill
-              className="object-cover object-left"
+              width={612}
+              height={792}
+              className="w-full h-full object-contain"
             />
           </div>
         ) : (
           <div className="flex items-center gap-3 min-w-0">
-            <Image
-              src="/myFitTrackLogo.PNG"
-              alt="MyFitTrack"
-              width={160}
-              height={40}
-              style={{ height: 34, width: "auto" }}
-              className="object-contain shrink-0"
-            />
+            <div className="w-9 h-9 rounded-lg bg-white shrink-0 flex items-center justify-center p-1">
+              {/* eslint-disable-next-line @next/next/no-img-element -- SVG local, next/image requiere dangerouslyAllowSVG */}
+              <img
+                src="/branding/isotipo-myfittrack.svg"
+                alt="MyFitTrack"
+                width={612}
+                height={792}
+                className="w-full h-full object-contain"
+              />
+            </div>
             <div className="min-w-0 overflow-hidden">
               <p className="text-white font-bold text-sm leading-tight tracking-tight">
                 MyFitTrack
@@ -213,7 +217,7 @@ export default function Sidebar() {
             className="w-[34px] h-[34px] rounded-full object-cover border border-white/20 shrink-0"
           />
         ) : (
-          <div className="w-[34px] h-[34px] rounded-full bg-green-500/20 border border-green-500/30 flex items-center justify-center text-green-300 font-semibold text-xs shrink-0 select-none">
+          <div className="w-[34px] h-[34px] rounded-full bg-brand-accent/20 border border-brand-accent/30 flex items-center justify-center text-brand-accent font-semibold text-xs shrink-0 select-none">
             {initials}
           </div>
         )}
@@ -255,7 +259,7 @@ export default function Sidebar() {
                     {/* Barra vertical activa (estilo Notion/Linear) — solo en modo expandido */}
                     {isActive && !collapsed && (
                       <span
-                        className="absolute left-0 top-[18%] bottom-[18%] w-[3px] bg-green-400 rounded-r-full pointer-events-none z-10"
+                        className="absolute left-0 top-[18%] bottom-[18%] w-[3px] bg-brand-accent rounded-r-full pointer-events-none z-10"
                         aria-hidden
                       />
                     )}
@@ -266,13 +270,13 @@ export default function Sidebar() {
                       className={`
                         flex items-center rounded-lg outline-none
                         transition-colors duration-150
-                        focus-visible:ring-2 focus-visible:ring-green-400 focus-visible:ring-offset-1
+                        focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-1
                         ${collapsed
                           ? "justify-center w-10 h-10 mx-auto"
                           : "gap-3 px-3 py-1.5 w-full"
                         }
                         ${isActive
-                          ? "bg-green-500/15 text-white"
+                          ? "bg-brand-accent/15 text-white"
                           : "text-white/55 hover:bg-sidebar-hover hover:text-white"
                         }
                       `}
@@ -281,7 +285,7 @@ export default function Sidebar() {
                         size={16}
                         strokeWidth={isActive ? 2.5 : 2}
                         className={`shrink-0 transition-colors duration-150 ${
-                          isActive ? "text-green-400" : ""
+                          isActive ? "text-brand-accent" : ""
                         }`}
                       />
                       {!collapsed && (
@@ -290,7 +294,7 @@ export default function Sidebar() {
                             {item.label}
                           </span>
                           {isActive && (
-                            <span className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0" />
+                            <span className="w-1.5 h-1.5 rounded-full bg-brand-accent shrink-0" />
                           )}
                         </>
                       )}
@@ -318,7 +322,7 @@ export default function Sidebar() {
               flex items-center rounded-lg text-white/35
               hover:text-white/70 hover:bg-white/6
               transition-colors duration-150 w-full outline-none
-              focus-visible:ring-2 focus-visible:ring-green-400
+              focus-visible:ring-2 focus-visible:ring-brand-accent
               ${collapsed
                 ? "justify-center w-10 h-9 mx-auto"
                 : "gap-2.5 px-3 py-1.5"

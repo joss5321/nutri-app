@@ -11,6 +11,7 @@ import {
   type SuplementoInput,
 } from "@/app/_data/suplementos";
 import ConfirmModal from "@/app/_components/ConfirmModal";
+import { Search, Camera, Check, Pencil, Trash2, Pill, Plus } from "lucide-react";
 
 function SuplementoModal({
   suplemento,
@@ -91,7 +92,7 @@ function SuplementoModal({
                 <Image src={imagenUrl} alt="" width={112} height={112} className="w-full h-full object-cover rounded-xl" />
               ) : (
                 <div className="flex flex-col items-center gap-1 text-gray-400">
-                  <span className="text-3xl">📷</span>
+                  <Camera size={26} />
                   <span className="text-xs">Subir imagen</span>
                 </div>
               )}
@@ -129,8 +130,9 @@ function SuplementoModal({
         <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100">
           <button onClick={onClose} className="px-4 h-10 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50">Cancelar</button>
           <button onClick={handleSave} disabled={saving}
-            className="px-5 h-10 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-dark disabled:opacity-50">
-            {saving ? "Guardando..." : isEdit ? "Guardar cambios" : "✓ Crear suplemento"}
+            className="px-5 h-10 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-dark disabled:opacity-50 inline-flex items-center gap-1.5">
+            {!saving && !isEdit && <Check size={15} />}
+            {saving ? "Guardando..." : isEdit ? "Guardar cambios" : "Crear suplemento"}
           </button>
         </div>
       </div>
@@ -192,13 +194,13 @@ export default function SuplementosPage() {
         </div>
         <button onClick={() => setShowCreate(true)}
           className="flex items-center gap-2 h-10 px-4 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary-dark transition-colors">
-          + Nuevo suplemento
+          <Plus size={16} /> Nuevo suplemento
         </button>
       </div>
 
       {/* Search */}
       <div className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl px-4 h-11 mb-5 max-w-sm shadow-sm">
-        <span className="text-gray-400">🔍</span>
+        <Search size={16} className="text-gray-400 shrink-0" />
         <input placeholder="Buscar suplemento..." value={search} onChange={(e) => setSearch(e.target.value)}
           className="flex-1 text-sm focus:outline-none text-gray-700" />
       </div>
@@ -243,12 +245,12 @@ export default function SuplementosPage() {
                   )}
                   <div className="flex items-center gap-2">
                     <button onClick={() => setEditing(s)}
-                      className="flex-1 h-9 rounded-xl border border-gray-200 text-gray-600 text-xs font-semibold hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors">
-                      ✏️ Editar
+                      className="flex-1 h-9 rounded-xl border border-gray-200 text-gray-600 text-xs font-semibold hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors inline-flex items-center justify-center gap-1">
+                      <Pencil size={12} /> Editar
                     </button>
                     <button onClick={() => setConfirmDeleteId(s.id)} disabled={deletingId === s.id}
-                      className="h-9 px-3 rounded-xl border border-red-200 text-red-500 text-xs font-semibold hover:bg-red-50 hover:border-red-400 transition-colors disabled:opacity-50">
-                      {deletingId === s.id ? "..." : "🗑️"}
+                      className="h-9 px-3 rounded-xl border border-red-200 text-red-500 text-xs font-semibold hover:bg-red-50 hover:border-red-400 transition-colors disabled:opacity-50 inline-flex items-center justify-center">
+                      {deletingId === s.id ? "..." : <Trash2 size={13} />}
                     </button>
                   </div>
                 </div>
@@ -257,7 +259,9 @@ export default function SuplementosPage() {
 
             {filtered.length === 0 && (
               <div className="col-span-3 flex flex-col items-center justify-center py-16 text-gray-400">
-                <span className="text-4xl mb-2">💊</span>
+                <div className="w-14 h-14 rounded-full bg-brand-soft flex items-center justify-center mb-3">
+                  <Pill size={26} className="text-primary" />
+                </div>
                 <p className="text-sm">No se encontraron suplementos.</p>
               </div>
             )}

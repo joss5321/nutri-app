@@ -1,17 +1,60 @@
 @import "tailwindcss";
 
+/* ─── Sistema visual MyFitTrack (admin-web) ──────────────────────────────
+   Construido a partir del isotipo oficial (public/branding/isotipo-myfittrack.svg:
+   tinta navy #192C31, cinta métrica amarilla #FFF824) y del verde esmeralda ya
+   oficial en la config de la app móvil (splash #2EBD8C / adaptive icon #144333),
+   que este panel ya usaba como `--color-primary` — se conserva y se completa.
+   `--color-sidebar` pasa de un verde genérico de Tailwind (#14532D) al mismo
+   esmeralda oscuro exacto de la experiencia Auth de mobile-app (#0B2B22), para
+   que sidebar ↔ Welcome/Login móvil se reconozcan como la misma marca. */
 @theme {
+  /* Brand */
   --color-primary: #2EBD8C;
   --color-primary-dark: #1A6B45;
   --color-primary-light: #EAF8F0;
-  --color-sidebar: #14532D;
-  --color-sidebar-hover: #166534;
+  --color-brand-accent: #3DDC97;
+  --color-brand-soft: #EAF7F1;
+  --color-ink: #192C31;
+  --color-highlight: #FFF824;
+
+  /* Sidebar / superficies oscuras (Auth de mobile-app) */
+  --color-sidebar: #0B2B22;
+  --color-sidebar-hover: #123D30;
+
+  /* Backgrounds */
+  --color-background: #F9F8F6;
+  --color-background-secondary: #F3F1EC;
+
+  /* Surfaces */
+  --color-surface: #FFFFFF;
+  --color-surface-elevated: #FFFFFF;
+  --color-surface-muted: #F5F7F5;
+
+  /* Text */
+  --color-text-primary: #192C31;
+  --color-text-secondary: #55625F;
+  --color-text-muted: #8A948F;
+  --color-text-inverse: #F7F5F0;
+
+  /* Semantic */
+  --color-success: #1A6B45;
+  --color-success-soft: #EAF8F0;
+  --color-warning: #B45309;
+  --color-warning-soft: #FFFBEB;
+  --color-error: #DC2626;
+  --color-error-soft: #FEF2F2;
+  --color-info: #136E4F;
+  --color-info-soft: #EAF7F1;
+
+  /* Borders */
   --color-border: #E5E7EB;
+  --color-divider: #F1F1EF;
 }
 
 :root {
-  --background: #F9FAFB;
-  --foreground: #111827;
+  --background: #F9F8F6;
+  --foreground: #192C31;
 }
 
 body {

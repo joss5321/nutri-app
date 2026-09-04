@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import { fetchPerfil, updatePerfil, type Perfil } from "@/app/_data/perfiles";
+import { Camera, ShieldCheck, Lock } from "lucide-react";
 
 export default function MiPerfilPage() {
   const [loading, setLoading] = useState(true);
@@ -156,7 +157,7 @@ export default function MiPerfilPage() {
               disabled={uploadingAvatar}
               className="absolute inset-0 rounded-full bg-black/0 group-hover:bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
             >
-              <span className="text-white text-sm font-semibold">{uploadingAvatar ? "..." : "📷"}</span>
+              <span className="text-white text-sm font-semibold">{uploadingAvatar ? "..." : <Camera size={16} />}</span>
             </button>
             <input
               ref={fileInputRef}
@@ -170,8 +171,8 @@ export default function MiPerfilPage() {
             <h2 className="font-bold text-gray-900 text-xl">{perfil?.nombre_completo || "Administrador"}</h2>
             <p className="text-gray-500 text-sm">{email}</p>
             <div className="flex items-center gap-2 mt-1">
-              <span className="text-xs px-3 py-0.5 rounded-full font-semibold bg-purple-100 text-purple-700">
-                🛡 Administrador
+              <span className="text-xs px-3 py-0.5 rounded-full font-semibold bg-purple-100 text-purple-700 inline-flex items-center gap-1">
+                <ShieldCheck size={12} /> Administrador
               </span>
             </div>
           </div>
@@ -272,9 +273,10 @@ export default function MiPerfilPage() {
           <button
             onClick={handleChangePassword}
             disabled={savingPassword}
-            className="px-4 h-10 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800 disabled:opacity-50"
+            className="px-4 h-10 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800 disabled:opacity-50 inline-flex items-center gap-2"
           >
-            {savingPassword ? "Cambiando..." : "🔒 Cambiar contraseña"}
+            {!savingPassword && <Lock size={14} />}
+            {savingPassword ? "Cambiando..." : "Cambiar contraseña"}
           </button>
         </div>
       </div>

@@ -1,10 +1,10 @@
 "use client";
 import { Suspense, useState, useEffect } from "react";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import PasswordInput from "./PasswordInput";
 import { useSearchParams } from "next/navigation";
+import { Mail, Utensils, Dumbbell, ClipboardList } from "lucide-react";
 
 function SearchParamsHandler({ onError }: { onError: (msg: string) => void }) {
   const searchParams = useSearchParams();
@@ -69,48 +69,49 @@ export default function LoginPage() {
       </Suspense>
     <div className="flex h-screen w-screen overflow-hidden">
       {/* ── Panel izquierdo ── */}
-      <div className="relative hidden lg:flex lg:w-1/2 flex-col justify-between overflow-hidden">
-        {/* Fondo oscuro con overlay verde */}
-        <div className="absolute inset-0 bg-gray-900" />
-        <div className="absolute inset-0 bg-gradient-to-br from-[#1A6845]/80 via-[#2EBD8C]/40 to-transparent" />
-
-        {/* Foto simulada con gradiente de gym */}
+      <div className="relative hidden lg:flex lg:w-1/2 flex-col justify-between overflow-hidden bg-sidebar">
+        {/* Brillo de marca, sutil */}
         <div
-          className="absolute inset-0 opacity-40"
+          className="absolute inset-0"
           style={{
             backgroundImage: `
-              radial-gradient(ellipse at 30% 60%, rgba(46,189,140,0.3) 0%, transparent 60%),
-              linear-gradient(135deg, #111 0%, #1a2e1a 50%, #0d1f0d 100%)
+              radial-gradient(ellipse at 20% -10%, rgba(61,220,151,0.16) 0%, transparent 55%),
+              radial-gradient(ellipse at 100% 105%, rgba(18,61,48,0.9) 0%, transparent 60%)
             `,
           }}
         />
 
         {/* Logo */}
         <div className="relative z-10 flex items-center gap-3 p-8">
-          <Image src="/logo-icon.png" alt="MyFitTrack" width={90} height={90} className="rounded-xl" />
+          <div className="w-[90px] h-[90px] rounded-xl bg-white shrink-0 flex items-center justify-center p-2.5">
+            {/* eslint-disable-next-line @next/next/no-img-element -- SVG local, next/image requiere dangerouslyAllowSVG */}
+            <img src="/branding/isotipo-myfittrack.svg" alt="MyFitTrack" width={612} height={792} className="w-full h-full object-contain" />
+          </div>
           <span className="text-white font-semibold text-xl tracking-wide">MyFitTrack</span>
         </div>
 
         {/* Heading central */}
         <div className="relative z-10 px-12">
-          <h1 className="text-5xl font-extrabold text-white leading-tight">
-            Tu bienestar<br />es tu mejor<br />
-            <span className="text-primary">inversión</span>
+          <h1 className="text-5xl font-extrabold text-white leading-tight tracking-tight">
+            Tu bienestar<br />es tu mejor inversión
           </h1>
+          <p className="text-white/60 text-base mt-4 max-w-sm">
+            Gestiona pacientes, planes y progreso desde un solo panel.
+          </p>
         </div>
 
         {/* Features bottom */}
         <div className="relative z-10 flex gap-10 px-12 pb-12">
           {[
-            { icon: "🥗", label: "Recetas\nsaludables" },
-            { icon: "🏋️", label: "Rutinas\nefectivas" },
-            { icon: "📋", label: "Planes\npersonalizados" },
+            { Icon: Utensils, label: "Recetas\nsaludables" },
+            { Icon: Dumbbell, label: "Rutinas\nefectivas" },
+            { Icon: ClipboardList, label: "Planes\npersonalizados" },
           ].map((f) => (
             <div key={f.label} className="flex flex-col items-center gap-2">
-              <div className="w-14 h-14 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-2xl">
-                {f.icon}
+              <div className="w-14 h-14 rounded-full bg-white/8 border border-white/15 flex items-center justify-center">
+                <f.Icon size={22} className="text-brand-accent" strokeWidth={1.75} />
               </div>
-              <span className="text-white/80 text-xs text-center whitespace-pre-line font-medium">
+              <span className="text-white/70 text-xs text-center whitespace-pre-line font-medium">
                 {f.label}
               </span>
             </div>
@@ -122,7 +123,11 @@ export default function LoginPage() {
       <div className="flex flex-1 flex-col items-center justify-center bg-white px-8 lg:px-16">
         <div className="w-full max-w-sm">
           <div className="mb-8 text-center flex flex-col items-center">
-            <Image src="/logo-horizontal.png" alt="MyFitTrack" width={240} height={115} className="mb-4" />
+            <div className="mb-4 flex items-center gap-3">
+              {/* eslint-disable-next-line @next/next/no-img-element -- SVG local, next/image requiere dangerouslyAllowSVG */}
+              <img src="/branding/isotipo-myfittrack.svg" alt="MyFitTrack" width={612} height={792} className="h-20 w-auto" />
+              <span className="text-2xl font-extrabold text-gray-900 tracking-wide">MyFitTrack</span>
+            </div>
             <h2 className="text-3xl font-extrabold text-primary">¡Bienvenido de nuevo!</h2>
             <p className="text-gray-500 mt-2 text-sm">Inicia sesión para continuar</p>
           </div>
@@ -130,7 +135,7 @@ export default function LoginPage() {
           <form onSubmit={handleLogin} className="flex flex-col gap-4">
             {/* Email */}
             <div className="flex items-center gap-3 bg-gray-100 rounded-2xl px-4 h-14 border border-transparent focus-within:border-primary transition-colors">
-              <span className="text-gray-400 text-lg">✉</span>
+              <Mail size={18} className="text-gray-400 shrink-0" />
               <input
                 type="email"
                 placeholder="Correo electrónico"

@@ -10,6 +10,7 @@ import {
 } from "@/app/_data/alimentos";
 import { fetchCurrentUserRol } from "@/app/_data/perfiles";
 import { supabase } from "@/lib/supabase";
+import { Search, Pencil, Trash2 } from "lucide-react";
 
 function fmt(v: number | null): string {
   if (v === null || v === undefined) return "—";
@@ -114,7 +115,7 @@ export default function AlimentosPage() {
       {/* Filtros */}
       <div className="flex items-center gap-3 mb-5">
         <div className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl px-4 h-11 max-w-sm shadow-sm flex-1">
-          <span className="text-gray-400">🔍</span>
+          <Search size={16} className="text-gray-400 shrink-0" />
           <input
             placeholder="Buscar alimento..."
             value={search}
@@ -214,16 +215,16 @@ export default function AlimentosPage() {
                               <>
                                 <button
                                   onClick={() => setEditing(a)}
-                                  className="h-8 px-3 rounded-lg border border-gray-200 text-gray-600 text-xs font-semibold hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors"
+                                  className="h-8 px-3 rounded-lg border border-gray-200 text-gray-600 text-xs font-semibold hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors inline-flex items-center gap-1"
                                 >
-                                  ✏ Editar
+                                  <Pencil size={12} /> Editar
                                 </button>
                                 <button
                                   onClick={() => setConfirmDeleteId(a.id)}
                                   disabled={deletingId === a.id}
-                                  className="h-8 px-2 rounded-lg border border-gray-200 text-red-500 text-xs font-semibold hover:border-red-300 hover:bg-red-50 transition-colors disabled:opacity-50"
+                                  className="h-8 px-2 rounded-lg border border-gray-200 text-red-500 text-xs font-semibold hover:border-red-300 hover:bg-red-50 transition-colors disabled:opacity-50 inline-flex items-center"
                                 >
-                                  {deletingId === a.id ? "..." : "🗑"}
+                                  {deletingId === a.id ? "..." : <Trash2 size={13} />}
                                 </button>
                               </>
                             ) : (
@@ -237,7 +238,7 @@ export default function AlimentosPage() {
                   {paginated.length === 0 && (
                     <tr>
                       <td colSpan={12} className="text-center py-14 text-gray-400">
-                        <span className="text-3xl block mb-2">🔍</span>
+                        <Search size={24} className="mx-auto mb-2 text-primary" />
                         No se encontraron alimentos.
                       </td>
                     </tr>

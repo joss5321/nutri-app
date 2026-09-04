@@ -6,8 +6,10 @@ import RecetasAsignadasForm from "@/app/_components/usuarios/RecetasAsignadasFor
 import SuplementosAsignadosForm from "@/app/_components/usuarios/SuplementosAsignadosForm";
 import DietocalculoForm from "@/app/_components/usuarios/DietocalculoForm";
 import { exportPlanNutricionPdf } from "@/app/_utils/exportPlanNutricionPdf";
+import { Calculator, Divide, Utensils, Pill, Search, FileText, X, Salad, Crown, Lock } from "lucide-react";
 
 type NutricionTab = "dietocalculo" | "equivalentes" | "recetas" | "suplementos";
+type LucideIcon = React.ComponentType<{ size?: number; className?: string; strokeWidth?: number }>;
 
 function NutricionModal({ perfil, onClose }: { perfil: Perfil; onClose: () => void }) {
   const [tab, setTab] = useState<NutricionTab>("dietocalculo");
@@ -15,11 +17,11 @@ function NutricionModal({ perfil, onClose }: { perfil: Perfil; onClose: () => vo
   const nombre = perfil.nombre_completo || "Usuario";
   const initials = nombre.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
 
-  const TABS: { key: NutricionTab; label: string; icon: string }[] = [
-    { key: "dietocalculo", label: "Dietocálculo",         icon: "🧮" },
-    { key: "equivalentes", label: "Cálculo equivalentes", icon: "🔢" },
-    { key: "recetas",      label: "Recetas",              icon: "🍽" },
-    { key: "suplementos",  label: "Suplementos",          icon: "💊" },
+  const TABS: { key: NutricionTab; label: string; Icon: LucideIcon }[] = [
+    { key: "dietocalculo", label: "Dietocálculo",         Icon: Calculator },
+    { key: "equivalentes", label: "Cálculo equivalentes", Icon: Divide },
+    { key: "recetas",      label: "Recetas",              Icon: Utensils },
+    { key: "suplementos",  label: "Suplementos",          Icon: Pill },
   ];
 
   const handleExportPdf = async () => {
@@ -52,9 +54,10 @@ function NutricionModal({ perfil, onClose }: { perfil: Perfil; onClose: () => vo
               onClick={handleExportPdf}
               disabled={exportando}
               className="flex items-center gap-2 h-9 px-4 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors">
-              {exportando ? "Generando..." : "📄 Exportar plan a PDF"}
+              <FileText size={15} />
+              {exportando ? "Generando..." : "Exportar plan a PDF"}
             </button>
-            <button onClick={onClose} className="w-9 h-9 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 text-xl">×</button>
+            <button onClick={onClose} className="w-9 h-9 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400"><X size={18} /></button>
           </div>
         </div>
 
@@ -68,7 +71,7 @@ function NutricionModal({ perfil, onClose }: { perfil: Perfil; onClose: () => vo
                 tab === t.key ? "border-primary text-primary" : "border-transparent text-gray-500 hover:text-gray-700"
               }`}
             >
-              {t.icon} {t.label}
+              <t.Icon size={15} /> {t.label}
             </button>
           ))}
         </div>
@@ -96,9 +99,10 @@ function PlanBadge({ plan }: { plan: string }) {
   const isPremium = plan === "premium";
   return (
     <span className={`text-xs px-3 py-1 rounded-full font-semibold inline-flex items-center gap-1 ${
-      isPremium ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"
+      isPremium ? "bg-brand-soft text-primary" : "bg-gray-100 text-gray-600"
     }`}>
-      {isPremium ? "👑 Premium" : "🔒 Básico"}
+      {isPremium ? <Crown size={11} /> : <Lock size={11} />}
+      {isPremium ? "Premium" : "Básico"}
     </span>
   );
 }
@@ -143,7 +147,7 @@ export default function NutricionPage() {
 
       {/* Search */}
       <div className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl px-4 h-11 mb-5 max-w-sm shadow-sm">
-        <span className="text-gray-400">🔍</span>
+        <Search size={16} className="text-gray-400 shrink-0" />
         <input
           placeholder="Buscar usuario por nombre..."
           value={search}
@@ -163,6 +167,7 @@ export default function NutricionPage() {
         <p className="text-sm text-gray-400 py-10 text-center">Cargando usuarios...</p>
       ) : (
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50/50">
@@ -195,7 +200,7 @@ export default function NutricionPage() {
                         className="flex items-center gap-2 h-9 px-3 rounded-xl border border-gray-200 hover:border-primary hover:bg-primary/5 hover:text-primary text-gray-600 text-xs font-semibold transition-colors"
                         title="Asignar nutrición"
                       >
-                        🥗 Asignar
+                        <Salad size={14} /> Asignar
                       </button>
                     </td>
                   </tr>
@@ -211,6 +216,7 @@ export default function NutricionPage() {
               )}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

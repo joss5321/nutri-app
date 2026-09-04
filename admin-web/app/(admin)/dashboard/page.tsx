@@ -2,6 +2,24 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { fetchTodasCitasPendientes, type CitaPendiente } from "@/app/_data/citas";
+import {
+  Users,
+  Dumbbell,
+  Salad,
+  CalendarClock,
+  ClipboardList,
+  BarChart3,
+  Scale,
+  FileEdit,
+  Building2,
+  Video,
+  PartyPopper,
+  Crown,
+  Lock,
+  X,
+} from "lucide-react";
+
+type LucideIcon = React.ComponentType<{ size?: number; className?: string; strokeWidth?: number }>;
 
 type Stats = {
   totalUsuarios: number;
@@ -31,16 +49,26 @@ function CitasPendientesModal({ onClose }: { onClose: () => void }) {
       .finally(() => setLoading(false));
   }, []);
 
+  const TIPO_ICONS: Record<string, LucideIcon> = {
+    consulta: ClipboardList,
+    seguimiento: BarChart3,
+    control: Scale,
+    valoracion: FileEdit,
+  };
   const TIPO_LABELS: Record<string, string> = {
-    consulta:   "📋 Consulta",
-    seguimiento: "📊 Seguimiento",
-    control:    "⚖️ Control",
-    valoracion: "📝 Valoración",
+    consulta: "Consulta",
+    seguimiento: "Seguimiento",
+    control: "Control",
+    valoracion: "Valoración",
   };
 
+  const MOD_ICONS: Record<string, LucideIcon> = {
+    presencial: Building2,
+    videollamada: Video,
+  };
   const MOD_LABELS: Record<string, string> = {
-    presencial: "🏥 Presencial",
-    videollamada: "💻 Videollamada",
+    presencial: "Presencial",
+    videollamada: "Videollamada",
   };
 
   function formatFecha(f: string) {
@@ -72,9 +100,9 @@ function CitasPendientesModal({ onClose }: { onClose: () => void }) {
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 text-xl"
+            className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400"
           >
-            ×
+            <X size={18} />
           </button>
         </div>
 
@@ -86,7 +114,9 @@ function CitasPendientesModal({ onClose }: { onClose: () => void }) {
             <p className="text-sm text-red-500 text-center py-12">{error}</p>
           ) : citas.length === 0 ? (
             <div className="text-center py-14">
-              <span className="text-4xl block mb-2">🎉</span>
+              <div className="w-14 h-14 rounded-full bg-brand-soft flex items-center justify-center mx-auto mb-3">
+                <PartyPopper size={26} className="text-primary" />
+              </div>
               <p className="text-gray-500 text-sm">No hay citas pendientes próximas.</p>
             </div>
           ) : (
@@ -94,6 +124,8 @@ function CitasPendientesModal({ onClose }: { onClose: () => void }) {
               {citas.map((c) => {
                 const nombre = c.perfiles?.nombre_completo || c.perfiles?.email || "Usuario";
                 const initials = nombre.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
+                const TipoIcon = TIPO_ICONS[c.tipo];
+                const ModIcon = c.modalidad ? MOD_ICONS[c.modalidad] : null;
                 return (
                   <div key={c.id} className="flex items-center gap-4 px-6 py-4 hover:bg-gray-50/50">
                     {/* Avatar */}
@@ -103,9 +135,16 @@ function CitasPendientesModal({ onClose }: { onClose: () => void }) {
                     {/* Info */}
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-gray-900 truncate">{nombre}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">
+                      <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
+                        {TipoIcon && <TipoIcon size={12} className="shrink-0" />}
                         {TIPO_LABELS[c.tipo] ?? c.tipo}
-                        {c.modalidad ? ` · ${MOD_LABELS[c.modalidad] ?? c.modalidad}` : ""}
+                        {c.modalidad && (
+                          <>
+                            <span className="mx-0.5">·</span>
+                            {ModIcon && <ModIcon size={12} className="shrink-0" />}
+                            {MOD_LABELS[c.modalidad] ?? c.modalidad}
+                          </>
+                        )}
                       </p>
                     </div>
                     {/* Fecha y hora */}
@@ -173,10 +212,10 @@ export default function DashboardPage() {
   const pctBasico = Math.round((stats.totalBasico / total) * 100);
 
   const kpis = [
-    { label: "Usuarios registrados", value: String(stats.totalUsuarios), icon: "👥", sub: `${stats.totalPremium} premium, ${stats.totalBasico} básico`, color: "bg-blue-50 text-blue-600",   clickable: false },
-    { label: "Rutinas activas",      value: String(stats.totalRutinas),  icon: "🏋️", sub: "Asignadas a usuarios",     color: "bg-green-50 text-green-600",  clickable: false },
-    { label: "Recetas en catálogo",  value: String(stats.totalRecetas),  icon: "🥗", sub: "Disponibles para asignar", color: "bg-orange-50 text-orange-600", clickable: false },
-    { label: "Citas pendientes",     value: String(stats.totalCitas),    icon: "📅", sub: "Haz clic para ver todas",  color: "bg-purple-50 text-purple-600", clickable: true  },
+    { label: "Usuarios registrados", value: String(stats.totalUsuarios), Icon: Users,         sub: `${stats.totalPremium} premium, ${stats.totalBasico} básico`, color: "bg-brand-soft text-primary",   clickable: false },
+    { label: "Rutinas activas",      value: String(stats.totalRutinas),  Icon: Dumbbell,       sub: "Asignadas a usuarios",     color: "bg-brand-soft text-primary",  clickable: false },
+    { label: "Recetas en catálogo",  value: String(stats.totalRecetas),  Icon: Salad,          sub: "Disponibles para asignar", color: "bg-amber-50 text-amber-600", clickable: false },
+    { label: "Citas pendientes",     value: String(stats.totalCitas),    Icon: CalendarClock,  sub: "Haz clic para ver todas",  color: "bg-purple-50 text-purple-600", clickable: true  },
   ];
 
   function timeAgo(dateStr: string) {
@@ -222,8 +261,8 @@ export default function DashboardPage() {
             >
               <div className="flex items-start justify-between mb-3">
                 <span className="text-sm text-gray-500 font-medium">{s.label}</span>
-                <span className={`w-9 h-9 rounded-xl flex items-center justify-center text-lg ${s.color}`}>
-                  {s.icon}
+                <span className={`w-9 h-9 rounded-xl flex items-center justify-center ${s.color}`}>
+                  <s.Icon size={18} />
                 </span>
               </div>
               <p className="text-3xl font-extrabold text-gray-900">{s.value}</p>
@@ -256,10 +295,11 @@ export default function DashboardPage() {
                   </div>
                   <div className="flex flex-col items-end gap-1 shrink-0">
                     <span className="text-xs text-gray-400">{timeAgo(u.created_at)}</span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                      isPremium ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1 ${
+                      isPremium ? "bg-brand-soft text-primary" : "bg-gray-100 text-gray-600"
                     }`}>
-                      {isPremium ? "👑 Premium" : "🔒 Básico"}
+                      {isPremium ? <Crown size={11} /> : <Lock size={11} />}
+                      {isPremium ? "Premium" : "Básico"}
                     </span>
                   </div>
                 </div>

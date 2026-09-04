@@ -22,6 +22,7 @@ import {
   CATEGORY_ES,
 } from "@/app/_data/workoutx-i18n";
 import { proxyGifUrl } from "@/app/_data/gif-proxy";
+import { Search, Eye, Pencil, Trash2 } from "lucide-react";
 
 const PAGE_SIZE = 24;
 
@@ -199,7 +200,7 @@ export default function EjerciciosPage() {
         {/* Fila 1: búsqueda + origen */}
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 flex-1 border border-gray-200 rounded-xl px-3 h-10">
-            <span className="text-gray-400 text-sm">🔍</span>
+            <Search size={15} className="text-gray-400 shrink-0" />
             <input
               placeholder="Buscar por nombre..."
               value={search}
@@ -301,7 +302,9 @@ export default function EjerciciosPage() {
 
             {exercises.length === 0 && (
               <div className="col-span-full flex flex-col items-center justify-center py-16 text-gray-400">
-                <span className="text-4xl mb-2">🔍</span>
+                <div className="w-14 h-14 rounded-full bg-brand-soft flex items-center justify-center mb-3">
+                  <Search size={24} className="text-primary" />
+                </div>
                 <p className="text-sm">No se encontraron ejercicios con estos filtros.</p>
               </div>
             )}
@@ -461,7 +464,7 @@ function ExerciseCard({
           onClick={onView}
           className="flex-1 flex items-center justify-center gap-1 h-9 rounded-xl border border-gray-200 text-gray-600 text-sm font-semibold hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors"
         >
-          👁 Ver
+          <Eye size={14} /> Ver
         </button>
         {canEdit ? (
           <>
@@ -469,14 +472,14 @@ function ExerciseCard({
               onClick={onEdit}
               className="flex-1 flex items-center justify-center gap-1 h-9 rounded-xl border border-gray-200 text-gray-600 text-sm font-semibold hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors"
             >
-              ✏ Editar
+              <Pencil size={13} /> Editar
             </button>
             <button
               onClick={onDelete}
               disabled={deleting}
-              className="h-9 px-3 rounded-xl border border-gray-200 text-red-500 text-sm font-semibold hover:border-red-300 hover:bg-red-50 transition-colors disabled:opacity-50"
+              className="h-9 px-3 rounded-xl border border-gray-200 text-red-500 text-sm font-semibold hover:border-red-300 hover:bg-red-50 transition-colors disabled:opacity-50 flex items-center justify-center"
             >
-              {deleting ? "..." : "🗑"}
+              {deleting ? "..." : <Trash2 size={14} />}
             </button>
           </>
         ) : (

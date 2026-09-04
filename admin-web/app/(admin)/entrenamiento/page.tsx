@@ -2,14 +2,16 @@
 import { useEffect, useState } from "react";
 import RutinaBuilderModal from "@/app/_components/rutinas/RutinaBuilderModal";
 import { fetchPerfiles, type Perfil } from "@/app/_data/perfiles";
+import { Search, Dumbbell, Crown, Lock } from "lucide-react";
 
 function PlanBadge({ plan }: { plan: string }) {
   const isPremium = plan === "premium";
   return (
     <span className={`text-xs px-3 py-1 rounded-full font-semibold inline-flex items-center gap-1 ${
-      isPremium ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"
+      isPremium ? "bg-brand-soft text-primary" : "bg-gray-100 text-gray-600"
     }`}>
-      {isPremium ? "👑 Premium" : "🔒 Básico"}
+      {isPremium ? <Crown size={11} /> : <Lock size={11} />}
+      {isPremium ? "Premium" : "Básico"}
     </span>
   );
 }
@@ -54,7 +56,7 @@ export default function EntrenamientoPage() {
 
       {/* Search */}
       <div className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl px-4 h-11 mb-5 max-w-sm shadow-sm">
-        <span className="text-gray-400">🔍</span>
+        <Search size={16} className="text-gray-400 shrink-0" />
         <input
           placeholder="Buscar usuario por nombre..."
           value={search}
@@ -74,6 +76,7 @@ export default function EntrenamientoPage() {
         <p className="text-sm text-gray-400 py-10 text-center">Cargando usuarios...</p>
       ) : (
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50/50">
@@ -106,7 +109,7 @@ export default function EntrenamientoPage() {
                         className="flex items-center gap-2 h-9 px-3 rounded-xl border border-gray-200 hover:border-primary hover:bg-primary/5 hover:text-primary text-gray-600 text-xs font-semibold transition-colors"
                         title="Ver y armar rutina"
                       >
-                        🏋️ Ver rutina
+                        <Dumbbell size={14} /> Ver rutina
                       </button>
                     </td>
                   </tr>
@@ -122,6 +125,7 @@ export default function EntrenamientoPage() {
               )}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

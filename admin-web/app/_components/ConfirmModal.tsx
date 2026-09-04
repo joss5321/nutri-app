@@ -1,4 +1,26 @@
 "use client";
+import { Trash2, TriangleAlert, CircleCheck } from "lucide-react";
+
+const VARIANTS = {
+  danger: {
+    btn: "bg-error text-white hover:opacity-90",
+    iconBg: "bg-error-soft",
+    iconColor: "text-error",
+    Icon: Trash2,
+  },
+  warning: {
+    btn: "bg-warning text-white hover:opacity-90",
+    iconBg: "bg-warning-soft",
+    iconColor: "text-warning",
+    Icon: TriangleAlert,
+  },
+  success: {
+    btn: "bg-primary text-white hover:bg-primary-dark",
+    iconBg: "bg-brand-soft",
+    iconColor: "text-primary",
+    Icon: CircleCheck,
+  },
+} as const;
 
 export default function ConfirmModal({
   title,
@@ -6,6 +28,7 @@ export default function ConfirmModal({
   confirmLabel = "Confirmar",
   cancelLabel = "Cancelar",
   variant = "danger",
+  loading = false,
   onConfirm,
   onCancel,
 }: {
@@ -13,19 +36,12 @@ export default function ConfirmModal({
   message: string;
   confirmLabel?: string;
   cancelLabel?: string;
-  variant?: "danger" | "warning";
+  variant?: "danger" | "warning" | "success";
+  loading?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
-  const btnStyles =
-    variant === "danger"
-      ? "bg-red-600 hover:bg-red-700 text-white"
-      : "bg-yellow-500 hover:bg-yellow-600 text-white";
-
-  const iconBg =
-    variant === "danger" ? "bg-red-100" : "bg-yellow-100";
-
-  const icon = variant === "danger" ? "🗑️" : "⚠️";
+  const v = VARIANTS[variant];
 
   return (
     <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4" onClick={onCancel}>
@@ -34,8 +50,8 @@ export default function ConfirmModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-6 flex flex-col items-center text-center gap-3">
-          <div className={`w-14 h-14 rounded-full ${iconBg} flex items-center justify-center text-2xl`}>
-            {icon}
+          <div className={`w-14 h-14 rounded-full ${v.iconBg} flex items-center justify-center`}>
+            <v.Icon size={26} className={v.iconColor} />
           </div>
           <h3 className="font-bold text-gray-900 text-lg">{title}</h3>
           <p className="text-sm text-gray-500 leading-relaxed">{message}</p>
@@ -43,15 +59,17 @@ export default function ConfirmModal({
         <div className="flex gap-3 px-6 pb-6">
           <button
             onClick={onCancel}
-            className="flex-1 h-11 rounded-xl border border-gray-200 text-gray-600 text-sm font-semibold hover:bg-gray-50 transition-colors"
+            disabled={loading}
+            className="flex-1 h-11 rounded-xl border border-gray-200 text-gray-600 text-sm font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
             {cancelLabel}
           </button>
           <button
             onClick={onConfirm}
-            className={`flex-1 h-11 rounded-xl text-sm font-semibold transition-colors ${btnStyles}`}
+            disabled={loading}
+            className={`flex-1 h-11 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 ${v.btn}`}
           >
-            {confirmLabel}
+            {loading ? "Guardando..." : confirmLabel}
           </button>
         </div>
       </div>

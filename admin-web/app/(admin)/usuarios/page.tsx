@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import UserModal from "@/app/_components/usuarios/UserModal";
 import NuevoPacienteModal from "@/app/_components/usuarios/NuevoPacienteModal";
 import { fetchPerfiles, setIsActive, setEstatus, type Perfil } from "@/app/_data/perfiles";
+import ConfirmModal from "@/app/_components/ConfirmModal";
+import { Search, Eye, Check, X, Crown, Lock, Plus } from "lucide-react";
 
 // ── Badges ────────────────────────────────────────────────────────────────────
 function PlanBadge({ plan }: { plan: string }) {
@@ -10,10 +12,11 @@ function PlanBadge({ plan }: { plan: string }) {
   return (
     <span
       className={`text-xs px-3 py-1 rounded-full font-semibold inline-flex items-center gap-1 ${
-        isPremium ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"
+        isPremium ? "bg-brand-soft text-primary" : "bg-gray-100 text-gray-600"
       }`}
     >
-      {isPremium ? "👑 Premium" : "🔒 Básico"}
+      {isPremium ? <Crown size={11} /> : <Lock size={11} />}
+      {isPremium ? "Premium" : "Básico"}
     </span>
   );
 }
@@ -21,7 +24,7 @@ function PlanBadge({ plan }: { plan: string }) {
 function EstatusBadge({ perfil }: { perfil: Perfil }) {
   if (perfil.estatus === "pendiente") {
     return (
-      <span className="text-xs px-2.5 py-1 rounded-full font-semibold inline-flex items-center gap-1.5 bg-amber-100 text-amber-700">
+      <span className="text-xs px-2.5 py-1 rounded-full font-semibold inline-flex items-center gap-1.5 bg-warning-soft text-warning">
         <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" />
         Pendiente
       </span>
@@ -29,7 +32,7 @@ function EstatusBadge({ perfil }: { perfil: Perfil }) {
   }
   if (perfil.estatus === "rechazado") {
     return (
-      <span className="text-xs px-2.5 py-1 rounded-full font-semibold inline-flex items-center gap-1.5 bg-red-100 text-red-700">
+      <span className="text-xs px-2.5 py-1 rounded-full font-semibold inline-flex items-center gap-1.5 bg-error-soft text-error">
         <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />
         Rechazado
       </span>
@@ -37,12 +40,12 @@ function EstatusBadge({ perfil }: { perfil: Perfil }) {
   }
   // aprobado — muestra si está habilitado o deshabilitado
   return perfil.is_active ? (
-    <span className="text-xs px-2.5 py-1 rounded-full font-semibold inline-flex items-center gap-1.5 bg-emerald-100 text-emerald-700">
+    <span className="text-xs px-2.5 py-1 rounded-full font-semibold inline-flex items-center gap-1.5 bg-success-soft text-success">
       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
       Aprobado
     </span>
   ) : (
-    <span className="text-xs px-2.5 py-1 rounded-full font-semibold inline-flex items-center gap-1.5 bg-red-100 text-red-700">
+    <span className="text-xs px-2.5 py-1 rounded-full font-semibold inline-flex items-center gap-1.5 bg-error-soft text-error">
       <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />
       Deshabilitado
     </span>
@@ -68,67 +71,8 @@ function Toast({ message, onDone }: { message: string; onDone: () => void }) {
   }, [onDone]);
   return (
     <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 bg-gray-900 text-white text-sm font-semibold px-5 py-3.5 rounded-2xl shadow-2xl animate-fade-in">
-      <span className="text-emerald-400">✓</span>
+      <Check size={16} className="text-emerald-400 shrink-0" />
       {message}
-    </div>
-  );
-}
-
-// ── Modal de confirmación ─────────────────────────────────────────────────────
-interface ConfirmModalProps {
-  title: string;
-  message: string;
-  confirmLabel: string;
-  variant: "danger" | "success";
-  loading?: boolean;
-  onConfirm: () => void;
-  onCancel: () => void;
-}
-function ConfirmModal({
-  title,
-  message,
-  confirmLabel,
-  variant,
-  loading,
-  onConfirm,
-  onCancel,
-}: ConfirmModalProps) {
-  return (
-    <div
-      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-      onClick={onCancel}
-    >
-      <div
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-md"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="p-6 border-b border-gray-100">
-          <h2 className="font-bold text-gray-900 text-lg">{title}</h2>
-        </div>
-        <div className="p-6">
-          <p className="text-gray-500 text-sm leading-relaxed">{message}</p>
-        </div>
-        <div className="flex items-center justify-end gap-3 px-6 pb-6">
-          <button
-            onClick={onCancel}
-            disabled={loading}
-            className="px-4 h-10 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50 disabled:opacity-50"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={loading}
-            className={`px-5 h-10 rounded-xl text-white text-sm font-semibold disabled:opacity-50 ${
-              variant === "danger"
-                ? "bg-red-500 hover:bg-red-600"
-                : "bg-emerald-500 hover:bg-emerald-600"
-            }`}
-          >
-            {loading ? "Guardando..." : confirmLabel}
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
@@ -256,7 +200,8 @@ export default function UsuariosPage() {
           onClick={() => setShowNuevoPaciente(true)}
           className="flex items-center gap-2 h-10 px-4 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-dark transition-colors"
         >
-          + Nuevo paciente
+          <Plus size={16} />
+          Nuevo paciente
         </button>
       </div>
 
@@ -294,7 +239,7 @@ export default function UsuariosPage() {
 
       {/* Search */}
       <div className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl px-4 h-11 mb-5 max-w-sm shadow-sm">
-        <span className="text-gray-400">🔍</span>
+        <Search size={16} className="text-gray-400 shrink-0" />
         <input
           placeholder="Buscar por nombre o correo..."
           value={search}
@@ -316,6 +261,7 @@ export default function UsuariosPage() {
         <p className="text-sm text-gray-400 py-10 text-center">Cargando pacientes...</p>
       ) : (
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50/50">
@@ -397,10 +343,10 @@ export default function UsuariosPage() {
                         {/* Ver detalle — siempre visible */}
                         <button
                           onClick={() => setSelected(u)}
-                          className="w-8 h-8 rounded-xl border border-gray-200 hover:border-primary hover:bg-primary/5 flex items-center justify-center transition-colors"
+                          className="w-8 h-8 rounded-xl border border-gray-200 hover:border-primary hover:bg-primary/5 flex items-center justify-center transition-colors text-gray-500 hover:text-primary"
                           title="Ver detalle"
                         >
-                          👁
+                          <Eye size={15} />
                         </button>
 
                         {/* Pendiente: Aprobar + Rechazar */}
@@ -408,15 +354,15 @@ export default function UsuariosPage() {
                           <>
                             <button
                               onClick={() => setPendingAction({ type: "aprobar", perfil: u })}
-                              className="h-8 px-3 rounded-xl border border-emerald-200 text-emerald-700 text-xs font-semibold hover:bg-emerald-50 hover:border-emerald-300 transition-colors"
+                              className="h-8 px-3 rounded-xl border border-emerald-200 text-emerald-700 text-xs font-semibold hover:bg-emerald-50 hover:border-emerald-300 transition-colors inline-flex items-center gap-1"
                             >
-                              ✓ Aprobar
+                              <Check size={13} /> Aprobar
                             </button>
                             <button
                               onClick={() => setPendingAction({ type: "rechazar", perfil: u })}
-                              className="h-8 px-3 rounded-xl border border-red-200 text-red-600 text-xs font-semibold hover:bg-red-50 hover:border-red-300 transition-colors"
+                              className="h-8 px-3 rounded-xl border border-red-200 text-red-600 text-xs font-semibold hover:bg-red-50 hover:border-red-300 transition-colors inline-flex items-center gap-1"
                             >
-                              ✕ Rechazar
+                              <X size={13} /> Rechazar
                             </button>
                           </>
                         )}
@@ -455,6 +401,7 @@ export default function UsuariosPage() {
               )}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

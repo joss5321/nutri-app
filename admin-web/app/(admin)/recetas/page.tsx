@@ -16,6 +16,7 @@ import {
 import { fetchAlimentos } from "@/app/_data/alimentos";
 import { fetchCurrentUserRol } from "@/app/_data/perfiles";
 import { supabase } from "@/lib/supabase";
+import { Search, Pencil, Trash2, ClipboardList, BarChart3, Utensils, Flame, RefreshCw, Link2, Clock, Plus, X } from "lucide-react";
 
 const PAGE_SIZE = 20;
 
@@ -132,9 +133,9 @@ function RecipeDetail({
 
       {/* Quick info */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 text-xs text-gray-500">
-        <span>⏱ {receta.tiempo_min ?? "—"} min</span>
-        <span>📊 {receta.nivel ?? "—"}</span>
-        <span>🔥 {receta.calorias ?? "—"} kcal</span>
+        <span className="inline-flex items-center gap-1"><Clock size={11} /> {receta.tiempo_min ?? "—"} min</span>
+        <span className="inline-flex items-center gap-1"><BarChart3 size={11} /> {receta.nivel ?? "—"}</span>
+        <span className="inline-flex items-center gap-1"><Flame size={11} /> {receta.calorias ?? "—"} kcal</span>
       </div>
 
       {/* Actions */}
@@ -144,7 +145,7 @@ function RecipeDetail({
             onClick={onEdit}
             className="flex-1 flex items-center justify-center gap-1 h-9 rounded-xl border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50"
           >
-            ✏️ Editar
+            <Pencil size={12} /> Editar
           </button>
         )}
         <button
@@ -152,7 +153,7 @@ function RecipeDetail({
           disabled={duplicating}
           className="flex-1 flex items-center justify-center gap-1 h-9 rounded-xl border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50 disabled:opacity-50"
         >
-          📋 {duplicating ? "Duplicando..." : "Duplicar"}
+          <ClipboardList size={12} /> {duplicating ? "Duplicando..." : "Duplicar"}
         </button>
         {canEdit && (
           <button
@@ -160,7 +161,7 @@ function RecipeDetail({
             disabled={deleting}
             className="flex-1 flex items-center justify-center gap-1 h-9 rounded-xl border border-red-200 text-red-600 text-xs font-semibold hover:bg-red-50 disabled:opacity-50"
           >
-            🗑 {deleting ? "Eliminando..." : "Eliminar"}
+            <Trash2 size={12} /> {deleting ? "Eliminando..." : "Eliminar"}
           </button>
         )}
       </div>
@@ -491,7 +492,7 @@ export default function RecetasPage() {
                 title="Liga los ingredientes de las recetas al catálogo de alimentos para poder calcular sus calorías"
                 className="flex items-center gap-2 h-10 px-4 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
               >
-                🔗 Vincular ingredientes
+                <Link2 size={15} /> Vincular ingredientes
               </button>
             )}
             {currentRol === "superadmin" && (
@@ -501,14 +502,15 @@ export default function RecetasPage() {
                 title="Recalcula calorías y macros de las recetas cuyos ingredientes están ligados al catálogo de alimentos"
                 className="flex items-center gap-2 h-10 px-4 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
               >
-                {recalculando ? "Recalculando..." : "🔄 Recalcular calorías"}
+                <RefreshCw size={15} className={recalculando ? "animate-spin" : ""} />
+                {recalculando ? "Recalculando..." : "Recalcular calorías"}
               </button>
             )}
             <button
               onClick={() => setShowCreate(true)}
               className="flex items-center gap-2 h-10 px-4 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary-dark transition-colors"
             >
-              + Nueva receta
+              <Plus size={16} /> Nueva receta
             </button>
           </div>
         </div>
@@ -516,7 +518,7 @@ export default function RecetasPage() {
         {recalcResumen && (
           <div className="mb-4 flex items-center justify-between bg-primary/5 border border-primary/20 text-gray-700 text-sm rounded-xl px-4 py-3">
             <span>{recalcResumen}</span>
-            <button onClick={() => setRecalcResumen(null)} className="text-gray-400 hover:text-gray-600 shrink-0 ml-3">×</button>
+            <button onClick={() => setRecalcResumen(null)} className="text-gray-400 hover:text-gray-600 shrink-0 ml-3"><X size={16} /></button>
           </div>
         )}
 
@@ -525,7 +527,7 @@ export default function RecetasPage() {
           <div>
             <label className="text-xs text-gray-400 font-medium mb-0.5 ml-1 block">&nbsp;</label>
             <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 h-10 shadow-sm">
-              <span className="text-gray-400 text-sm">🔍</span>
+              <Search size={15} className="text-gray-400 shrink-0" />
               <input
                 placeholder="Buscar recetas..."
                 value={search}
@@ -604,8 +606,8 @@ export default function RecetasPage() {
                       {r.nombre}
                     </p>
                     <div className="flex items-center gap-3 text-xs text-gray-500 mb-2">
-                      <span>⏱ {r.tiempo_min ?? "—"} min</span>
-                      <span>📊 {r.nivel ?? "—"}</span>
+                      <span className="inline-flex items-center gap-1"><Clock size={11} /> {r.tiempo_min ?? "—"} min</span>
+                      <span className="inline-flex items-center gap-1"><BarChart3 size={11} /> {r.nivel ?? "—"}</span>
                     </div>
                     <p className="text-sm font-bold text-gray-900">{r.calorias ?? "—"} kcal</p>
                     {r.categoria_nutricional && (
@@ -623,23 +625,23 @@ export default function RecetasPage() {
                           onClick={() => setEditing(r)}
                           className="flex-1 flex items-center justify-center gap-1 h-9 rounded-xl border border-gray-200 text-gray-600 text-xs font-semibold hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors"
                         >
-                          ✏ Editar
+                          <Pencil size={12} /> Editar
                         </button>
                       )}
                       <button
                         onClick={() => handleDuplicate(r)}
                         disabled={duplicatingId === r.id}
-                        className="h-9 px-3 rounded-xl border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50"
+                        className="h-9 px-3 rounded-xl border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50 flex items-center justify-center"
                       >
-                        {duplicatingId === r.id ? "..." : "📋"}
+                        {duplicatingId === r.id ? "..." : <ClipboardList size={13} />}
                       </button>
                       {canEdit(r) && (
                         <button
                           onClick={() => setConfirmDeleteId(r.id)}
                           disabled={deletingId === r.id}
-                          className="h-9 px-3 rounded-xl border border-gray-200 text-red-500 text-xs font-semibold hover:border-red-300 hover:bg-red-50 transition-colors disabled:opacity-50"
+                          className="h-9 px-3 rounded-xl border border-gray-200 text-red-500 text-xs font-semibold hover:border-red-300 hover:bg-red-50 transition-colors disabled:opacity-50 flex items-center justify-center"
                         >
-                          {deletingId === r.id ? "..." : "🗑"}
+                          {deletingId === r.id ? "..." : <Trash2 size={13} />}
                         </button>
                       )}
                     </div>
@@ -649,7 +651,9 @@ export default function RecetasPage() {
 
               {recetas.length === 0 && (
                 <div className="col-span-3 flex flex-col items-center justify-center py-16 text-gray-400">
-                  <span className="text-4xl mb-2">🔍</span>
+                  <div className="w-14 h-14 rounded-full bg-brand-soft flex items-center justify-center mb-3">
+                    <Utensils size={24} className="text-primary" />
+                  </div>
                   <p className="text-sm">No se encontraron recetas.</p>
                 </div>
               )}

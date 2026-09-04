@@ -1,9 +1,8 @@
 "use client";
 import { useState } from "react";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Mail, User, Lock, MailCheck, Utensils, Dumbbell, ClipboardList } from "lucide-react";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -51,48 +50,49 @@ export default function RegisterPage() {
   return (
     <div className="flex h-screen w-screen overflow-hidden">
       {/* ── Panel izquierdo ── */}
-      <div className="relative hidden lg:flex lg:w-1/2 flex-col justify-between overflow-hidden">
-        {/* Fondo oscuro con overlay verde */}
-        <div className="absolute inset-0 bg-gray-900" />
-        <div className="absolute inset-0 bg-gradient-to-br from-[#1A6845]/80 via-[#2EBD8C]/40 to-transparent" />
-
-        {/* Foto simulada con gradiente de gym */}
+      <div className="relative hidden lg:flex lg:w-1/2 flex-col justify-between overflow-hidden bg-sidebar">
+        {/* Brillo de marca, sutil */}
         <div
-          className="absolute inset-0 opacity-40"
+          className="absolute inset-0"
           style={{
             backgroundImage: `
-              radial-gradient(ellipse at 30% 60%, rgba(46,189,140,0.3) 0%, transparent 60%),
-              linear-gradient(135deg, #111 0%, #1a2e1a 50%, #0d1f0d 100%)
+              radial-gradient(ellipse at 20% -10%, rgba(61,220,151,0.16) 0%, transparent 55%),
+              radial-gradient(ellipse at 100% 105%, rgba(18,61,48,0.9) 0%, transparent 60%)
             `,
           }}
         />
 
         {/* Logo */}
         <div className="relative z-10 flex items-center gap-3 p-8">
-          <Image src="/logo-icon.png" alt="MyFitTrack" width={40} height={40} className="rounded-xl" />
+          <div className="w-10 h-10 rounded-xl bg-white shrink-0 flex items-center justify-center p-1.5">
+            {/* eslint-disable-next-line @next/next/no-img-element -- SVG local, next/image requiere dangerouslyAllowSVG */}
+            <img src="/branding/isotipo-myfittrack.svg" alt="MyFitTrack" width={612} height={792} className="w-full h-full object-contain" />
+          </div>
           <span className="text-white font-semibold text-lg tracking-wide">MyFitTrack</span>
         </div>
 
         {/* Heading central */}
         <div className="relative z-10 px-12">
-          <h1 className="text-5xl font-extrabold text-white leading-tight">
-            Únete y<br />transforma<br />
-            <span className="text-primary">vidas</span>
+          <h1 className="text-5xl font-extrabold text-white leading-tight tracking-tight">
+            Únete y<br />transforma vidas
           </h1>
+          <p className="text-white/60 text-base mt-4 max-w-sm">
+            Crea tu cuenta para administrar pacientes, planes y progreso.
+          </p>
         </div>
 
         {/* Features bottom */}
         <div className="relative z-10 flex gap-10 px-12 pb-12">
           {[
-            { icon: "🥗", label: "Recetas\nsaludables" },
-            { icon: "🏋️", label: "Rutinas\nefectivas" },
-            { icon: "📋", label: "Planes\npersonalizados" },
+            { Icon: Utensils, label: "Recetas\nsaludables" },
+            { Icon: Dumbbell, label: "Rutinas\nefectivas" },
+            { Icon: ClipboardList, label: "Planes\npersonalizados" },
           ].map((f) => (
             <div key={f.label} className="flex flex-col items-center gap-2">
-              <div className="w-14 h-14 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-2xl">
-                {f.icon}
+              <div className="w-14 h-14 rounded-full bg-white/8 border border-white/15 flex items-center justify-center">
+                <f.Icon size={22} className="text-brand-accent" strokeWidth={1.75} />
               </div>
-              <span className="text-white/80 text-xs text-center whitespace-pre-line font-medium">
+              <span className="text-white/70 text-xs text-center whitespace-pre-line font-medium">
                 {f.label}
               </span>
             </div>
@@ -105,8 +105,8 @@ export default function RegisterPage() {
         <div className="w-full max-w-sm">
           {success ? (
             <div className="flex flex-col items-center text-center gap-4">
-              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-3xl">
-                ✉️
+              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                <MailCheck size={28} className="text-primary" />
               </div>
               <h2 className="text-2xl font-extrabold text-primary">¡Cuenta creada!</h2>
               <p className="text-gray-500 text-sm">
@@ -123,7 +123,11 @@ export default function RegisterPage() {
           ) : (
             <>
               <div className="mb-8 text-center flex flex-col items-center">
-                <Image src="/logo-horizontal.png" alt="MyFitTrack" width={180} height={76} className="mb-4" />
+                <div className="mb-4 flex items-center gap-2.5">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- SVG local, next/image requiere dangerouslyAllowSVG */}
+                  <img src="/branding/isotipo-myfittrack.svg" alt="MyFitTrack" width={612} height={792} className="h-14 w-auto" />
+                  <span className="text-xl font-extrabold text-gray-900 tracking-wide">MyFitTrack</span>
+                </div>
                 <h2 className="text-3xl font-extrabold text-primary">Crear cuenta</h2>
                 <p className="text-gray-500 mt-2 text-sm">Regístrate para administrar la plataforma</p>
               </div>
@@ -132,7 +136,7 @@ export default function RegisterPage() {
                 {/* Nombre */}
                 <div>
                   <div className="flex items-center gap-3 bg-gray-100 rounded-2xl px-4 h-14 border border-transparent focus-within:border-primary transition-colors">
-                    <span className="text-gray-400 text-lg">👤</span>
+                    <User size={18} className="text-gray-400 shrink-0" />
                     <input
                       type="text"
                       placeholder="Nombre completo"
@@ -147,7 +151,7 @@ export default function RegisterPage() {
                 {/* Email */}
                 <div>
                   <div className="flex items-center gap-3 bg-gray-100 rounded-2xl px-4 h-14 border border-transparent focus-within:border-primary transition-colors">
-                    <span className="text-gray-400 text-lg">✉</span>
+                    <Mail size={18} className="text-gray-400 shrink-0" />
                     <input
                       type="email"
                       placeholder="Correo electrónico"
@@ -162,7 +166,7 @@ export default function RegisterPage() {
                 {/* Password */}
                 <div>
                   <div className="flex items-center gap-3 bg-gray-100 rounded-2xl px-4 h-14 border border-transparent focus-within:border-primary transition-colors">
-                    <span className="text-gray-400 text-lg">🔒</span>
+                    <Lock size={18} className="text-gray-400 shrink-0" />
                     <input
                       type={showPass ? "text" : "password"}
                       placeholder="Contraseña"
@@ -183,7 +187,7 @@ export default function RegisterPage() {
                 {/* Confirm password */}
                 <div>
                   <div className="flex items-center gap-3 bg-gray-100 rounded-2xl px-4 h-14 border border-transparent focus-within:border-primary transition-colors">
-                    <span className="text-gray-400 text-lg">🔒</span>
+                    <Lock size={18} className="text-gray-400 shrink-0" />
                     <input
                       type={showConfirm ? "text" : "password"}
                       placeholder="Confirmar contraseña"

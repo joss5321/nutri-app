@@ -11,6 +11,7 @@ import {
   type RutinaInput,
 } from "@/app/_data/rutinas";
 import { exportRutinaPdf } from "@/app/_utils/exportRutinaPdf";
+import { Search, Dumbbell, X, BarChart3, FileText, Trash2, Check } from "lucide-react";
 
 type SerieRow = { reps: string; peso: string };
 
@@ -340,7 +341,7 @@ export default function RutinaBuilderModal({
             <div className="col-span-1 flex flex-col gap-3">
               <p className="text-sm font-bold text-gray-800">Catálogo de ejercicios</p>
               <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 h-10">
-                <span className="text-gray-400 text-sm">🔍</span>
+                <Search size={15} className="text-gray-400 shrink-0" />
                 <input
                   placeholder="Buscar ejercicio..."
                   value={search}
@@ -443,7 +444,7 @@ export default function RutinaBuilderModal({
               >
                 {assigned[activeDay].length === 0 && (
                   <div className="flex-1 flex flex-col items-center justify-center text-gray-400 gap-1">
-                    <span className="text-3xl">🏋️</span>
+                    <Dumbbell size={28} />
                     <p className="text-sm">Arrastra ejercicios aquí para {activeDay}</p>
                   </div>
                 )}
@@ -521,7 +522,7 @@ export default function RutinaBuilderModal({
                             onClick={() => removeExercise(a.uid)}
                             className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                           >
-                            ✕
+                            <X size={14} />
                           </button>
                         </div>
                       </div>
@@ -626,7 +627,7 @@ export default function RutinaBuilderModal({
           return (
             <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50">
               <div className="flex items-center justify-between mb-3">
-                <p className="font-bold text-gray-900 text-sm">📊 Distribución muscular semanal</p>
+                <p className="font-bold text-gray-900 text-sm flex items-center gap-1.5"><BarChart3 size={14} className="text-primary" /> Distribución muscular semanal</p>
                 <div className="flex gap-3 text-xs text-gray-500">
                   <span><span className="font-bold text-gray-900">{totalEjercicios}</span> ejercicios</span>
                   <span><span className="font-bold text-gray-900">{totalSeries}</span> series totales</span>
@@ -669,15 +670,16 @@ export default function RutinaBuilderModal({
               disabled={loadingRutina || !!error}
               className="flex items-center gap-2 px-5 h-10 rounded-xl border border-gray-200 text-gray-600 text-sm font-semibold hover:bg-gray-50 disabled:opacity-50"
             >
-              📄 Exportar PDF
+              <FileText size={15} /> Exportar PDF
             </button>
             {rutinaId && (
               <button
                 onClick={() => setShowDeleteConfirm(true)}
                 disabled={deleting || saving}
-                className="px-5 h-10 rounded-xl border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50 disabled:opacity-50"
+                className="flex items-center gap-2 px-5 h-10 rounded-xl border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50 disabled:opacity-50"
               >
-                {deleting ? "Eliminando..." : "🗑️ Eliminar rutina"}
+                {!deleting && <Trash2 size={14} />}
+                {deleting ? "Eliminando..." : "Eliminar rutina"}
               </button>
             )}
           </div>
@@ -692,7 +694,8 @@ export default function RutinaBuilderModal({
               disabled={saving || deleting || loadingRutina}
               className="flex items-center gap-2 px-5 h-10 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-dark disabled:opacity-50"
             >
-              {saving ? "Guardando..." : "✓ Guardar rutina"}
+              {!saving && <Check size={15} />}
+              {saving ? "Guardando..." : "Guardar rutina"}
             </button>
           </div>
         </div>

@@ -1,18 +1,18 @@
 // components/PasswordInput.tsx
 "use client";
 import { useState } from "react";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Lock } from "lucide-react";
 
 
-export default function PasswordInput({ value, onChange }: { 
-  value: string; 
-  onChange: (v: string) => void 
+export default function PasswordInput({ value, onChange }: {
+  value: string;
+  onChange: (v: string) => void
 }) {
   const [showPass, setShowPass] = useState(false);
 
   return (
     <div className="flex items-center gap-3 bg-gray-100 rounded-2xl px-4 h-14 border border-transparent focus-within:border-primary transition-colors">
-      <span className="text-gray-400 text-lg">🔒</span>
+      <Lock size={18} className="text-gray-400 shrink-0" />
       <input
         type={showPass ? "text" : "password"}
         placeholder="Contraseña"
