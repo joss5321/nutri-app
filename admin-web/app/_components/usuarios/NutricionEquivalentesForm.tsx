@@ -10,6 +10,7 @@ import {
   type EquivalenteInput,
 } from "@/app/_data/nutricion";
 import { fetchDietocalculo, type Dietocalculo } from "@/app/_data/dietocalculo";
+import { StickyNote, Check, Sparkles, Save } from "lucide-react";
 
 const buildEmptyRows = (): EquivalenteInput[] =>
   FOOD_GROUPS.map((fg) => ({
@@ -301,7 +302,7 @@ export default function NutricionEquivalentesForm({ userId }: { userId: string }
     <div className="space-y-6">
       {hasDraft && (
         <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 font-medium">
-          <span>📝</span>
+          <StickyNote size={14} className="shrink-0" />
           <span>Borrador restaurado — tienes cambios sin guardar en este formulario.</span>
           <button
             type="button"
@@ -377,7 +378,9 @@ export default function NutricionEquivalentesForm({ userId }: { userId: string }
                             {mealSum < rac ? `−${rac - mealSum}` : `+${mealSum - rac}`}
                           </span>
                         ) : (
-                          <span title="Raciones distribuidas correctamente" className="text-emerald-500 text-sm shrink-0">✓</span>
+                          <span title="Raciones distribuidas correctamente" className="shrink-0">
+                            <Check size={14} className="text-emerald-500" />
+                          </span>
                         )
                       )}
                     </div>
@@ -516,7 +519,7 @@ export default function NutricionEquivalentesForm({ userId }: { userId: string }
           title={!dietocalculo?.get_ajustado ? "Primero guarda el Dietocálculo con GET ajustado" : ""}
           className="flex items-center gap-2 px-4 h-10 rounded-xl border-2 border-primary text-primary text-sm font-semibold hover:bg-primary/5 disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          ✨ Sugerir raciones
+          <Sparkles size={15} /> Sugerir raciones
         </button>
 
         <div className="flex items-center gap-3">
@@ -530,7 +533,8 @@ export default function NutricionEquivalentesForm({ userId }: { userId: string }
             disabled={saving}
             className="flex items-center gap-2 px-4 h-10 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-dark disabled:opacity-50"
           >
-            {saving ? "Guardando..." : "💾 Guardar equivalentes"}
+            {!saving && <Save size={15} />}
+            {saving ? "Guardando..." : "Guardar equivalentes"}
           </button>
         </div>
       </div>

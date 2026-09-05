@@ -6,6 +6,7 @@ import {
   savePlanSuplementacion,
   type PlanSuplementoInput,
 } from "@/app/_data/plan_suplementacion";
+import { StickyNote, Search, Pill, X, Save } from "lucide-react";
 
 type AsignadoRow = {
   suplemento: Suplemento;
@@ -160,7 +161,7 @@ export default function SuplementosAsignadosForm({ userId }: { userId: string })
     <div className="space-y-4">
       {hasDraft && (
         <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 font-medium">
-          <span>📝</span>
+          <StickyNote size={14} className="shrink-0" />
           <span>Borrador restaurado — tienes cambios sin guardar en este formulario.</span>
           <button
             type="button"
@@ -185,7 +186,7 @@ export default function SuplementosAsignadosForm({ userId }: { userId: string })
         <div className="col-span-2 flex flex-col gap-3">
           <p className="text-xs font-bold text-gray-600">Catálogo de suplementos</p>
           <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 h-9">
-            <span className="text-gray-400 text-sm">🔍</span>
+            <Search size={14} className="text-gray-400 shrink-0" />
             <input placeholder="Buscar suplemento..." value={search} onChange={(e) => setSearch(e.target.value)}
               className="flex-1 text-sm bg-transparent focus:outline-none text-gray-700" />
           </div>
@@ -199,7 +200,7 @@ export default function SuplementosAsignadosForm({ userId }: { userId: string })
                 className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 cursor-grab active:cursor-grabbing hover:border-primary/50 transition-colors"
                 title="Arrastra o haz clic para asignar"
               >
-                <span className="text-xl">💊</span>
+                <Pill size={20} className="text-primary shrink-0" />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-gray-800 truncate">{s.nombre}</p>
                   <div className="flex items-center gap-2 text-xs text-gray-400">
@@ -238,19 +239,21 @@ export default function SuplementosAsignadosForm({ userId }: { userId: string })
           >
             {asignados.length === 0 && (
               <div className="flex-1 flex flex-col items-center justify-center text-gray-400 gap-1">
-                <span className="text-3xl">💊</span>
+                <div className="w-14 h-14 rounded-full bg-brand-soft flex items-center justify-center mb-1">
+                  <Pill size={26} className="text-primary" />
+                </div>
                 <p className="text-sm text-center">Arrastra suplementos aquí para asignarlos</p>
               </div>
             )}
             {asignados.map((a) => (
               <div key={a.suplemento.id} className="bg-white border border-gray-200 rounded-xl p-3">
                 <div className="flex items-center gap-2 mb-3">
-                  <span className="text-xl">💊</span>
+                  <Pill size={20} className="text-primary shrink-0" />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-gray-800 truncate">{a.suplemento.nombre}</p>
                     {a.suplemento.marca && <p className="text-xs text-gray-400">{a.suplemento.marca} {a.suplemento.gramaje && `· ${a.suplemento.gramaje}`}</p>}
                   </div>
-                  <button onClick={() => removeSuplemento(a.suplemento.id)} className="text-gray-400 hover:text-red-500 text-sm">✕</button>
+                  <button onClick={() => removeSuplemento(a.suplemento.id)} className="text-gray-400 hover:text-red-500"><X size={15} /></button>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
                   <div>
@@ -293,7 +296,8 @@ export default function SuplementosAsignadosForm({ userId }: { userId: string })
         )}
         <button onClick={handleSave} disabled={saving}
           className="flex items-center gap-2 px-4 h-10 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-dark disabled:opacity-50">
-          {saving ? "Guardando..." : "💾 Guardar suplementación"}
+          {!saving && <Save size={15} />}
+          {saving ? "Guardando..." : "Guardar suplementación"}
         </button>
       </div>
     </div>

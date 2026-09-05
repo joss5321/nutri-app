@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { X, Check } from "lucide-react";
 import { FOOD_GROUPS } from "@/app/_data/nutricion";
 import {
   UNIDADES_ALIMENTO,
@@ -105,9 +106,9 @@ export default function AlimentoModal({
           </div>
           <button
             onClick={onClose}
-            className="w-9 h-9 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 text-xl"
+            className="w-9 h-9 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400"
           >
-            ×
+            <X size={18} />
           </button>
         </div>
 
@@ -278,7 +279,7 @@ export default function AlimentoModal({
             disabled={saving || !nombre.trim()}
             className="flex items-center gap-2 px-4 h-10 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-dark disabled:opacity-60"
           >
-            {saving ? "Guardando..." : `✓ ${isEdit ? "Guardar cambios" : "Agregar alimento"}`}
+            {saving ? "Guardando..." : (<><Check size={15} /> {isEdit ? "Guardar cambios" : "Agregar alimento"}</>)}
           </button>
         </div>
       </div>

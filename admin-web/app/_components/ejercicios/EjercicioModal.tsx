@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { X, Check, Clapperboard, Upload } from "lucide-react";
 import { MUSCLE_GROUPS, type Exercise } from "@/app/_data/exercises";
 import { createEjercicio, deleteEjercicioVideo, updateEjercicio, uploadEjercicioVideo } from "@/app/_data/ejercicios";
 import { getYouTubeEmbedId, isYouTubeShort, VideoPlayer } from "@/app/_components/ejercicios/VideoPlayer";
@@ -92,7 +93,7 @@ export default function EjercicioModal({
             <h2 className="font-bold text-gray-900 text-xl">{isEdit ? "Editar ejercicio" : "Crear ejercicio"}</h2>
             <p className="text-gray-500 text-sm">Completa la información para {isEdit ? "actualizar" : "agregar"} el ejercicio al catálogo.</p>
           </div>
-          <button onClick={onClose} className="w-9 h-9 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 text-xl">×</button>
+          <button onClick={onClose} className="w-9 h-9 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400"><X size={18} /></button>
         </div>
 
         <div className="grid grid-cols-3 gap-6 p-6">
@@ -126,7 +127,7 @@ export default function EjercicioModal({
                   <VideoPlayer src={videoPreview} controls className="w-full h-full" />
                 ) : (
                   <div className="flex flex-col items-center gap-2 text-gray-400">
-                    <span className="text-4xl">🎬</span>
+                    <Clapperboard size={36} />
                     <p className="text-sm">Arrastra un video o pega una URL de YouTube</p>
                   </div>
                 )}
@@ -134,7 +135,7 @@ export default function EjercicioModal({
               <div className="flex items-center justify-between mt-2">
                 <p className="text-xs text-gray-400">Formatos: MP4, MOV o YouTube URL. Máx. 50MB.</p>
                 <label className="flex items-center gap-1 text-xs text-primary font-semibold cursor-pointer hover:underline">
-                  ↑ {videoPreview ? "Cambiar video" : "Subir video"}
+                  <Upload size={12} /> {videoPreview ? "Cambiar video" : "Subir video"}
                   <input type="file" accept="video/*" className="hidden"
                     onChange={(e) => handleFileChange(e.target.files?.[0])} />
                 </label>
@@ -168,7 +169,7 @@ export default function EjercicioModal({
                     {muscSec.map((m) => (
                       <span key={m} className="flex items-center gap-1 bg-primary/10 text-primary text-xs px-2 py-0.5 rounded-full font-medium">
                         {m}
-                        <button onClick={() => toggleMuscSec(m)} className="hover:text-primary-dark">×</button>
+                        <button onClick={() => toggleMuscSec(m)} className="hover:text-primary-dark"><X size={11} /></button>
                       </span>
                     ))}
                     <select onChange={(e) => { if (e.target.value) toggleMuscSec(e.target.value); e.target.value = ""; }}
@@ -238,7 +239,7 @@ export default function EjercicioModal({
           </div>
           <button onClick={handleSave} disabled={saving || !nombre.trim()}
             className="flex items-center gap-2 px-4 h-10 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-dark disabled:opacity-60">
-            {saving ? "Guardando..." : `✓ ${isEdit ? "Guardar cambios" : "Guardar ejercicio"}`}
+            {saving ? "Guardando..." : (<><Check size={15} /> {isEdit ? "Guardar cambios" : "Guardar ejercicio"}</>)}
           </button>
         </div>
       </div>

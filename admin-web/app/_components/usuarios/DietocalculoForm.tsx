@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { fetchPerfil } from "@/app/_data/perfiles";
 import { fetchUltimaMedida } from "@/app/_data/medidas";
 import { fetchDietocalculo, saveDietocalculo, type DietocalculoInput } from "@/app/_data/dietocalculo";
+import { StickyNote, CircleCheck, TriangleAlert, Save } from "lucide-react";
 
 // ── Fórmulas GEB ────────────────────────────────────────────
 type Formula = "mifflin" | "harris" | "fao" | "valencia" | "schofield";
@@ -221,7 +222,7 @@ export default function DietocalculoForm({ userId }: { userId: string }) {
     <div className="space-y-6">
       {hasDraft && (
         <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 font-medium">
-          <span>📝</span>
+          <StickyNote size={14} className="shrink-0" />
           <span>Borrador restaurado — tienes cambios sin guardar en este formulario.</span>
           <button
             type="button"
@@ -239,7 +240,7 @@ export default function DietocalculoForm({ userId }: { userId: string }) {
       )}
       {existingId && (
         <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-2 text-xs text-green-700 flex items-center gap-2">
-          <span>✅</span> Este usuario ya tiene un dietocálculo guardado. Los cambios se actualizarán al guardar.
+          <CircleCheck size={14} className="shrink-0" /> Este usuario ya tiene un dietocálculo guardado. Los cambios se actualizarán al guardar.
         </div>
       )}
 
@@ -369,7 +370,7 @@ export default function DietocalculoForm({ userId }: { userId: string }) {
             </div>
             {getAjustado != null && totalMacroKcal > getAjustado && (
               <div className="mt-2 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-                <span className="text-amber-500 shrink-0">⚠️</span>
+                <TriangleAlert size={14} className="text-amber-500 shrink-0" />
                 <p className="text-xs text-amber-700">
                   Los macronutrientes suman <strong>{totalMacroKcal.toFixed(0)} kcal</strong> y exceden el GET ajustado de <strong>{getAjustado.toFixed(0)} kcal</strong> en <strong>{(totalMacroKcal - getAjustado).toFixed(0)} kcal</strong>.
                 </p>
@@ -388,7 +389,8 @@ export default function DietocalculoForm({ userId }: { userId: string }) {
         )}
         <button onClick={handleSave} disabled={saving}
           className="flex items-center gap-2 px-5 h-10 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-dark disabled:opacity-50">
-          {saving ? "Guardando..." : existingId ? "💾 Actualizar dietocálculo" : "💾 Guardar dietocálculo"}
+          {!saving && <Save size={15} />}
+          {saving ? "Guardando..." : existingId ? "Actualizar dietocálculo" : "Guardar dietocálculo"}
         </button>
       </div>
     </div>

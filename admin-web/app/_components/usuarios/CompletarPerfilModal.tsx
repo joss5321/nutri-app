@@ -3,16 +3,18 @@ import { useState } from "react";
 import type { Perfil } from "@/app/_data/perfiles";
 import InformacionPersonalForm from "./InformacionPersonalForm";
 import CitasManager from "./CitasManager";
+import { X, User, CalendarDays } from "lucide-react";
 
 type Tab = "personal" | "cita";
+type LucideIcon = React.ComponentType<{ size?: number; className?: string; strokeWidth?: number }>;
 
 export default function CompletarPerfilModal({ perfiles, onClose }: { perfiles: Perfil[]; onClose: () => void }) {
   const [selectedUserId, setSelectedUserId] = useState("");
   const [tab, setTab] = useState<Tab>("personal");
 
-  const TABS: { key: Tab; label: string; icon: string }[] = [
-    { key: "personal",  label: "Información Personal", icon: "👤" },
-    { key: "cita",      label: "Cita",                 icon: "📅" },
+  const TABS: { key: Tab; label: string; Icon: LucideIcon }[] = [
+    { key: "personal",  label: "Información Personal", Icon: User },
+    { key: "cita",      label: "Cita",                 Icon: CalendarDays },
   ];
 
   return (
@@ -27,7 +29,7 @@ export default function CompletarPerfilModal({ perfiles, onClose }: { perfiles: 
             <h2 className="font-bold text-gray-900 text-xl">Completar perfil de usuario</h2>
             <p className="text-gray-500 text-sm">Selecciona un usuario registrado y completa su información personal y citas.</p>
           </div>
-          <button onClick={onClose} className="w-9 h-9 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 text-xl">×</button>
+          <button onClick={onClose} className="w-9 h-9 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400"><X size={18} /></button>
         </div>
 
         {/* Selector de usuario */}
@@ -52,7 +54,7 @@ export default function CompletarPerfilModal({ perfiles, onClose }: { perfiles: 
                 tab === t.key ? "border-primary text-primary" : "border-transparent text-gray-500 hover:text-gray-700"
               }`}
             >
-              {t.icon} {t.label}
+              <t.Icon size={15} /> {t.label}
             </button>
           ))}
         </div>

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { fetchCitas, createCita, deleteCita, type Cita, type CitaInput } from "@/app/_data/citas";
+import { CalendarDays, ClipboardList, MapPin, StickyNote, X } from "lucide-react";
 
 const MONTH_LABELS = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -161,7 +162,7 @@ export default function CitasManager({ userId }: { userId: string }) {
           })}
         </div>
         <div className="mt-3 p-2.5 bg-primary/5 rounded-xl border border-primary/20">
-          <p className="text-xs font-semibold text-primary">📅 {MONTH_LABELS[month]}</p>
+          <p className="text-xs font-semibold text-primary inline-flex items-center gap-1"><CalendarDays size={12} /> {MONTH_LABELS[month]}</p>
           <p className="text-xs text-gray-500 mt-0.5">
             {citaDaysInMonth.size === 0 ? "Sin citas programadas este mes." : `${citaDaysInMonth.size} día(s) con citas programadas.`}
           </p>
@@ -170,7 +171,7 @@ export default function CitasManager({ userId }: { userId: string }) {
 
       {/* Formulario nueva cita */}
       <div className="bg-white rounded-xl border border-gray-200 p-4">
-        <p className="font-bold text-gray-900 text-sm mb-3">📋 Registrar nueva cita</p>
+        <p className="font-bold text-gray-900 text-sm mb-3 inline-flex items-center gap-1.5"><ClipboardList size={14} className="text-primary" /> Registrar nueva cita</p>
         <div className="flex flex-col gap-3">
           <div className="grid grid-cols-2 gap-2">
             <div>
@@ -219,9 +220,10 @@ export default function CitasManager({ userId }: { userId: string }) {
           <button
             onClick={handleAddCita}
             disabled={saving || !fecha || !hora}
-            className="w-full h-10 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary-dark disabled:opacity-50"
+            className="w-full h-10 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary-dark disabled:opacity-50 inline-flex items-center justify-center gap-2"
           >
-            {saving ? "Guardando..." : "📅 Guardar cita"}
+            {!saving && <CalendarDays size={15} />}
+            {saving ? "Guardando..." : "Guardar cita"}
           </button>
         </div>
       </div>
@@ -248,10 +250,10 @@ export default function CitasManager({ userId }: { userId: string }) {
                 </div>
                 <p className="font-bold text-gray-800 text-sm mt-0.5">{c.tipo}</p>
                 {c.profesional && <p className="text-xs text-gray-500">{c.profesional}</p>}
-                {c.modalidad && <p className="text-xs text-gray-400">📍 {c.modalidad}</p>}
-                {c.notas && <p className="text-xs text-gray-400 mt-1">📝 {c.notas}</p>}
+                {c.modalidad && <p className="text-xs text-gray-400 inline-flex items-center gap-1"><MapPin size={11} /> {c.modalidad}</p>}
+                {c.notas && <p className="text-xs text-gray-400 mt-1 inline-flex items-center gap-1"><StickyNote size={11} /> {c.notas}</p>}
               </div>
-              <button onClick={() => handleRemoveCita(c.id)} className="text-gray-400 hover:text-red-500 text-sm self-start">✕</button>
+              <button onClick={() => handleRemoveCita(c.id)} className="text-gray-400 hover:text-red-500 self-start"><X size={15} /></button>
             </div>
           );
         })}

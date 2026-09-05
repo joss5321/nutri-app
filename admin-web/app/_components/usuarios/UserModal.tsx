@@ -6,6 +6,9 @@ import { fetchRutinaActiva, type Rutina } from "@/app/_data/rutinas";
 import { fetchEjercicioLogsByUser, type EjercicioLog } from "@/app/_data/ejercicio_logs";
 import InformacionPersonalForm from "./InformacionPersonalForm";
 import CitasManager from "./CitasManager";
+import { X, Crown, Lock, Cake, Stethoscope, BarChart3, Dumbbell, CalendarDays, Trophy } from "lucide-react";
+
+type LucideIcon = React.ComponentType<{ size?: number; className?: string; strokeWidth?: number }>;
 
 // ── Círculo de progreso SVG ─────────────────────────────────
 function CircleProgress({ value, label, sub }: { value: number; label: string; sub: string }) {
@@ -165,7 +168,7 @@ function ChartDetailModal({ chart, medidas, onClose }: { chart: ChartDef; medida
             <h3 className="font-bold text-gray-900 text-lg">{chart.title}</h3>
             <p className="text-sm text-gray-500">{data.length} registros</p>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 text-xl">×</button>
+          <button onClick={onClose} className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400"><X size={18} /></button>
         </div>
 
         <div className="p-6 space-y-5">
@@ -403,7 +406,7 @@ function EjercicioDetailModal({ ej, onClose }: { ej: EjExercise; onClose: () => 
             <h3 className="font-bold text-gray-900 text-lg">{ej.emoji} {ej.nombre}</h3>
             <p className="text-sm text-gray-500">{sessions.length} sesión{sessions.length !== 1 ? "es" : ""} · {maxSeries} serie{maxSeries !== 1 ? "s" : ""} máx.</p>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 text-xl">×</button>
+          <button onClick={onClose} className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400"><X size={18} /></button>
         </div>
 
         <div className="p-6 space-y-5">
@@ -425,7 +428,7 @@ function EjercicioDetailModal({ ej, onClose }: { ej: EjExercise; onClose: () => 
               { label: "Actual",    value: latestMax != null ? `${latestMax} kg` : "—" },
               { label: "Cambio",    value: delta != null ? `${delta >= 0 ? "+" : ""}${delta.toFixed(1)} kg` : "—", color: delta != null ? (delta >= 0 ? "text-green-600" : "text-red-500") : "" },
               { label: "Promedio",  value: avg   != null ? `${avg.toFixed(1)} kg` : "—" },
-              { label: "Máximo 🏆", value: best  != null ? `${best} kg` : "—" },
+              { label: "Máximo", value: best  != null ? `${best} kg` : "—" },
               { label: "Mínimo",   value: worst  != null ? `${worst} kg` : "—" },
             ].map((s) => (
               <div key={s.label} className="bg-gray-50 rounded-xl p-3 border border-gray-100 text-center">
@@ -476,8 +479,8 @@ function EjercicioDetailModal({ ej, onClose }: { ej: EjExercise; onClose: () => 
                             return (
                               <td key={n} className="px-4 py-2.5 text-xs text-right font-semibold whitespace-nowrap">
                                 {serie != null ? (
-                                  <span className={isTrophy ? "text-primary" : "text-gray-800"}>
-                                    {serie.pesoKg} kg{isTrophy ? " 🏆" : ""}
+                                  <span className={`inline-flex items-center gap-1 ${isTrophy ? "text-primary" : "text-gray-800"}`}>
+                                    {serie.pesoKg} kg{isTrophy && <Trophy size={11} className="text-primary" />}
                                   </span>
                                 ) : (
                                   <span className="text-gray-300">—</span>
@@ -578,7 +581,12 @@ function ProgresoEjercicios({ userId }: { userId: string }) {
                   <div className="flex justify-between items-center mb-1">
                     <p className="text-xs font-bold text-gray-800 truncate">{ej.emoji} {ej.nombre}</p>
                     {ej.best != null && (
-                      <span className="text-xs font-bold text-primary shrink-0">🏆 {ej.best} kg</span>
+                      <span className="text-xs font-bold text-primary shrink-0 inline-flex items-center gap-1">
+                        <span className="w-4 h-4 rounded-full bg-ink flex items-center justify-center shrink-0">
+                          <Trophy size={9} className="text-highlight" />
+                        </span>
+                        {ej.best} kg
+                      </span>
                     )}
                   </div>
                   {recentLogs.length >= 2 && (
@@ -635,11 +643,11 @@ export default function UserModal({ perfil: perfilInicial, onClose }: { perfil: 
     );
   };
 
-  const TABS: { key: Tab; label: string; icon: string }[] = [
-    { key: "historial",          label: "Historial Clínico",   icon: "🩺" },
-    { key: "progresoMedidas",    label: "Progreso Medidas",    icon: "📊" },
-    { key: "progresoEjercicios", label: "Progreso Ejercicios", icon: "🏋️" },
-    { key: "citas",              label: "Próximas Citas",      icon: "📅" },
+  const TABS: { key: Tab; label: string; Icon: LucideIcon }[] = [
+    { key: "historial",          label: "Historial Clínico",   Icon: Stethoscope },
+    { key: "progresoMedidas",    label: "Progreso Medidas",    Icon: BarChart3 },
+    { key: "progresoEjercicios", label: "Progreso Ejercicios", Icon: Dumbbell },
+    { key: "citas",              label: "Próximas Citas",      Icon: CalendarDays },
   ];
 
   const nombre = perfil.nombre_completo || "Usuario sin nombre";
@@ -662,15 +670,16 @@ export default function UserModal({ perfil: perfilInicial, onClose }: { perfil: 
               <div className="flex items-center gap-2">
                 <h2 className="font-bold text-gray-900 text-xl">{nombre}</h2>
                 <span className={`text-xs px-3 py-1 rounded-full font-semibold inline-flex items-center gap-1 ${
-                  isPremium ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"
+                  isPremium ? "bg-brand-soft text-primary" : "bg-gray-100 text-gray-600"
                 }`}>
-                  {isPremium ? "👑 Premium" : "🔒 Básico"}
+                  {isPremium ? <Crown size={11} /> : <Lock size={11} />}
+                  {isPremium ? "Premium" : "Básico"}
                 </span>
               </div>
               <div className="flex items-center gap-3 text-sm text-gray-500 mt-0.5">
                 <span className="capitalize">{perfil.sexo || "—"}</span>
                 <span>|</span>
-                <span>🎂 {formatFecha(perfil.fecha_nacimiento)}</span>
+                <span className="inline-flex items-center gap-1"><Cake size={13} /> {formatFecha(perfil.fecha_nacimiento)}</span>
               </div>
             </div>
           </div>
@@ -699,7 +708,7 @@ export default function UserModal({ perfil: perfilInicial, onClose }: { perfil: 
                   : "border-transparent text-gray-500 hover:text-gray-700"
               }`}
             >
-              {t.icon} {t.label}
+              <t.Icon size={15} /> {t.label}
             </button>
           ))}
         </div>

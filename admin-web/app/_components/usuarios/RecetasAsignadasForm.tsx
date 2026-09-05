@@ -3,13 +3,16 @@ import { useEffect, useState } from "react";
 import { fetchRecetas, type Receta, type RecetaInput } from "@/app/_data/recetas";
 import { fetchRecetasAsignadas, saveRecetasAsignadas, personalizeReceta, type MealKey } from "@/app/_data/recetas_guardadas";
 import RecetaModal from "@/app/_components/recetas/RecetaModal";
+import { StickyNote, Search, Flame, BarChart3, Pencil, X, Save, Sunrise, Apple, UtensilsCrossed, Cookie, Moon } from "lucide-react";
 
-const MEAL_TABS: { key: MealKey; label: string; emoji: string }[] = [
-  { key: "desayuno",   label: "Desayuno",   emoji: "🌅" },
-  { key: "colacion_1", label: "Colación 1", emoji: "🍎" },
-  { key: "comida",     label: "Comida",     emoji: "🍽" },
-  { key: "colacion_2", label: "Colación 2", emoji: "🥜" },
-  { key: "cena",       label: "Cena",       emoji: "🌙" },
+type LucideIcon = React.ComponentType<{ size?: number; className?: string; strokeWidth?: number }>;
+
+const MEAL_TABS: { key: MealKey; label: string; Icon: LucideIcon }[] = [
+  { key: "desayuno",   label: "Desayuno",   Icon: Sunrise },
+  { key: "colacion_1", label: "Colación 1", Icon: Apple },
+  { key: "comida",     label: "Comida",     Icon: UtensilsCrossed },
+  { key: "colacion_2", label: "Colación 2", Icon: Cookie },
+  { key: "cena",       label: "Cena",       Icon: Moon },
 ];
 
 const emptyMeals = (): Record<MealKey, Receta[]> => ({
@@ -160,7 +163,7 @@ export default function RecetasAsignadasForm({ userId }: { userId: string }) {
     <div className="space-y-4">
       {hasDraft && (
         <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 font-medium">
-          <span>📝</span>
+          <StickyNote size={14} className="shrink-0" />
           <span>Borrador restaurado — tienes cambios sin guardar en este formulario.</span>
           <button
             type="button"
@@ -185,7 +188,7 @@ export default function RecetasAsignadasForm({ userId }: { userId: string }) {
         <div className="flex flex-col gap-3">
           <p className="text-xs font-bold text-gray-600">Catálogo de recetas</p>
           <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 h-9">
-            <span className="text-gray-400 text-sm">🔍</span>
+            <Search size={14} className="text-gray-400 shrink-0" />
             <input
               placeholder="Buscar receta..."
               value={search}
@@ -208,11 +211,11 @@ export default function RecetasAsignadasForm({ userId }: { userId: string }) {
                   <p className="text-sm font-medium text-gray-800 truncate">{r.nombre}</p>
                   <div className="flex items-center gap-2 text-xs text-gray-400">
                     {r.tipo && <span>{r.tipo}</span>}
-                    {r.calorias && <span>🔥 {r.calorias} kcal</span>}
-                    {r.nivel && <span>📊 {r.nivel}</span>}
+                    {r.calorias && <span className="inline-flex items-center gap-0.5"><Flame size={10} /> {r.calorias} kcal</span>}
+                    {r.nivel && <span className="inline-flex items-center gap-0.5"><BarChart3 size={10} /> {r.nivel}</span>}
                   </div>
                 </div>
-                <span className="text-gray-300 text-lg">+</span>
+                <span className="text-gray-300 text-lg leading-none">+</span>
               </div>
             ))}
             {catalogoDisponible.length === 0 && (
@@ -243,7 +246,7 @@ export default function RecetasAsignadasForm({ userId }: { userId: string }) {
                       : "text-gray-500 hover:text-gray-700"
                   }`}
                 >
-                  <span className="block text-base">{tab.emoji}</span>
+                  <tab.Icon size={15} className="mx-auto mb-0.5" />
                   <span className="block truncate">{tab.label}</span>
                   {count > 0 && (
                     <span className={`inline-block text-[9px] font-bold px-1.5 py-0.5 rounded-full mt-0.5 ${
@@ -273,7 +276,7 @@ export default function RecetasAsignadasForm({ userId }: { userId: string }) {
           >
             {asignadas[activeTab].length === 0 && (
               <div className="flex-1 flex flex-col items-center justify-center text-gray-400 gap-1 py-6">
-                <span className="text-3xl">{activeTabInfo.emoji}</span>
+                <activeTabInfo.Icon size={26} />
                 <p className="text-xs text-center">Arrastra recetas para {activeTabInfo.label}</p>
               </div>
             )}
@@ -284,24 +287,24 @@ export default function RecetasAsignadasForm({ userId }: { userId: string }) {
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-medium text-gray-800 truncate">{r.nombre}</p>
                     {r.user_id !== null && (
-                      <span className="shrink-0 text-[10px] font-semibold bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full">
+                      <span className="shrink-0 text-[10px] font-semibold bg-brand-soft text-primary px-1.5 py-0.5 rounded-full">
                         Personalizada
                       </span>
                     )}
                   </div>
                   <div className="flex items-center gap-2 text-xs text-gray-400">
                     {r.tipo && <span>{r.tipo}</span>}
-                    {r.calorias && <span>🔥 {r.calorias} kcal</span>}
+                    {r.calorias && <span className="inline-flex items-center gap-0.5"><Flame size={10} /> {r.calorias} kcal</span>}
                   </div>
                 </div>
                 <button
                   onClick={() => setEditingReceta({ receta: r, meal: activeTab })}
-                  className="text-gray-400 hover:text-primary text-sm px-1"
+                  className="text-gray-400 hover:text-primary px-1"
                   title="Editar receta para este usuario"
                 >
-                  ✏
+                  <Pencil size={14} />
                 </button>
-                <button onClick={() => removeReceta(r.id, activeTab)} className="text-gray-400 hover:text-red-500 text-sm">✕</button>
+                <button onClick={() => removeReceta(r.id, activeTab)} className="text-gray-400 hover:text-red-500"><X size={15} /></button>
               </div>
             ))}
           </div>
@@ -319,7 +322,8 @@ export default function RecetasAsignadasForm({ userId }: { userId: string }) {
           disabled={saving}
           className="flex items-center gap-2 px-4 h-10 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-dark disabled:opacity-50"
         >
-          {saving ? "Guardando..." : "💾 Guardar recetas"}
+          {!saving && <Save size={15} />}
+          {saving ? "Guardando..." : "Guardar recetas"}
         </button>
       </div>
 

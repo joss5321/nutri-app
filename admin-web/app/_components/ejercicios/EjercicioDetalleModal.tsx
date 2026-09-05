@@ -1,4 +1,5 @@
 "use client";
+import { X } from "lucide-react";
 import type { Exercise } from "@/app/_data/exercises";
 import {
   tx,
@@ -50,9 +51,9 @@ export default function EjercicioDetalleModal({
           </div>
           <button
             onClick={onClose}
-            className="shrink-0 w-9 h-9 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 text-xl ml-3"
+            className="shrink-0 w-9 h-9 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 ml-3"
           >
-            ×
+            <X size={18} />
           </button>
         </div>
 

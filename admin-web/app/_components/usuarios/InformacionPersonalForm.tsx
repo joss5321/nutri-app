@@ -11,6 +11,11 @@ import {
 } from "@/app/_data/historia_clinica";
 import ConfirmModal from "@/app/_components/ConfirmModal";
 import { exportHistorialClinicoPdf } from "@/app/_utils/exportHistorialPdf";
+import {
+  StickyNote, Save, Pencil, X, CalendarDays, FileText,
+  ClipboardList, BarChart3, Stethoscope, FlaskConical, Salad,
+  PersonStanding, Users as UsersIcon, Dumbbell, ChevronUp, ChevronDown,
+} from "lucide-react";
 
 // ── Helpers ──────────────────────────────────────────────────
 function calcularEdad(fechaNacimiento: string): number | null {
@@ -39,7 +44,7 @@ const TXA = "w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ou
 function Nota({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
     <div className="border-t border-dashed border-gray-200 pt-3 mt-1">
-      <label className={LB}>📝 Nota clínica</label>
+      <label className={`${LB} inline-flex items-center gap-1`}><StickyNote size={12} /> Nota clínica</label>
       <textarea value={value} onChange={(e) => onChange(e.target.value)}
         rows={2} placeholder="Notas adicionales para esta sección..."
         className={TXA} />
@@ -93,17 +98,19 @@ function YesNo({ value, onChange, labels = ["Sí", "No"] }: {
   );
 }
 
-function Accordion({ title, icon, isOpen, onToggle, children }: {
-  title: string; icon: string; isOpen: boolean; onToggle: () => void; children: React.ReactNode;
+type LucideIcon = React.ComponentType<{ size?: number; className?: string; strokeWidth?: number }>;
+
+function Accordion({ title, icon: Icon, isOpen, onToggle, children }: {
+  title: string; icon: LucideIcon; isOpen: boolean; onToggle: () => void; children: React.ReactNode;
 }) {
   return (
     <div className="border border-gray-200 rounded-xl overflow-hidden">
       <button type="button" onClick={onToggle}
         className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left">
         <span className="flex items-center gap-2 font-semibold text-gray-800 text-sm">
-          <span>{icon}</span> {title}
+          <Icon size={15} className="text-primary shrink-0" /> {title}
         </span>
-        <span className="text-gray-400 text-sm">{isOpen ? "▲" : "▼"}</span>
+        {isOpen ? <ChevronUp size={15} className="text-gray-400" /> : <ChevronDown size={15} className="text-gray-400" />}
       </button>
       {isOpen && <div className="p-4 space-y-4">{children}</div>}
     </div>
@@ -406,7 +413,7 @@ export default function InformacionPersonalForm({
     </div>
   );
 
-  const SaveBtn = ({ label = "💾 Guardar datos personales" }: { label?: string }) => (
+  const SaveBtn = ({ label = "Guardar datos personales" }: { label?: string }) => (
     <div className="flex items-center justify-end gap-3">
       {perfilFeedback && (
         <span className={`text-xs font-medium ${perfilFeedback.type === "success" ? "text-green-600" : "text-red-600"}`}>
@@ -415,6 +422,7 @@ export default function InformacionPersonalForm({
       )}
       <button onClick={handleSavePerfil} disabled={savingPerfil}
         className="flex items-center gap-2 px-4 h-10 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-dark disabled:opacity-50">
+        {!savingPerfil && <Save size={15} />}
         {savingPerfil ? "Guardando..." : label}
       </button>
     </div>
@@ -441,14 +449,14 @@ export default function InformacionPersonalForm({
           type="button"
           onClick={handleExportPdf}
           className="flex items-center gap-2 h-9 px-4 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
-          📄 Exportar historial a PDF
+          <FileText size={15} /> Exportar historial a PDF
         </button>
       </div>
 
       {/* Banner de borrador no guardado */}
       {hasDraft && (
         <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 font-medium">
-          <span>📝</span>
+          <StickyNote size={14} className="shrink-0" />
           <span>Borrador restaurado — tienes cambios sin guardar en este formulario.</span>
           <button
             type="button"
@@ -484,8 +492,8 @@ export default function InformacionPersonalForm({
           <label className={LB}>Plan de membresía</label>
           <select value={planMembresia} onChange={(e) => setPlanMembresia(e.target.value)}
             className={IC + " bg-white"}>
-            <option value="basico">🔒 Básico</option>
-            <option value="premium">👑 Premium</option>
+            <option value="basico">Básico</option>
+            <option value="premium">Premium</option>
           </select>
         </div>
         <div>
@@ -620,7 +628,8 @@ export default function InformacionPersonalForm({
         )}
         <button onClick={() => setShowMedidasConfirm(true)} disabled={savingMedidas}
           className="flex items-center gap-2 px-4 h-10 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800 disabled:opacity-50">
-          {savingMedidas ? "Guardando..." : "📊 Registrar medidas"}
+          {!savingMedidas && <BarChart3 size={15} />}
+          {savingMedidas ? "Guardando..." : "Registrar medidas"}
         </button>
       </div>
 
@@ -635,7 +644,7 @@ export default function InformacionPersonalForm({
       </div>
 
       {/* ── Antecedentes personales ── */}
-      <Accordion title="Antecedentes personales" icon="🩺"
+      <Accordion title="Antecedentes personales" icon={Stethoscope}
         isOpen={openSecs.has("ap")} onToggle={() => tog("ap")}>
 
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Síntomas gastrointestinales</p>
@@ -704,7 +713,7 @@ export default function InformacionPersonalForm({
       </Accordion>
 
       {/* ── Antecedentes familiares ── */}
-      <Accordion title="Antecedentes familiares" icon="👨‍👩‍👧‍👦"
+      <Accordion title="Antecedentes familiares" icon={UsersIcon}
         isOpen={openSecs.has("af")} onToggle={() => tog("af")}>
 
         <div className="space-y-2">
@@ -726,7 +735,7 @@ export default function InformacionPersonalForm({
       </Accordion>
 
       {/* ── Estilo de vida ── */}
-      <Accordion title="Estilo de vida" icon="🏃"
+      <Accordion title="Estilo de vida" icon={PersonStanding}
         isOpen={openSecs.has("ev")} onToggle={() => tog("ev")}>
 
         <div className="space-y-3">
@@ -847,7 +856,7 @@ export default function InformacionPersonalForm({
       </Accordion>
 
       {/* ── Indicadores bioquímicos ── */}
-      <Accordion title="Indicadores bioquímicos" icon="🧪"
+      <Accordion title="Indicadores bioquímicos" icon={FlaskConical}
         isOpen={openSecs.has("ib")} onToggle={() => tog("ib")}>
 
         <div className="grid grid-cols-2 gap-3">
@@ -873,7 +882,7 @@ export default function InformacionPersonalForm({
       </Accordion>
 
       {/* ── Indicadores dietéticos ── */}
-      <Accordion title="Indicadores dietéticos" icon="🥗"
+      <Accordion title="Indicadores dietéticos" icon={Salad}
         isOpen={openSecs.has("id")} onToggle={() => tog("id")}>
 
         <div className="grid grid-cols-2 gap-3">
@@ -924,8 +933,8 @@ export default function InformacionPersonalForm({
                 <label className="text-xs text-gray-500 font-medium">Colación (entre desayuno y comida)</label>
                 <button type="button"
                   onClick={() => { setColacionAMVisible(false); sh("id_r24_colacion_am")(""); }}
-                  className="text-xs text-red-500 hover:underline">
-                  ✕ Quitar
+                  className="text-xs text-red-500 hover:underline inline-flex items-center gap-1">
+                  <X size={12} /> Quitar
                 </button>
               </div>
               <textarea value={hist.id_r24_colacion_am} onChange={(e) => sh("id_r24_colacion_am")(e.target.value)}
@@ -950,8 +959,8 @@ export default function InformacionPersonalForm({
                 <label className="text-xs text-gray-500 font-medium">Colación (entre comida y cena)</label>
                 <button type="button"
                   onClick={() => { setColacionPMVisible(false); sh("id_r24_colacion_pm")(""); }}
-                  className="text-xs text-red-500 hover:underline">
-                  ✕ Quitar
+                  className="text-xs text-red-500 hover:underline inline-flex items-center gap-1">
+                  <X size={12} /> Quitar
                 </button>
               </div>
               <textarea value={hist.id_r24_colacion_pm} onChange={(e) => sh("id_r24_colacion_pm")(e.target.value)}
@@ -1075,7 +1084,7 @@ export default function InformacionPersonalForm({
       </Accordion>
 
       {/* ── Entrenamiento ── */}
-      <Accordion title="Entrenamiento" icon="💪"
+      <Accordion title="Entrenamiento" icon={Dumbbell}
         isOpen={openSecs.has("ent")} onToggle={() => tog("ent")}>
 
         <div className="grid grid-cols-2 gap-3">
@@ -1114,7 +1123,7 @@ export default function InformacionPersonalForm({
       </Accordion>
 
       {/* ── Comentarios / Plan de intervención ── */}
-      <Accordion title="Comentarios / Plan de intervención" icon="📋"
+      <Accordion title="Comentarios / Plan de intervención" icon={ClipboardList}
         isOpen={openSecs.has("plan")} onToggle={() => tog("plan")}>
         <div>
           <label className={LB}>Comentarios y plan de intervención</label>
@@ -1126,7 +1135,7 @@ export default function InformacionPersonalForm({
       </Accordion>
 
       {/* Botón guardar historial (copia) */}
-      <SaveBtn label="💾 Guardar historial clínico" />
+      <SaveBtn label="Guardar historial clínico" />
 
       <div className="border-t border-gray-200" />
 
@@ -1222,8 +1231,9 @@ export default function InformacionPersonalForm({
               Cancelar
             </button>
             <button onClick={handleSaveSeguimiento} disabled={savingSeg}
-              className="h-9 px-4 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-dark disabled:opacity-50">
-              {savingSeg ? "Guardando..." : editingSegId ? "💾 Guardar cambios" : "💾 Guardar seguimiento"}
+              className="h-9 px-4 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-dark disabled:opacity-50 inline-flex items-center gap-2">
+              {!savingSeg && <Save size={14} />}
+              {savingSeg ? "Guardando..." : editingSegId ? "Guardar cambios" : "Guardar seguimiento"}
             </button>
           </div>
         </div>
@@ -1241,7 +1251,9 @@ export default function InformacionPersonalForm({
                 <div className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors">
                   <button type="button" onClick={() => togSeg(seg.id)}
                     className="flex-1 flex items-center gap-3 text-left min-w-0">
-                    <span className="text-sm font-semibold text-gray-800 shrink-0">📅 Seguimiento — {fechaFmt}</span>
+                    <span className="text-sm font-semibold text-gray-800 shrink-0 inline-flex items-center gap-1.5">
+                      <CalendarDays size={14} className="text-primary" /> Seguimiento — {fechaFmt}
+                    </span>
                     {seg.como_se_sintio && (
                       <span className="text-xs text-gray-500 truncate max-w-[200px]">{seg.como_se_sintio}</span>
                     )}
@@ -1249,11 +1261,11 @@ export default function InformacionPersonalForm({
                   <div className="flex items-center gap-3 shrink-0 pl-3">
                     <button type="button"
                       onClick={() => { setNewSeg(seg); setEditingSegId(seg.id); setShowNewSeg(true); }}
-                      className="text-xs font-semibold text-primary hover:underline">
-                      ✏️ Editar
+                      className="text-xs font-semibold text-primary hover:underline inline-flex items-center gap-1">
+                      <Pencil size={12} /> Editar
                     </button>
-                    <button type="button" onClick={() => togSeg(seg.id)} className="text-gray-400 text-sm">
-                      {isOpen ? "▲" : "▼"}
+                    <button type="button" onClick={() => togSeg(seg.id)} className="text-gray-400">
+                      {isOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
                     </button>
                   </div>
                 </div>

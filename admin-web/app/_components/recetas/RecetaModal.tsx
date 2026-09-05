@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
+import { X, Check, Zap, BarChart3, Flame, UtensilsCrossed } from "lucide-react";
 import {
   CATEGORIAS_NUTRICIONALES,
   NIVELES_RECETA,
@@ -57,9 +58,9 @@ function ListEditor({
             <button
               onClick={() => remove(i)}
               disabled={items.length === 1}
-              className="w-7 h-7 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-30 disabled:hover:bg-transparent shrink-0"
+              className="w-7 h-7 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-30 disabled:hover:bg-transparent shrink-0 flex items-center justify-center"
             >
-              ×
+              <X size={14} />
             </button>
           </div>
         ))}
@@ -255,7 +256,7 @@ export default function RecetaModal({
             <h2 className="font-bold text-gray-900 text-xl">{isEdit ? "Editar receta" : "Crear receta"}</h2>
             <p className="text-gray-500 text-sm">Completa la información para {isEdit ? "actualizar" : "agregar"} la receta al catálogo.</p>
           </div>
-          <button onClick={onClose} className="w-9 h-9 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 text-xl">×</button>
+          <button onClick={onClose} className="w-9 h-9 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400"><X size={18} /></button>
         </div>
 
         <div className="grid grid-cols-3 gap-6 p-6">
@@ -336,7 +337,7 @@ export default function RecetaModal({
                           }`}
                         />
                         {isLinked && (
-                          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-green-500 text-xs font-bold">✓</span>
+                          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-green-500"><Check size={13} /></span>
                         )}
                         {dropdownIdx === i && ing.nombre.trim() && (
                           <div className="absolute z-30 top-full mt-1 left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
@@ -393,9 +394,9 @@ export default function RecetaModal({
                       <button
                         onClick={() => removeIngrediente(i)}
                         disabled={ingredientes.length === 1}
-                        className="w-7 h-7 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-30 disabled:hover:bg-transparent"
+                        className="w-7 h-7 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-30 disabled:hover:bg-transparent flex items-center justify-center"
                       >
-                        ×
+                        <X size={14} />
                       </button>
                     </div>
                   );
@@ -410,8 +411,8 @@ export default function RecetaModal({
             <section>
               <p className="text-sm font-bold text-gray-800 mb-3">3. Porciones y calorías</p>
               {hasLinked && (
-                <p className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-1.5 mb-3">
-                  ⚡ Calculado automáticamente desde los ingredientes agregados
+                <p className="flex items-center gap-1 text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-1.5 mb-3">
+                  <Zap size={12} /> Calculado automáticamente desde los ingredientes agregados
                 </p>
               )}
               <div className="grid grid-cols-2 gap-3">
@@ -446,8 +447,8 @@ export default function RecetaModal({
                   4. Macronutrientes{hasLinked ? " (total receta)" : " (por porción)"}
                 </p>
                 {hasLinked && (
-                  <span className="text-xs text-green-600 bg-green-50 border border-green-100 px-2 py-0.5 rounded-full">
-                    ⚡ Auto
+                  <span className="flex items-center gap-1 text-xs text-green-600 bg-green-50 border border-green-100 px-2 py-0.5 rounded-full">
+                    <Zap size={11} /> Auto
                   </span>
                 )}
               </div>
@@ -505,9 +506,9 @@ export default function RecetaModal({
               </div>
 
               <div className="flex items-center justify-between text-xs text-gray-500 border-t border-gray-100 pt-3">
-                <span>📊 {nivel}</span>
-                <span>🔥 {calorias || "—"} kcal</span>
-                <span>🍽️ {porciones || "—"}</span>
+                <span className="flex items-center gap-1"><BarChart3 size={12} /> {nivel}</span>
+                <span className="flex items-center gap-1"><Flame size={12} /> {calorias || "—"} kcal</span>
+                <span className="flex items-center gap-1"><UtensilsCrossed size={12} /> {porciones || "—"}</span>
               </div>
 
               {(proteinas || carbohidratos || grasas) && (
@@ -528,8 +529,8 @@ export default function RecetaModal({
               )}
 
               {hasLinked && (
-                <p className="mt-3 text-xs text-center text-green-600 bg-green-50 rounded-lg py-1">
-                  ⚡ {ingredientes.filter(i => i.alimento_id).length} ingrediente{ingredientes.filter(i => i.alimento_id).length !== 1 ? "s" : ""} del catálogo
+                <p className="mt-3 flex items-center justify-center gap-1 text-xs text-center text-green-600 bg-green-50 rounded-lg py-1">
+                  <Zap size={12} /> {ingredientes.filter(i => i.alimento_id).length} ingrediente{ingredientes.filter(i => i.alimento_id).length !== 1 ? "s" : ""} del catálogo
                 </p>
               )}
             </div>
@@ -546,7 +547,7 @@ export default function RecetaModal({
           </div>
           <button onClick={handleSave} disabled={saving || !nombre.trim()}
             className="flex items-center gap-2 px-4 h-10 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-dark disabled:opacity-60">
-            {saving ? "Guardando..." : `✓ ${isEdit ? "Guardar cambios" : "Guardar receta"}`}
+            {saving ? "Guardando..." : (<><Check size={15} /> {isEdit ? "Guardar cambios" : "Guardar receta"}</>)}
           </button>
         </div>
       </div>
