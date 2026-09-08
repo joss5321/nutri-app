@@ -11,28 +11,28 @@ export default function PasswordInput({ value, onChange }: {
   const [showPass, setShowPass] = useState(false);
 
   return (
-    <div className="flex items-center gap-3 bg-gray-100 rounded-2xl px-4 h-14 border border-transparent focus-within:border-primary transition-colors">
-      <Lock size={18} className="text-gray-400 shrink-0" />
+    <div className="flex items-center gap-3 bg-surface-muted rounded-2xl px-4 h-14 border border-transparent focus-within:border-primary transition-colors">
+      <Lock size={18} className="text-muted shrink-0" />
       <input
         type={showPass ? "text" : "password"}
         placeholder="Contraseña"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         required
-        className="flex-1 bg-transparent outline-none text-gray-700 text-sm"
+        className="flex-1 bg-transparent outline-none text-text-primary text-sm"
       />
       <span
         onMouseDown={(e) => {
           e.preventDefault();
           setShowPass((v) => !v);
         }}
-        className="text-gray-400 hover:text-gray-600 select-none cursor-pointer p-1"
+        className="text-muted hover:text-secondary select-none cursor-pointer p-1"
       >
       
         {showPass ? (
-            <EyeOff size={18} className="text-gray-400 hover:text-gray-600 cursor-pointer" />
+            <EyeOff size={18} className="text-muted hover:text-secondary cursor-pointer" />
         ) : (
-            <Eye size={18} className="text-gray-400 hover:text-gray-600 cursor-pointer" />
+            <Eye size={18} className="text-muted hover:text-secondary cursor-pointer" />
         )}
       </span>
     </div>

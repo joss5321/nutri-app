@@ -24,9 +24,9 @@ function CircleProgress({ value, label, sub }: { value: number; label: string; s
             strokeLinecap="round" strokeDasharray={circ} strokeDashoffset={offset}
             transform="rotate(-90 40 40)" />
         </svg>
-        <span className="absolute inset-0 flex items-center justify-center text-sm font-bold text-gray-900">{value}%</span>
+        <span className="absolute inset-0 flex items-center justify-center text-sm font-bold text-text-primary">{value}%</span>
       </div>
-      <p className="text-xs font-semibold text-gray-700">{label}</p>
+      <p className="text-xs font-semibold text-text-primary">{label}</p>
       <p className="text-xs text-primary">{sub}</p>
     </div>
   );
@@ -163,12 +163,12 @@ function ChartDetailModal({ chart, medidas, onClose }: { chart: ChartDef; medida
   return (
     <div className="fixed inset-0 bg-black/60 z-[70] flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between p-6 border-b border-gray-100">
+        <div className="flex items-center justify-between p-6 border-b border-divider">
           <div>
-            <h3 className="font-bold text-gray-900 text-lg">{chart.title}</h3>
-            <p className="text-sm text-gray-500">{data.length} registros</p>
+            <h3 className="font-bold text-text-primary text-lg">{chart.title}</h3>
+            <p className="text-sm text-secondary">{data.length} registros</p>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400"><X size={18} /></button>
+          <button onClick={onClose} className="w-8 h-8 rounded-full hover:bg-surface-muted flex items-center justify-center text-muted"><X size={18} /></button>
         </div>
 
         <div className="p-6 space-y-5">
@@ -177,7 +177,7 @@ function ChartDetailModal({ chart, medidas, onClose }: { chart: ChartDef; medida
             {(Object.keys(PERIOD_LABELS) as Period[]).map((p) => (
               <button key={p} onClick={() => setPeriod(p)}
                 className={`px-4 py-2 rounded-xl text-xs font-semibold transition-colors ${
-                  period === p ? "bg-primary text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  period === p ? "bg-primary text-white" : "bg-surface-muted text-secondary hover:bg-surface-muted"
                 }`}>
                 {PERIOD_LABELS[p]}
               </button>
@@ -188,36 +188,36 @@ function ChartDetailModal({ chart, medidas, onClose }: { chart: ChartDef; medida
           <div className="grid grid-cols-5 gap-3">
             {[
               { label: "Actual", value: latest ? `${latest.value.toFixed(1)} ${chart.unit}` : "—" },
-              { label: "Cambio", value: delta != null ? `${delta > 0 ? "+" : ""}${delta.toFixed(1)} ${chart.unit}` : "—", color: delta != null ? (delta <= 0 ? "text-green-600" : "text-red-500") : "" },
+              { label: "Cambio", value: delta != null ? `${delta > 0 ? "+" : ""}${delta.toFixed(1)} ${chart.unit}` : "—", color: delta != null ? (delta <= 0 ? "text-success" : "text-error") : "" },
               { label: "Promedio", value: avg != null ? `${avg.toFixed(1)} ${chart.unit}` : "—" },
               { label: "Máximo", value: best != null ? `${best.toFixed(1)} ${chart.unit}` : "—" },
               { label: "Mínimo", value: worst != null ? `${worst.toFixed(1)} ${chart.unit}` : "—" },
             ].map((s) => (
-              <div key={s.label} className="bg-gray-50 rounded-xl p-3 border border-gray-100 text-center">
-                <p className="text-xs text-gray-500">{s.label}</p>
-                <p className={`font-bold text-sm mt-0.5 ${("color" in s && s.color) || "text-gray-900"}`}>{s.value}</p>
+              <div key={s.label} className="bg-background-secondary rounded-xl p-3 border border-divider text-center">
+                <p className="text-xs text-secondary">{s.label}</p>
+                <p className={`font-bold text-sm mt-0.5 ${("color" in s && s.color) || "text-text-primary"}`}>{s.value}</p>
               </div>
             ))}
           </div>
 
           {/* Gráfica grande */}
           {data.length >= 2 ? (
-            <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <div className="bg-white rounded-xl border border-border p-4">
               <LineChart data={data} />
             </div>
           ) : (
-            <p className="text-sm text-gray-400 text-center py-8">Se necesitan al menos 2 registros en este período.</p>
+            <p className="text-sm text-muted text-center py-8">Se necesitan al menos 2 registros en este período.</p>
           )}
 
           {/* Tabla de datos */}
           {data.length > 0 && (
-            <div className="rounded-xl border border-gray-200 overflow-hidden">
+            <div className="rounded-xl border border-border overflow-hidden">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-gray-50">
-                    <th className="text-left px-4 py-2 text-xs font-semibold text-gray-500">Fecha</th>
-                    <th className="text-right px-4 py-2 text-xs font-semibold text-gray-500">Valor</th>
-                    <th className="text-right px-4 py-2 text-xs font-semibold text-gray-500">Cambio</th>
+                  <tr className="bg-background-secondary">
+                    <th className="text-left px-4 py-2 text-xs font-semibold text-secondary">Fecha</th>
+                    <th className="text-right px-4 py-2 text-xs font-semibold text-secondary">Valor</th>
+                    <th className="text-right px-4 py-2 text-xs font-semibold text-secondary">Cambio</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -225,12 +225,12 @@ function ChartDetailModal({ chart, medidas, onClose }: { chart: ChartDef; medida
                     const prev = i < arr.length - 1 ? arr[i + 1] : null;
                     const change = prev ? d.value - prev.value : null;
                     return (
-                      <tr key={`${d.fecha}-${i}`} className="border-t border-gray-100">
-                        <td className="px-4 py-2 text-xs text-gray-700">{d.label}</td>
-                        <td className="px-4 py-2 text-xs text-right font-semibold text-gray-900">{d.value.toFixed(1)} {chart.unit}</td>
+                      <tr key={`${d.fecha}-${i}`} className="border-t border-divider">
+                        <td className="px-4 py-2 text-xs text-text-primary">{d.label}</td>
+                        <td className="px-4 py-2 text-xs text-right font-semibold text-text-primary">{d.value.toFixed(1)} {chart.unit}</td>
                         <td className="px-4 py-2 text-xs text-right">
                           {change != null ? (
-                            <span className={change <= 0 ? "text-green-600" : "text-red-500"}>
+                            <span className={change <= 0 ? "text-success" : "text-error"}>
                               {change > 0 ? "+" : ""}{change.toFixed(1)}
                             </span>
                           ) : "—"}
@@ -260,8 +260,8 @@ function ProgresoMedidas({ userId }: { userId: string }) {
       .finally(() => setLoading(false));
   }, [userId]);
 
-  if (loading) return <p className="text-sm text-gray-400 text-center py-10">Cargando medidas...</p>;
-  if (medidas.length === 0) return <p className="text-sm text-gray-400 text-center py-10">Sin registros de medidas aún.</p>;
+  if (loading) return <p className="text-sm text-muted text-center py-10">Cargando medidas...</p>;
+  if (medidas.length === 0) return <p className="text-sm text-muted text-center py-10">Sin registros de medidas aún.</p>;
 
   const latest = medidas[medidas.length - 1];
   const first = medidas[0];
@@ -282,15 +282,15 @@ function ProgresoMedidas({ userId }: { userId: string }) {
           { label: "% Grasa", value: latest?.grasa_pct != null ? `${latest.grasa_pct} %` : "—" },
           { label: "Registros", value: String(medidas.length) },
         ].map((s) => (
-          <div key={s.label} className="bg-gray-50 rounded-xl p-2.5 border border-gray-100">
-            <p className="text-xs text-gray-500">{s.label}</p>
-            <p className="font-bold text-gray-900 text-xs mt-0.5">{s.value}</p>
+          <div key={s.label} className="bg-background-secondary rounded-xl p-2.5 border border-divider">
+            <p className="text-xs text-secondary">{s.label}</p>
+            <p className="font-bold text-text-primary text-xs mt-0.5">{s.value}</p>
           </div>
         ))}
       </div>
 
       {/* Gráficas */}
-      <p className="text-xs text-gray-400">Haz clic en una gráfica para ver más detalles</p>
+      <p className="text-xs text-muted">Haz clic en una gráfica para ver más detalles</p>
       <div className="grid grid-cols-2 gap-4">
         {CHARTS.map((c) => {
           const data = buildChartData(medidas, c.key as Parameters<typeof buildChartData>[1]);
@@ -300,15 +300,15 @@ function ProgresoMedidas({ userId }: { userId: string }) {
           const delta = last - firstV;
           return (
             <div key={c.key} onClick={() => setDetailChart(c)}
-              className="bg-white rounded-xl border border-gray-200 p-3 cursor-pointer hover:border-primary/50 hover:shadow-md transition-all">
+              className="bg-white rounded-xl border border-border p-3 cursor-pointer hover:border-primary/50 hover:shadow-md transition-all">
               <div className="flex justify-between items-center mb-2">
-                <p className="font-bold text-gray-900 text-xs">{c.title}</p>
-                <span className={`text-xs font-semibold ${delta <= 0 ? "text-green-600" : "text-red-500"}`}>
+                <p className="font-bold text-text-primary text-xs">{c.title}</p>
+                <span className={`text-xs font-semibold ${delta <= 0 ? "text-success" : "text-error"}`}>
                   {delta > 0 ? "+" : ""}{delta.toFixed(1)} {c.unit}
                 </span>
               </div>
               <LineChart data={data} />
-              <p className="text-[10px] text-gray-400 text-right mt-1">Clic para ampliar</p>
+              <p className="text-[10px] text-muted text-right mt-1">Clic para ampliar</p>
             </div>
           );
         })}
@@ -401,12 +401,12 @@ function EjercicioDetailModal({ ej, onClose }: { ej: EjExercise; onClose: () => 
   return (
     <div className="fixed inset-0 bg-black/60 z-[70] flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between p-6 border-b border-gray-100">
+        <div className="flex items-center justify-between p-6 border-b border-divider">
           <div>
-            <h3 className="font-bold text-gray-900 text-lg">{ej.emoji} {ej.nombre}</h3>
-            <p className="text-sm text-gray-500">{sessions.length} sesión{sessions.length !== 1 ? "es" : ""} · {maxSeries} serie{maxSeries !== 1 ? "s" : ""} máx.</p>
+            <h3 className="font-bold text-text-primary text-lg">{ej.emoji} {ej.nombre}</h3>
+            <p className="text-sm text-secondary">{sessions.length} sesión{sessions.length !== 1 ? "es" : ""} · {maxSeries} serie{maxSeries !== 1 ? "s" : ""} máx.</p>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400"><X size={18} /></button>
+          <button onClick={onClose} className="w-8 h-8 rounded-full hover:bg-surface-muted flex items-center justify-center text-muted"><X size={18} /></button>
         </div>
 
         <div className="p-6 space-y-5">
@@ -415,7 +415,7 @@ function EjercicioDetailModal({ ej, onClose }: { ej: EjExercise; onClose: () => 
             {(Object.keys(PERIOD_LABELS) as Period[]).map((p) => (
               <button key={p} onClick={() => setPeriod(p)}
                 className={`px-4 py-2 rounded-xl text-xs font-semibold transition-colors ${
-                  period === p ? "bg-primary text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  period === p ? "bg-primary text-white" : "bg-surface-muted text-secondary hover:bg-surface-muted"
                 }`}>
                 {PERIOD_LABELS[p]}
               </button>
@@ -426,39 +426,39 @@ function EjercicioDetailModal({ ej, onClose }: { ej: EjExercise; onClose: () => 
           <div className="grid grid-cols-5 gap-3">
             {[
               { label: "Actual",    value: latestMax != null ? `${latestMax} kg` : "—" },
-              { label: "Cambio",    value: delta != null ? `${delta >= 0 ? "+" : ""}${delta.toFixed(1)} kg` : "—", color: delta != null ? (delta >= 0 ? "text-green-600" : "text-red-500") : "" },
+              { label: "Cambio",    value: delta != null ? `${delta >= 0 ? "+" : ""}${delta.toFixed(1)} kg` : "—", color: delta != null ? (delta >= 0 ? "text-success" : "text-error") : "" },
               { label: "Promedio",  value: avg   != null ? `${avg.toFixed(1)} kg` : "—" },
               { label: "Máximo", value: best  != null ? `${best} kg` : "—" },
               { label: "Mínimo",   value: worst  != null ? `${worst} kg` : "—" },
             ].map((s) => (
-              <div key={s.label} className="bg-gray-50 rounded-xl p-3 border border-gray-100 text-center">
-                <p className="text-xs text-gray-500">{s.label}</p>
-                <p className={`font-bold text-sm mt-0.5 ${("color" in s && s.color) || "text-gray-900"}`}>{s.value}</p>
+              <div key={s.label} className="bg-background-secondary rounded-xl p-3 border border-divider text-center">
+                <p className="text-xs text-secondary">{s.label}</p>
+                <p className={`font-bold text-sm mt-0.5 ${("color" in s && s.color) || "text-text-primary"}`}>{s.value}</p>
               </div>
             ))}
           </div>
 
           {/* Gráfica de línea (max peso por sesión) */}
           {chartData.length >= 2 ? (
-            <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <div className="bg-white rounded-xl border border-border p-4">
               <LineChart data={chartData} unit="kg" />
             </div>
           ) : (
-            <p className="text-sm text-gray-400 text-center py-8">Se necesitan al menos 2 sesiones en este período.</p>
+            <p className="text-sm text-muted text-center py-8">Se necesitan al menos 2 sesiones en este período.</p>
           )}
 
           {/* Tabla por sesión × series */}
           {sessions.length > 0 && maxSeries > 0 && (
-            <div className="rounded-xl border border-gray-200 overflow-hidden">
+            <div className="rounded-xl border border-border overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm" style={{ minWidth: 200 + maxSeries * 90 }}>
                   <thead>
-                    <tr className="bg-gray-50">
-                      <th className="sticky left-0 bg-gray-50 text-left px-4 py-2.5 text-xs font-semibold text-gray-500 border-r border-gray-200 whitespace-nowrap z-10">
+                    <tr className="bg-background-secondary">
+                      <th className="sticky left-0 bg-background-secondary text-left px-4 py-2.5 text-xs font-semibold text-secondary border-r border-border whitespace-nowrap z-10">
                         Fecha
                       </th>
                       {serieColumns.map((n) => (
-                        <th key={n} className="text-right px-4 py-2.5 text-xs font-semibold text-gray-500 whitespace-nowrap">
+                        <th key={n} className="text-right px-4 py-2.5 text-xs font-semibold text-secondary whitespace-nowrap">
                           Serie {n}
                         </th>
                       ))}
@@ -469,8 +469,8 @@ function EjercicioDetailModal({ ej, onClose }: { ej: EjExercise; onClose: () => 
                       const [y, m, d] = session.fecha.split("-").map(Number);
                       const serieMap = new Map(session.series.map((sr) => [sr.numeroSerie, sr]));
                       return (
-                        <tr key={session.sesionId} className="border-t border-gray-100 hover:bg-gray-50/50">
-                          <td className="sticky left-0 bg-white hover:bg-gray-50/50 px-4 py-2.5 text-xs font-medium text-gray-700 border-r border-gray-200 whitespace-nowrap z-10">
+                        <tr key={session.sesionId} className="border-t border-divider hover:bg-background-secondary/50">
+                          <td className="sticky left-0 bg-white hover:bg-background-secondary/50 px-4 py-2.5 text-xs font-medium text-text-primary border-r border-border whitespace-nowrap z-10">
                             {d}/{MONTH_SHORT[m - 1]}/{String(y).slice(2)}
                           </td>
                           {serieColumns.map((n) => {
@@ -479,11 +479,11 @@ function EjercicioDetailModal({ ej, onClose }: { ej: EjExercise; onClose: () => 
                             return (
                               <td key={n} className="px-4 py-2.5 text-xs text-right font-semibold whitespace-nowrap">
                                 {serie != null ? (
-                                  <span className={`inline-flex items-center gap-1 ${isTrophy ? "text-primary" : "text-gray-800"}`}>
+                                  <span className={`inline-flex items-center gap-1 ${isTrophy ? "text-primary" : "text-text-primary"}`}>
                                     {serie.pesoKg} kg{isTrophy && <Trophy size={11} className="text-primary" />}
                                   </span>
                                 ) : (
-                                  <span className="text-gray-300">—</span>
+                                  <span className="text-muted">—</span>
                                 )}
                               </td>
                             );
@@ -498,7 +498,7 @@ function EjercicioDetailModal({ ej, onClose }: { ej: EjExercise; onClose: () => 
           )}
 
           {sessions.length === 0 && (
-            <p className="text-sm text-gray-400 text-center py-8">Sin registros en este período.</p>
+            <p className="text-sm text-muted text-center py-8">Sin registros en este período.</p>
           )}
         </div>
       </div>
@@ -520,7 +520,7 @@ function ProgresoEjercicios({ userId }: { userId: string }) {
       .finally(() => setLoading(false));
   }, [userId]);
 
-  if (loading) return <p className="text-sm text-gray-400 text-center py-10">Cargando ejercicios...</p>;
+  if (loading) return <p className="text-sm text-muted text-center py-10">Cargando ejercicios...</p>;
 
   const loggedIds = [...new Set(ejLogs.map((l) => l.ejercicio_id))];
   const exercisesWithLogs: EjExercise[] = loggedIds
@@ -541,22 +541,22 @@ function ProgresoEjercicios({ userId }: { userId: string }) {
     <div className="space-y-4 text-sm">
       {/* Rutina resumen */}
       {rutina && (
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="bg-white rounded-xl border border-border p-4">
           <div className="flex justify-between items-center mb-3">
             <div>
-              <p className="font-bold text-gray-900">{rutina.nombre}</p>
-              <p className="text-xs text-gray-500">{workoutDays.length} días de entrenamiento · {totalEjercicios} ejercicios</p>
+              <p className="font-bold text-text-primary">{rutina.nombre}</p>
+              <p className="text-xs text-secondary">{workoutDays.length} días de entrenamiento · {totalEjercicios} ejercicios</p>
             </div>
           </div>
           <div className="flex gap-2">
             {rutinaDias.map((d) => (
               <div key={d.numero_dia} className="flex flex-col items-center gap-1 flex-1">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
-                  d.es_descanso ? "bg-gray-100 text-gray-400" : "bg-primary text-white"
+                  d.es_descanso ? "bg-surface-muted text-muted" : "bg-primary text-white"
                 }`}>
                   {d.es_descanso ? "—" : d.rutina_ejercicios.length}
                 </div>
-                <span className="text-[9px] text-gray-500">{d.nombre_dia.slice(0, 3)}</span>
+                <span className="text-[9px] text-secondary">{d.nombre_dia.slice(0, 3)}</span>
               </div>
             ))}
           </div>
@@ -565,10 +565,10 @@ function ProgresoEjercicios({ userId }: { userId: string }) {
 
       {/* Gráficas de ejercicios */}
       {exercisesWithLogs.length === 0 ? (
-        <p className="text-xs text-gray-400 text-center py-10">El usuario no ha registrado pesos en ejercicios aún.</p>
+        <p className="text-xs text-muted text-center py-10">El usuario no ha registrado pesos en ejercicios aún.</p>
       ) : (
         <>
-          <p className="text-xs text-gray-400">Haz clic en una gráfica para ver más detalles</p>
+          <p className="text-xs text-muted">Haz clic en una gráfica para ver más detalles</p>
           <div className="grid grid-cols-2 gap-4">
             {exercisesWithLogs.map((ej) => {
               const recentLogs = ej.logs.slice(-10);
@@ -577,9 +577,9 @@ function ProgresoEjercicios({ userId }: { userId: string }) {
               const delta = lastPeso - firstPeso;
               return (
                 <div key={ej.id} onClick={() => setDetailEj(ej)}
-                  className="bg-white rounded-xl border border-gray-200 p-3 cursor-pointer hover:border-primary/50 hover:shadow-md transition-all">
+                  className="bg-white rounded-xl border border-border p-3 cursor-pointer hover:border-primary/50 hover:shadow-md transition-all">
                   <div className="flex justify-between items-center mb-1">
-                    <p className="text-xs font-bold text-gray-800 truncate">{ej.emoji} {ej.nombre}</p>
+                    <p className="text-xs font-bold text-text-primary truncate">{ej.emoji} {ej.nombre}</p>
                     {ej.best != null && (
                       <span className="text-xs font-bold text-primary shrink-0 inline-flex items-center gap-1">
                         <span className="w-4 h-4 rounded-full bg-ink flex items-center justify-center shrink-0">
@@ -590,7 +590,7 @@ function ProgresoEjercicios({ userId }: { userId: string }) {
                     )}
                   </div>
                   {recentLogs.length >= 2 && (
-                    <p className={`text-[10px] font-semibold mb-2 ${delta >= 0 ? "text-green-600" : "text-red-500"}`}>
+                    <p className={`text-[10px] font-semibold mb-2 ${delta >= 0 ? "text-success" : "text-error"}`}>
                       {delta >= 0 ? "↑" : "↓"} {Math.abs(delta).toFixed(1)} kg desde el primer registro
                     </p>
                   )}
@@ -602,16 +602,16 @@ function ProgresoEjercicios({ userId }: { userId: string }) {
                       const [, m, d] = log.fecha.split("-").map(Number);
                       return (
                         <div key={log.id} className="flex flex-col items-center flex-1" title={`${log.peso_kg} kg — ${d}/${m}`}>
-                          <span className={`text-[8px] mb-0.5 ${isLast ? "text-primary font-bold" : "text-gray-400"}`}>
+                          <span className={`text-[8px] mb-0.5 ${isLast ? "text-primary font-bold" : "text-muted"}`}>
                             {log.peso_kg}
                           </span>
-                          <div className={`w-3 rounded-sm ${isLast ? "bg-primary" : "bg-gray-300"}`} style={{ height: barH }} />
-                          <span className="text-[7px] text-gray-400 mt-0.5">{d}/{m}</span>
+                          <div className={`w-3 rounded-sm ${isLast ? "bg-primary" : "bg-surface-muted"}`} style={{ height: barH }} />
+                          <span className="text-[7px] text-muted mt-0.5">{d}/{m}</span>
                         </div>
                       );
                     })}
                   </div>
-                  <p className="text-[10px] text-gray-400 text-right mt-1">Clic para ampliar</p>
+                  <p className="text-[10px] text-muted text-right mt-1">Clic para ampliar</p>
                 </div>
               );
             })}
@@ -661,22 +661,22 @@ export default function UserModal({ perfil: perfilInicial, onClose }: { perfil: 
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-start justify-between p-6 border-b border-gray-100">
+        <div className="flex items-start justify-between p-6 border-b border-divider">
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 rounded-full bg-primary/15 flex items-center justify-center text-primary font-bold text-xl">
               {initials}
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="font-bold text-gray-900 text-xl">{nombre}</h2>
+                <h2 className="font-bold text-text-primary text-xl">{nombre}</h2>
                 <span className={`text-xs px-3 py-1 rounded-full font-semibold inline-flex items-center gap-1 ${
-                  isPremium ? "bg-brand-soft text-primary" : "bg-gray-100 text-gray-600"
+                  isPremium ? "bg-brand-soft text-primary" : "bg-surface-muted text-secondary"
                 }`}>
                   {isPremium ? <Crown size={11} /> : <Lock size={11} />}
                   {isPremium ? "Premium" : "Básico"}
                 </span>
               </div>
-              <div className="flex items-center gap-3 text-sm text-gray-500 mt-0.5">
+              <div className="flex items-center gap-3 text-sm text-secondary mt-0.5">
                 <span className="capitalize">{perfil.sexo || "—"}</span>
                 <span>|</span>
                 <span className="inline-flex items-center gap-1"><Cake size={13} /> {formatFecha(perfil.fecha_nacimiento)}</span>
@@ -685,19 +685,19 @@ export default function UserModal({ perfil: perfilInicial, onClose }: { perfil: 
           </div>
           <div className="flex items-start gap-6">
             <div className="text-right">
-              <p className="text-xs text-gray-500">Registrado</p>
-              <p className="text-sm font-semibold text-gray-700 mt-1">
+              <p className="text-xs text-secondary">Registrado</p>
+              <p className="text-sm font-semibold text-text-primary mt-1">
                 {perfil.created_at ? new Date(perfil.created_at).toLocaleDateString("es-MX") : "—"}
               </p>
             </div>
-            <button onClick={onClose} className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 text-xl">
+            <button onClick={onClose} className="w-8 h-8 rounded-full hover:bg-surface-muted flex items-center justify-center text-muted hover:text-secondary text-xl">
               ×
             </button>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-gray-100 px-6">
+        <div className="flex border-b border-divider px-6">
           {TABS.map((t) => (
             <button
               key={t.key}
@@ -705,7 +705,7 @@ export default function UserModal({ perfil: perfilInicial, onClose }: { perfil: 
               className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 transition-colors ${
                 tab === t.key
                   ? "border-primary text-primary"
-                  : "border-transparent text-gray-500 hover:text-gray-700"
+                  : "border-transparent text-secondary hover:text-text-primary"
               }`}
             >
               <t.Icon size={15} /> {t.label}

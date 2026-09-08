@@ -99,8 +99,8 @@ export default function AlimentosPage() {
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Alimentos</h1>
-          <p className="text-gray-500 text-sm mt-1">
+          <h1 className="text-2xl font-bold text-text-primary">Alimentos</h1>
+          <p className="text-secondary text-sm mt-1">
             Administra el catálogo de alimentos con su información nutricional.
           </p>
         </div>
@@ -114,19 +114,19 @@ export default function AlimentosPage() {
 
       {/* Filtros */}
       <div className="flex items-center gap-3 mb-5">
-        <div className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl px-4 h-11 max-w-sm shadow-sm flex-1">
-          <Search size={16} className="text-gray-400 shrink-0" />
+        <div className="flex items-center gap-3 bg-white border border-border rounded-xl px-4 h-11 max-w-sm shadow-sm flex-1">
+          <Search size={16} className="text-muted shrink-0" />
           <input
             placeholder="Buscar alimento..."
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            className="flex-1 text-sm focus:outline-none text-gray-700"
+            className="flex-1 text-sm focus:outline-none text-text-primary"
           />
         </div>
         <select
           value={categoriaFilter}
           onChange={(e) => { setCategoriaFilter(e.target.value); setPage(1); }}
-          className="h-11 border border-gray-200 rounded-xl px-3 text-sm bg-white shadow-sm focus:outline-none focus:border-primary"
+          className="h-11 border border-border rounded-xl px-3 text-sm bg-white shadow-sm focus:outline-none focus:border-primary"
         >
           <option value="Todas">Todas las categorías ({alimentos.length})</option>
           {categoriasDisponibles.map((cat) => {
@@ -142,7 +142,7 @@ export default function AlimentosPage() {
       </div>
 
       {error && (
-        <div className="mb-4 flex items-center justify-between bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl px-4 py-3">
+        <div className="mb-4 flex items-center justify-between bg-error-soft border border-error/30 text-error text-sm rounded-xl px-4 py-3">
           <span>{error}</span>
           <button onClick={load} className="font-semibold hover:underline">
             Reintentar
@@ -151,25 +151,25 @@ export default function AlimentosPage() {
       )}
 
       {loading ? (
-        <p className="text-sm text-gray-400 py-10 text-center">Cargando alimentos...</p>
+        <p className="text-sm text-muted py-10 text-center">Cargando alimentos...</p>
       ) : (
         <>
-          <p className="text-xs text-gray-400 mb-3">
+          <p className="text-xs text-muted mb-3">
             {filtered.length} alimento{filtered.length !== 1 ? "s" : ""} en el catálogo
             {totalPages > 1 && ` · Página ${safePage} de ${totalPages}`}
           </p>
 
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-gray-100 bg-gray-50">
-                    <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">Alimento</th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">Categoría</th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">Cantidad</th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">Unidad</th>
-                    <th className="text-right px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">P. Bruto (g)</th>
-                    <th className="text-right px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">P. Neto (g)</th>
+                  <tr className="border-b border-divider bg-background-secondary">
+                    <th className="text-left px-4 py-3 font-semibold text-secondary whitespace-nowrap">Alimento</th>
+                    <th className="text-left px-4 py-3 font-semibold text-secondary whitespace-nowrap">Categoría</th>
+                    <th className="text-left px-4 py-3 font-semibold text-secondary whitespace-nowrap">Cantidad</th>
+                    <th className="text-left px-4 py-3 font-semibold text-secondary whitespace-nowrap">Unidad</th>
+                    <th className="text-right px-4 py-3 font-semibold text-secondary whitespace-nowrap">P. Bruto (g)</th>
+                    <th className="text-right px-4 py-3 font-semibold text-secondary whitespace-nowrap">P. Neto (g)</th>
                     <th className="text-right px-4 py-3 font-semibold text-amber-600 whitespace-nowrap">Kcal</th>
                     <th className="text-right px-4 py-3 font-semibold text-red-500 whitespace-nowrap">Prot (g)</th>
                     <th className="text-right px-4 py-3 font-semibold text-purple-500 whitespace-nowrap">Líp (g)</th>
@@ -184,26 +184,26 @@ export default function AlimentosPage() {
                     return (
                       <tr
                         key={a.id}
-                        className={`border-b border-gray-50 hover:bg-gray-50/60 transition-colors ${
-                          i % 2 === 0 ? "" : "bg-gray-50/30"
+                        className={`border-b border-divider hover:bg-background-secondary/60 transition-colors ${
+                          i % 2 === 0 ? "" : "bg-background-secondary/30"
                         }`}
                       >
-                        <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">
+                        <td className="px-4 py-3 font-medium text-text-primary whitespace-nowrap">
                           {a.nombre}
                         </td>
-                        <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                        <td className="px-4 py-3 text-secondary whitespace-nowrap">
                           {a.categoria ? (
                             <span className="inline-flex items-center gap-1.5 text-xs bg-primary/8 text-primary px-2 py-0.5 rounded-full font-medium">
                               {grupo ? `${grupo.icono} ` : ""}{a.categoria}
                             </span>
                           ) : (
-                            <span className="text-gray-400">—</span>
+                            <span className="text-muted">—</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-gray-600">{fmt(a.cantidad)}</td>
-                        <td className="px-4 py-3 text-gray-600 capitalize">{a.unidad ?? "—"}</td>
-                        <td className="px-4 py-3 text-right text-gray-600">{fmt(a.peso_bruto_g)}</td>
-                        <td className="px-4 py-3 text-right text-gray-600">{fmt(a.peso_neto_g)}</td>
+                        <td className="px-4 py-3 text-secondary">{fmt(a.cantidad)}</td>
+                        <td className="px-4 py-3 text-secondary capitalize">{a.unidad ?? "—"}</td>
+                        <td className="px-4 py-3 text-right text-secondary">{fmt(a.peso_bruto_g)}</td>
+                        <td className="px-4 py-3 text-right text-secondary">{fmt(a.peso_neto_g)}</td>
                         <td className="px-4 py-3 text-right font-semibold text-amber-600">{fmt(a.kcal)}</td>
                         <td className="px-4 py-3 text-right text-red-500">{fmt(a.proteinas_g)}</td>
                         <td className="px-4 py-3 text-right text-purple-500">{fmt(a.lipidos_g)}</td>
@@ -215,20 +215,20 @@ export default function AlimentosPage() {
                               <>
                                 <button
                                   onClick={() => setEditing(a)}
-                                  className="h-8 px-3 rounded-lg border border-gray-200 text-gray-600 text-xs font-semibold hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors inline-flex items-center gap-1"
+                                  className="h-8 px-3 rounded-lg border border-border text-secondary text-xs font-semibold hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors inline-flex items-center gap-1"
                                 >
                                   <Pencil size={12} /> Editar
                                 </button>
                                 <button
                                   onClick={() => setConfirmDeleteId(a.id)}
                                   disabled={deletingId === a.id}
-                                  className="h-8 px-2 rounded-lg border border-gray-200 text-red-500 text-xs font-semibold hover:border-red-300 hover:bg-red-50 transition-colors disabled:opacity-50 inline-flex items-center"
+                                  className="h-8 px-2 rounded-lg border border-border text-error text-xs font-semibold hover:border-error/50 hover:bg-error-soft transition-colors disabled:opacity-50 inline-flex items-center"
                                 >
                                   {deletingId === a.id ? "..." : <Trash2 size={13} />}
                                 </button>
                               </>
                             ) : (
-                              <span className="text-xs text-gray-400 italic">Solo lectura</span>
+                              <span className="text-xs text-muted italic">Solo lectura</span>
                             )}
                           </div>
                         </td>
@@ -237,7 +237,7 @@ export default function AlimentosPage() {
                   })}
                   {paginated.length === 0 && (
                     <tr>
-                      <td colSpan={12} className="text-center py-14 text-gray-400">
+                      <td colSpan={12} className="text-center py-14 text-muted">
                         <Search size={24} className="mx-auto mb-2 text-primary" />
                         No se encontraron alimentos.
                       </td>
@@ -251,21 +251,21 @@ export default function AlimentosPage() {
           {/* Paginación */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between mt-4">
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-muted">
                 Mostrando {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, filtered.length)} de {filtered.length}
               </p>
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => setPage(1)}
                   disabled={safePage === 1}
-                  className="h-8 px-2 rounded-lg border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="h-8 px-2 rounded-lg border border-border text-secondary text-xs font-semibold hover:bg-background-secondary disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   «
                 </button>
                 <button
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={safePage === 1}
-                  className="h-8 px-3 rounded-lg border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="h-8 px-3 rounded-lg border border-border text-secondary text-xs font-semibold hover:bg-background-secondary disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   ‹ Anterior
                 </button>
@@ -280,7 +280,7 @@ export default function AlimentosPage() {
                   }, [])
                   .map((n, idx) =>
                     n === "…" ? (
-                      <span key={`ellipsis-${idx}`} className="h-8 px-2 flex items-center text-gray-400 text-xs">…</span>
+                      <span key={`ellipsis-${idx}`} className="h-8 px-2 flex items-center text-muted text-xs">…</span>
                     ) : (
                       <button
                         key={n}
@@ -288,7 +288,7 @@ export default function AlimentosPage() {
                         className={`h-8 w-8 rounded-lg border text-xs font-semibold transition-colors ${
                           safePage === n
                             ? "bg-primary border-primary text-white"
-                            : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                            : "border-border text-secondary hover:bg-background-secondary"
                         }`}
                       >
                         {n}
@@ -299,14 +299,14 @@ export default function AlimentosPage() {
                 <button
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   disabled={safePage === totalPages}
-                  className="h-8 px-3 rounded-lg border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="h-8 px-3 rounded-lg border border-border text-secondary text-xs font-semibold hover:bg-background-secondary disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Siguiente ›
                 </button>
                 <button
                   onClick={() => setPage(totalPages)}
                   disabled={safePage === totalPages}
-                  className="h-8 px-2 rounded-lg border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="h-8 px-2 rounded-lg border border-border text-secondary text-xs font-semibold hover:bg-background-secondary disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   »
                 </button>

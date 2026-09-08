@@ -68,7 +68,7 @@ function Tooltip({ label }: { label: string }) {
     <div
       className="
         absolute left-full top-1/2 -translate-y-1/2 ml-2 z-50
-        px-2.5 py-1.5 rounded-md bg-gray-900/95 text-white text-xs font-medium
+        px-2.5 py-1.5 rounded-md bg-ink/95 text-white text-xs font-medium
         whitespace-nowrap shadow-xl pointer-events-none
         opacity-0 group-hover:opacity-100 transition-opacity duration-150
       "
@@ -168,24 +168,24 @@ export default function Sidebar() {
       >
         {collapsed ? (
           <div className="w-9 h-9 rounded-lg bg-white shrink-0 flex items-center justify-center p-1">
-            {/* eslint-disable-next-line @next/next/no-img-element -- SVG local, next/image requiere dangerouslyAllowSVG */}
+            {/* eslint-disable-next-line @next/next/no-img-element -- asset de marca local, no requiere el pipeline de next/image */}
             <img
-              src="/branding/isotipo-myfittrack.svg"
+              src="/branding/isotipo-myfittrack.png"
               alt="MyFitTrack"
-              width={612}
-              height={792}
+              width={900}
+              height={900}
               className="w-full h-full object-contain"
             />
           </div>
         ) : (
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-9 h-9 rounded-lg bg-white shrink-0 flex items-center justify-center p-1">
-              {/* eslint-disable-next-line @next/next/no-img-element -- SVG local, next/image requiere dangerouslyAllowSVG */}
+              {/* eslint-disable-next-line @next/next/no-img-element -- asset de marca local, no requiere el pipeline de next/image */}
               <img
-                src="/branding/isotipo-myfittrack.svg"
+                src="/branding/isotipo-myfittrack.png"
                 alt="MyFitTrack"
-                width={612}
-                height={792}
+                width={900}
+                height={900}
                 className="w-full h-full object-contain"
               />
             </div>
@@ -347,9 +347,9 @@ export default function Sidebar() {
             onClick={handleLogout}
             className={`
               flex items-center rounded-lg text-white/35
-              hover:text-red-400 hover:bg-red-500/8
+              hover:text-error hover:bg-error/8
               transition-colors duration-150 w-full outline-none
-              focus-visible:ring-2 focus-visible:ring-red-400
+              focus-visible:ring-2 focus-visible:ring-error
               ${collapsed
                 ? "justify-center w-10 h-9 mx-auto"
                 : "gap-2.5 px-3 py-1.5"

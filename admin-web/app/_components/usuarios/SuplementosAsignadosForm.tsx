@@ -145,13 +145,13 @@ export default function SuplementosAsignadosForm({ userId }: { userId: string })
   });
 
   if (loading) {
-    return <p className="text-sm text-gray-400 text-center py-10">Cargando suplementos...</p>;
+    return <p className="text-sm text-muted text-center py-10">Cargando suplementos...</p>;
   }
 
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-10">
-        <p className="text-sm text-red-600">{error}</p>
+        <p className="text-sm text-error">{error}</p>
         <button onClick={load} className="text-sm font-semibold text-primary hover:underline">Reintentar</button>
       </div>
     );
@@ -160,7 +160,7 @@ export default function SuplementosAsignadosForm({ userId }: { userId: string })
   return (
     <div className="space-y-4">
       {hasDraft && (
-        <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 font-medium">
+        <div className="flex items-center gap-2 px-4 py-2.5 bg-warning-soft border border-warning/30 rounded-xl text-xs text-warning font-medium">
           <StickyNote size={14} className="shrink-0" />
           <span>Borrador restaurado — tienes cambios sin guardar en este formulario.</span>
           <button
@@ -171,24 +171,24 @@ export default function SuplementosAsignadosForm({ userId }: { userId: string })
               setReady(false);
               load();
             }}
-            className="ml-auto shrink-0 text-amber-600 hover:text-amber-800 underline font-semibold">
+            className="ml-auto shrink-0 text-warning hover:opacity-70 underline font-semibold">
             Descartar cambios
           </button>
         </div>
       )}
       <div>
-        <p className="font-semibold text-gray-900">Asignar suplementos</p>
-        <p className="text-sm text-gray-500">Arrastra o haz clic en los suplementos del catálogo para asignarlos con dosis y horario.</p>
+        <p className="font-semibold text-text-primary">Asignar suplementos</p>
+        <p className="text-sm text-secondary">Arrastra o haz clic en los suplementos del catálogo para asignarlos con dosis y horario.</p>
       </div>
 
       <div className="grid grid-cols-5 gap-4">
         {/* ── Catálogo (izquierda) ── */}
         <div className="col-span-2 flex flex-col gap-3">
-          <p className="text-xs font-bold text-gray-600">Catálogo de suplementos</p>
-          <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 h-9">
-            <Search size={14} className="text-gray-400 shrink-0" />
+          <p className="text-xs font-bold text-secondary">Catálogo de suplementos</p>
+          <div className="flex items-center gap-2 bg-background-secondary border border-border rounded-xl px-3 h-9">
+            <Search size={14} className="text-muted shrink-0" />
             <input placeholder="Buscar suplemento..." value={search} onChange={(e) => setSearch(e.target.value)}
-              className="flex-1 text-sm bg-transparent focus:outline-none text-gray-700" />
+              className="flex-1 text-sm bg-transparent focus:outline-none text-text-primary" />
           </div>
           <div className="flex flex-col gap-2 overflow-y-auto max-h-[24rem] pr-1">
             {catalogoDisponible.map((s) => (
@@ -197,22 +197,22 @@ export default function SuplementosAsignadosForm({ userId }: { userId: string })
                 draggable
                 onDragStart={(e) => e.dataTransfer.setData("text/plain", s.id)}
                 onClick={() => addSuplemento(s.id)}
-                className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 cursor-grab active:cursor-grabbing hover:border-primary/50 transition-colors"
+                className="flex items-center gap-2 bg-background-secondary border border-border rounded-xl px-3 py-2 cursor-grab active:cursor-grabbing hover:border-primary/50 transition-colors"
                 title="Arrastra o haz clic para asignar"
               >
                 <Pill size={20} className="text-primary shrink-0" />
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-gray-800 truncate">{s.nombre}</p>
-                  <div className="flex items-center gap-2 text-xs text-gray-400">
+                  <p className="text-sm font-medium text-text-primary truncate">{s.nombre}</p>
+                  <div className="flex items-center gap-2 text-xs text-muted">
                     {s.marca && <span>{s.marca}</span>}
                     {s.gramaje && <span>· {s.gramaje}</span>}
                   </div>
                 </div>
-                <span className="text-gray-300 text-lg">+</span>
+                <span className="text-muted text-lg">+</span>
               </div>
             ))}
             {catalogoDisponible.length === 0 && (
-              <p className="text-xs text-gray-400 text-center py-4">
+              <p className="text-xs text-muted text-center py-4">
                 {catalogo.length === 0 ? "No hay suplementos en el catálogo." : "No se encontraron suplementos."}
               </p>
             )}
@@ -221,7 +221,7 @@ export default function SuplementosAsignadosForm({ userId }: { userId: string })
 
         {/* ── Asignados (derecha, drop zone) ── */}
         <div className="col-span-3 flex flex-col gap-3">
-          <p className="text-xs font-bold text-gray-600">
+          <p className="text-xs font-bold text-secondary">
             Suplementos asignados ({asignados.length})
           </p>
           <div
@@ -234,11 +234,11 @@ export default function SuplementosAsignadosForm({ userId }: { userId: string })
               setDragOver(false);
             }}
             className={`flex-1 rounded-xl border-2 border-dashed p-3 flex flex-col gap-3 min-h-[24rem] overflow-y-auto transition-colors ${
-              dragOver ? "border-primary bg-primary/5" : "border-gray-200"
+              dragOver ? "border-primary bg-primary/5" : "border-border"
             }`}
           >
             {asignados.length === 0 && (
-              <div className="flex-1 flex flex-col items-center justify-center text-gray-400 gap-1">
+              <div className="flex-1 flex flex-col items-center justify-center text-muted gap-1">
                 <div className="w-14 h-14 rounded-full bg-brand-soft flex items-center justify-center mb-1">
                   <Pill size={26} className="text-primary" />
                 </div>
@@ -246,41 +246,41 @@ export default function SuplementosAsignadosForm({ userId }: { userId: string })
               </div>
             )}
             {asignados.map((a) => (
-              <div key={a.suplemento.id} className="bg-white border border-gray-200 rounded-xl p-3">
+              <div key={a.suplemento.id} className="bg-white border border-border rounded-xl p-3">
                 <div className="flex items-center gap-2 mb-3">
                   <Pill size={20} className="text-primary shrink-0" />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-gray-800 truncate">{a.suplemento.nombre}</p>
-                    {a.suplemento.marca && <p className="text-xs text-gray-400">{a.suplemento.marca} {a.suplemento.gramaje && `· ${a.suplemento.gramaje}`}</p>}
+                    <p className="text-sm font-semibold text-text-primary truncate">{a.suplemento.nombre}</p>
+                    {a.suplemento.marca && <p className="text-xs text-muted">{a.suplemento.marca} {a.suplemento.gramaje && `· ${a.suplemento.gramaje}`}</p>}
                   </div>
-                  <button onClick={() => removeSuplemento(a.suplemento.id)} className="text-gray-400 hover:text-red-500"><X size={15} /></button>
+                  <button onClick={() => removeSuplemento(a.suplemento.id)} className="text-muted hover:text-error"><X size={15} /></button>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
                   <div>
-                    <label className="text-[10px] text-gray-400 block mb-0.5">Dosis</label>
+                    <label className="text-[10px] text-muted block mb-0.5">Dosis</label>
                     <input value={a.dosis} onChange={(e) => updateRow(a.suplemento.id, "dosis", e.target.value)}
                       placeholder="Ej. 1 medida (30g)"
-                      className="w-full h-8 border border-gray-200 rounded-lg px-2 text-xs focus:outline-none focus:border-primary" />
+                      className="w-full h-8 border border-border rounded-lg px-2 text-xs focus:outline-none focus:border-primary" />
                   </div>
                   <div>
-                    <label className="text-[10px] text-gray-400 block mb-0.5">Hora</label>
+                    <label className="text-[10px] text-muted block mb-0.5">Hora</label>
                     <input type="time" value={a.hora} onChange={(e) => updateRow(a.suplemento.id, "hora", e.target.value)}
-                      className="w-full h-8 border border-gray-200 rounded-lg px-2 text-xs focus:outline-none focus:border-primary" />
+                      className="w-full h-8 border border-border rounded-lg px-2 text-xs focus:outline-none focus:border-primary" />
                   </div>
                   <div>
-                    <label className="text-[10px] text-gray-400 block mb-0.5">Momento</label>
+                    <label className="text-[10px] text-muted block mb-0.5">Momento</label>
                     <select value={a.momento} onChange={(e) => updateRow(a.suplemento.id, "momento", e.target.value)}
-                      className="w-full h-8 border border-gray-200 rounded-lg px-2 text-xs bg-white focus:outline-none focus:border-primary">
+                      className="w-full h-8 border border-border rounded-lg px-2 text-xs bg-white focus:outline-none focus:border-primary">
                       <option value="">Seleccionar...</option>
                       {MOMENTOS.map((m) => <option key={m}>{m}</option>)}
                     </select>
                   </div>
                 </div>
                 <div className="mt-2">
-                  <label className="text-[10px] text-gray-400 block mb-0.5">Notas</label>
+                  <label className="text-[10px] text-muted block mb-0.5">Notas</label>
                   <input value={a.notas} onChange={(e) => updateRow(a.suplemento.id, "notas", e.target.value)}
                     placeholder="Ej. Tomar con agua fría, evitar con cafeína..."
-                    className="w-full h-8 border border-gray-200 rounded-lg px-2 text-xs focus:outline-none focus:border-primary" />
+                    className="w-full h-8 border border-border rounded-lg px-2 text-xs focus:outline-none focus:border-primary" />
                 </div>
               </div>
             ))}
@@ -288,9 +288,9 @@ export default function SuplementosAsignadosForm({ userId }: { userId: string })
         </div>
       </div>
 
-      <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-100">
+      <div className="flex items-center justify-end gap-3 pt-2 border-t border-divider">
         {feedback && (
-          <span className={`text-xs font-medium ${feedback.type === "success" ? "text-green-600" : "text-red-600"}`}>
+          <span className={`text-xs font-medium ${feedback.type === "success" ? "text-success" : "text-error"}`}>
             {feedback.text}
           </span>
         )}

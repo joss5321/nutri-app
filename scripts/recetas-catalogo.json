@@ -7,12 +7,12 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "3 pzas de huevo",
+        "descripcion": "huevo",
         "cantidad": 3,
         "unidad": "pieza"
       },
       {
-        "descripcion": "2 rebanadas de pechuga de pavo",
+        "descripcion": "pechuga de pavo",
         "cantidad": 2,
         "unidad": "rebanada"
       },
@@ -22,12 +22,12 @@
         "unidad": null
       },
       {
-        "descripcion": "30g de queso oaxaca",
+        "descripcion": "queso oaxaca",
         "cantidad": 30,
         "unidad": "gramos"
       },
       {
-        "descripcion": "⅓ pza (30g) de aguacate",
+        "descripcion": "aguacate",
         "cantidad": 30,
         "unidad": "gramos"
       }
@@ -42,27 +42,27 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "2 pzas de pan integral",
+        "descripcion": "pan integral",
         "cantidad": 2,
         "unidad": "pieza"
       },
       {
-        "descripcion": "⅓ pza (40g) de aguacate (machacar con sal y limón)",
+        "descripcion": "aguacate (machacar con sal y limón)",
         "cantidad": 40,
         "unidad": "gramos"
       },
       {
-        "descripcion": "3 pzas de huevo al gusto (duro, revuelto, estrellado)",
+        "descripcion": "huevo al gusto (duro, revuelto, estrellado)",
         "cantidad": 3,
         "unidad": "pieza"
       },
       {
-        "descripcion": "60g de queso panela",
+        "descripcion": "queso panela",
         "cantidad": 60,
         "unidad": "gramos"
       },
       {
-        "descripcion": "1 jitomate en rodajas",
+        "descripcion": "jitomate en rodajas",
         "cantidad": 1,
         "unidad": "pieza"
       }
@@ -77,7 +77,7 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "60g de totopos horneados",
+        "descripcion": "totopos horneados",
         "cantidad": 60,
         "unidad": "gramos"
       },
@@ -87,17 +87,17 @@
         "unidad": null
       },
       {
-        "descripcion": "3 huevos al gusto",
+        "descripcion": "huevos al gusto",
         "cantidad": 3,
         "unidad": "pieza"
       },
       {
-        "descripcion": "30g de queso panela",
+        "descripcion": "queso panela",
         "cantidad": 30,
         "unidad": "gramos"
       },
       {
-        "descripcion": "⅓ pza (30g) de aguacate",
+        "descripcion": "aguacate",
         "cantidad": 30,
         "unidad": "gramos"
       }
@@ -112,32 +112,32 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "2 huevos",
+        "descripcion": "huevos",
         "cantidad": 2,
         "unidad": "pieza"
       },
       {
-        "descripcion": "¼ tza de claras",
+        "descripcion": "claras",
         "cantidad": 0.25,
         "unidad": "taza"
       },
       {
-        "descripcion": "2 rebanadas de pechuga de pavo",
+        "descripcion": "pechuga de pavo",
         "cantidad": 2,
         "unidad": "rebanada"
       },
       {
-        "descripcion": "⅓ pza (40g) de aguacate",
+        "descripcion": "aguacate",
         "cantidad": 40,
         "unidad": "gramos"
       },
       {
-        "descripcion": "2 tortillas de maíz",
+        "descripcion": "tortillas de maíz",
         "cantidad": 2,
         "unidad": "pieza"
       },
       {
-        "descripcion": "30g de queso panela",
+        "descripcion": "queso panela",
         "cantidad": 30,
         "unidad": "gramos"
       }
@@ -152,7 +152,7 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "60g de avena en hojuelas",
+        "descripcion": "avena en hojuelas",
         "cantidad": 60,
         "unidad": "gramos"
       },
@@ -172,12 +172,12 @@
         "unidad": null
       },
       {
-        "descripcion": "1 huevo",
+        "descripcion": "huevo",
         "cantidad": 1,
         "unidad": "pieza"
       },
       {
-        "descripcion": "5g de mantequilla sin sal (para la sartén)",
+        "descripcion": "mantequilla sin sal (para la sartén)",
         "cantidad": 5,
         "unidad": "gramos"
       }
@@ -197,17 +197,17 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "2 pzas de pan integral",
+        "descripcion": "pan integral",
         "cantidad": 2,
         "unidad": "pieza"
       },
       {
-        "descripcion": "1 huevo",
+        "descripcion": "huevo",
         "cantidad": 1,
         "unidad": "pieza"
       },
       {
-        "descripcion": "5 cdas de leche",
+        "descripcion": "leche",
         "cantidad": 5,
         "unidad": "cucharada"
       },
@@ -217,7 +217,7 @@
         "unidad": null
       },
       {
-        "descripcion": "5g de mantequilla sin sal (para la sartén)",
+        "descripcion": "mantequilla sin sal (para la sartén)",
         "cantidad": 5,
         "unidad": "gramos"
       },
@@ -242,7 +242,7 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "2 pzas de huevo",
+        "descripcion": "huevo",
         "cantidad": 2,
         "unidad": "pieza"
       },
@@ -252,12 +252,12 @@
         "unidad": null
       },
       {
-        "descripcion": "2 rebanadas (60g) de queso panela",
+        "descripcion": "queso panela",
         "cantidad": 60,
         "unidad": "gramos"
       },
       {
-        "descripcion": "⅓ pza (40g) de aguacate",
+        "descripcion": "aguacate",
         "cantidad": 40,
         "unidad": "gramos"
       },
@@ -277,27 +277,27 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "3 pzas de huevo",
+        "descripcion": "huevo",
         "cantidad": 3,
         "unidad": "pieza"
       },
       {
-        "descripcion": "¼ tza de claras de huevo",
+        "descripcion": "claras de huevo",
         "cantidad": 0.25,
         "unidad": "taza"
       },
       {
-        "descripcion": "¼ tza de papa cocida",
+        "descripcion": "papa cocida",
         "cantidad": 0.25,
         "unidad": "taza"
       },
       {
-        "descripcion": "2 rebanadas de queso panela",
+        "descripcion": "queso panela",
         "cantidad": 2,
         "unidad": "rebanada"
       },
       {
-        "descripcion": "1 tortilla de maíz",
+        "descripcion": "tortilla de maíz",
         "cantidad": 1,
         "unidad": "pieza"
       },
@@ -317,27 +317,27 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "2 rebanadas de pan integral",
+        "descripcion": "pan integral",
         "cantidad": 2,
         "unidad": "rebanada"
       },
       {
-        "descripcion": "2 huevos al gusto",
+        "descripcion": "huevos al gusto",
         "cantidad": 2,
         "unidad": "pieza"
       },
       {
-        "descripcion": "2 rebanadas de pechuga de pavo",
+        "descripcion": "pechuga de pavo",
         "cantidad": 2,
         "unidad": "rebanada"
       },
       {
-        "descripcion": "2 rebanadas (60g) de queso panela",
+        "descripcion": "queso panela",
         "cantidad": 60,
         "unidad": "gramos"
       },
       {
-        "descripcion": "⅓ pza (40g) de aguacate machacado con sal y limón",
+        "descripcion": "aguacate machacado con sal y limón",
         "cantidad": 40,
         "unidad": "gramos"
       },
@@ -357,12 +357,12 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "2 pzas de huevo",
+        "descripcion": "huevo",
         "cantidad": 2,
         "unidad": "pieza"
       },
       {
-        "descripcion": "¼ tza de ejotes cocidos",
+        "descripcion": "ejotes cocidos",
         "cantidad": 0.25,
         "unidad": "taza"
       },
@@ -372,17 +372,17 @@
         "unidad": null
       },
       {
-        "descripcion": "2 rebanadas (60g) de queso panela",
+        "descripcion": "queso panela",
         "cantidad": 60,
         "unidad": "gramos"
       },
       {
-        "descripcion": "⅓ pza (40g) de aguacate",
+        "descripcion": "aguacate",
         "cantidad": 40,
         "unidad": "gramos"
       },
       {
-        "descripcion": "2 tortillas de maíz",
+        "descripcion": "tortillas de maíz",
         "cantidad": 2,
         "unidad": "pieza"
       }
@@ -402,12 +402,12 @@
         "unidad": null
       },
       {
-        "descripcion": "60g de carne molida",
+        "descripcion": "carne molida",
         "cantidad": 60,
         "unidad": "gramos"
       },
       {
-        "descripcion": "30g de queso oaxaca o manchego",
+        "descripcion": "queso oaxaca o manchego",
         "cantidad": 30,
         "unidad": "gramos"
       },
@@ -437,22 +437,22 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "2 pzas de huevo",
+        "descripcion": "huevo",
         "cantidad": 2,
         "unidad": "pieza"
       },
       {
-        "descripcion": "1 papa cocida (140g)",
+        "descripcion": "papa cocida (140g)",
         "cantidad": 140,
         "unidad": "gramos"
       },
       {
-        "descripcion": "1 jitomate en rodajas",
+        "descripcion": "jitomate en rodajas",
         "cantidad": 1,
         "unidad": "pieza"
       },
       {
-        "descripcion": "⅓ pza (30g) de aguacate",
+        "descripcion": "aguacate",
         "cantidad": 30,
         "unidad": "gramos"
       }
@@ -471,7 +471,7 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "1 pza de pan pita integral",
+        "descripcion": "pan pita integral",
         "cantidad": 1,
         "unidad": "pieza"
       },
@@ -481,12 +481,12 @@
         "unidad": null
       },
       {
-        "descripcion": "60g de pechuga de pollo",
+        "descripcion": "pechuga de pollo",
         "cantidad": 60,
         "unidad": "gramos"
       },
       {
-        "descripcion": "30g de queso panela",
+        "descripcion": "queso panela",
         "cantidad": 30,
         "unidad": "gramos"
       },
@@ -506,7 +506,7 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "2 pzas de huevo estrellados",
+        "descripcion": "huevo estrellados",
         "cantidad": 2,
         "unidad": "pieza"
       },
@@ -516,17 +516,17 @@
         "unidad": null
       },
       {
-        "descripcion": "30g de queso panela",
+        "descripcion": "queso panela",
         "cantidad": 30,
         "unidad": "gramos"
       },
       {
-        "descripcion": "1 cdita de aceite vegetal",
+        "descripcion": "aceite vegetal",
         "cantidad": 1,
         "unidad": "cucharadita"
       },
       {
-        "descripcion": "2 tortillas de maíz",
+        "descripcion": "tortillas de maíz",
         "cantidad": 2,
         "unidad": "pieza"
       }
@@ -541,22 +541,22 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "1 pza de baguette integral (sin migajón)",
+        "descripcion": "baguette integral (sin migajón)",
         "cantidad": 1,
         "unidad": "pieza"
       },
       {
-        "descripcion": "1 cdita de aceite de oliva",
+        "descripcion": "aceite de oliva",
         "cantidad": 1,
         "unidad": "cucharadita"
       },
       {
-        "descripcion": "2 rebanadas de pechuga de pavo ahumada",
+        "descripcion": "pechuga de pavo ahumada",
         "cantidad": 2,
         "unidad": "rebanada"
       },
       {
-        "descripcion": "60g de queso mozarella",
+        "descripcion": "queso mozarella",
         "cantidad": 60,
         "unidad": "gramos"
       },
@@ -576,17 +576,17 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "1 pza de pan pita",
+        "descripcion": "pan pita",
         "cantidad": 1,
         "unidad": "pieza"
       },
       {
-        "descripcion": "120g de pechuga de pollo deshebrada",
+        "descripcion": "pechuga de pollo deshebrada",
         "cantidad": 120,
         "unidad": "gramos"
       },
       {
-        "descripcion": "60g de queso panela",
+        "descripcion": "queso panela",
         "cantidad": 60,
         "unidad": "gramos"
       },
@@ -596,7 +596,7 @@
         "unidad": null
       },
       {
-        "descripcion": "30g de aguacate machacado + chipotle",
+        "descripcion": "aguacate machacado + chipotle",
         "cantidad": 30,
         "unidad": "gramos"
       }
@@ -611,12 +611,12 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "2 piezas de galletas de arroz sin azúcar",
+        "descripcion": "galletas de arroz sin azúcar",
         "cantidad": 2,
         "unidad": "pieza"
       },
       {
-        "descripcion": "½ cda (15g) de crema de cacahuate sin azúcar",
+        "descripcion": "crema de cacahuate sin azúcar",
         "cantidad": 15,
         "unidad": "gramos"
       },
@@ -651,7 +651,7 @@
         "unidad": null
       },
       {
-        "descripcion": "1 cda de crema de cacahuate",
+        "descripcion": "crema de cacahuate",
         "cantidad": 1,
         "unidad": "cucharada"
       }
@@ -670,7 +670,7 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "1 tza de fresas picadas (200g)",
+        "descripcion": "fresas picadas (200g)",
         "cantidad": 200,
         "unidad": "gramos"
       },
@@ -690,7 +690,7 @@
         "unidad": null
       },
       {
-        "descripcion": "6 nueces enteras",
+        "descripcion": "nueces enteras",
         "cantidad": 6,
         "unidad": "pieza"
       }
@@ -705,7 +705,7 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "1 tza de leche deslactosada",
+        "descripcion": "leche deslactosada",
         "cantidad": 1,
         "unidad": "taza"
       },
@@ -715,12 +715,12 @@
         "unidad": null
       },
       {
-        "descripcion": "6 nueces",
+        "descripcion": "nueces",
         "cantidad": 6,
         "unidad": "pieza"
       },
       {
-        "descripcion": "30g de avena en hojuelas",
+        "descripcion": "avena en hojuelas",
         "cantidad": 30,
         "unidad": "gramos"
       }
@@ -735,7 +735,7 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "90g de yogurt griego sin azúcar",
+        "descripcion": "yogurt griego sin azúcar",
         "cantidad": 90,
         "unidad": "gramos"
       },
@@ -750,7 +750,7 @@
         "unidad": null
       },
       {
-        "descripcion": "5 galletas maría troceadas",
+        "descripcion": "galletas maría troceadas",
         "cantidad": 5,
         "unidad": "pieza"
       }
@@ -765,27 +765,27 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "30g de avena en hojuelas",
+        "descripcion": "avena en hojuelas",
         "cantidad": 30,
         "unidad": "gramos"
       },
       {
-        "descripcion": "½ plátano",
+        "descripcion": "plátano",
         "cantidad": 0.5,
         "unidad": "pieza"
       },
       {
-        "descripcion": "3 cdas de chía remojada",
+        "descripcion": "chía remojada",
         "cantidad": 3,
         "unidad": "cucharada"
       },
       {
-        "descripcion": "1 pza de huevo",
+        "descripcion": "huevo",
         "cantidad": 1,
         "unidad": "pieza"
       },
       {
-        "descripcion": "½ tza de leche",
+        "descripcion": "leche",
         "cantidad": 0.5,
         "unidad": "taza"
       },
@@ -805,7 +805,7 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "1 tza de leche deslactosada",
+        "descripcion": "leche deslactosada",
         "cantidad": 1,
         "unidad": "taza"
       },
@@ -815,7 +815,7 @@
         "unidad": null
       },
       {
-        "descripcion": "3 nueces",
+        "descripcion": "nueces",
         "cantidad": 3,
         "unidad": "pieza"
       },
@@ -835,27 +835,27 @@
     "porciones": "1 rebanada (1/8 de pan)",
     "ingredientes": [
       {
-        "descripcion": "2 plátanos maduros medianos",
+        "descripcion": "plátanos maduros medianos",
         "cantidad": 2,
         "unidad": "pieza"
       },
       {
-        "descripcion": "2 huevos",
+        "descripcion": "huevos",
         "cantidad": 2,
         "unidad": "pieza"
       },
       {
-        "descripcion": "1 taza (90g) de avena molida",
+        "descripcion": "avena molida",
         "cantidad": 90,
         "unidad": "gramos"
       },
       {
-        "descripcion": "¼ taza (60g) de yogurt natural sin azúcar o griego light",
+        "descripcion": "yogurt natural sin azúcar o griego light",
         "cantidad": 60,
         "unidad": "gramos"
       },
       {
-        "descripcion": "1 cdita de polvo para hornear",
+        "descripcion": "polvo para hornear",
         "cantidad": 1,
         "unidad": "cucharadita"
       },
@@ -882,17 +882,17 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "10 pzas de galletas maría",
+        "descripcion": "galletas maría",
         "cantidad": 10,
         "unidad": "pieza"
       },
       {
-        "descripcion": "125g de yogurt griego s/azúcar + jugo de limón + vainilla + edulcorante",
+        "descripcion": "yogurt griego s/azúcar + jugo de limón + vainilla + edulcorante",
         "cantidad": 125,
         "unidad": "gramos"
       },
       {
-        "descripcion": "6 nueces troceadas",
+        "descripcion": "nueces troceadas",
         "cantidad": 6,
         "unidad": "pieza"
       }
@@ -907,22 +907,22 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "½ tza de avena en hojuelas",
+        "descripcion": "avena en hojuelas",
         "cantidad": 0.5,
         "unidad": "taza"
       },
       {
-        "descripcion": "1 cda de crema de cacahuate s/azúcar",
+        "descripcion": "crema de cacahuate s/azúcar",
         "cantidad": 1,
         "unidad": "cucharada"
       },
       {
-        "descripcion": "2 cdas de chispas de chocolate",
+        "descripcion": "chispas de chocolate",
         "cantidad": 2,
         "unidad": "cucharada"
       },
       {
-        "descripcion": "1 plátano machacado",
+        "descripcion": "plátano machacado",
         "cantidad": 1,
         "unidad": "pieza"
       }
@@ -937,17 +937,17 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "1 yogurt griego s/azúcar bebible sabor mango",
+        "descripcion": "yogurt griego s/azúcar bebible sabor mango",
         "cantidad": 1,
         "unidad": "pieza"
       },
       {
-        "descripcion": "½ tza de mango congelado",
+        "descripcion": "mango congelado",
         "cantidad": 0.5,
         "unidad": "taza"
       },
       {
-        "descripcion": "2 cdas de chía previamente hidratada (5-10 min)",
+        "descripcion": "chía previamente hidratada (5-10 min)",
         "cantidad": 2,
         "unidad": "cucharada"
       }
@@ -962,7 +962,7 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "90g de yogurt griego s/azúcar",
+        "descripcion": "yogurt griego s/azúcar",
         "cantidad": 90,
         "unidad": "gramos"
       },
@@ -972,7 +972,7 @@
         "unidad": null
       },
       {
-        "descripcion": "3 cdas de leche",
+        "descripcion": "leche",
         "cantidad": 3,
         "unidad": "cucharada"
       },
@@ -997,17 +997,17 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "30g de totopos horneados o susalias enchiladas",
+        "descripcion": "totopos horneados o susalias enchiladas",
         "cantidad": 30,
         "unidad": "gramos"
       },
       {
-        "descripcion": "1 puño de cacahuates japoneses (aprox 20 pzas)",
+        "descripcion": "cacahuates japoneses (aprox 20 pzas)",
         "cantidad": 20,
         "unidad": "pieza"
       },
       {
-        "descripcion": "1 tza de verduras (jícama, zanahoria, pepino)",
+        "descripcion": "verduras (jícama, zanahoria, pepino)",
         "cantidad": 1,
         "unidad": "taza"
       },
@@ -1027,12 +1027,12 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "120g de pechuga de pollo (100g cocido)",
+        "descripcion": "pechuga de pollo (100g cocido)",
         "cantidad": 120,
         "unidad": "gramos"
       },
       {
-        "descripcion": "1 cdita de aceite para cocinar",
+        "descripcion": "aceite para cocinar",
         "cantidad": 1,
         "unidad": "cucharadita"
       },
@@ -1047,12 +1047,12 @@
         "unidad": null
       },
       {
-        "descripcion": "30g de queso oaxaca reducido en grasa",
+        "descripcion": "queso oaxaca reducido en grasa",
         "cantidad": 30,
         "unidad": "gramos"
       },
       {
-        "descripcion": "3 tortillas de maíz",
+        "descripcion": "tortillas de maíz",
         "cantidad": 3,
         "unidad": "pieza"
       }
@@ -1077,12 +1077,12 @@
         "unidad": null
       },
       {
-        "descripcion": "½ tza de arroz cocido con verduras",
+        "descripcion": "arroz cocido con verduras",
         "cantidad": 0.5,
         "unidad": "taza"
       },
       {
-        "descripcion": "⅓ pza (60g) de aguacate",
+        "descripcion": "aguacate",
         "cantidad": 60,
         "unidad": "gramos"
       },
@@ -1092,12 +1092,12 @@
         "unidad": null
       },
       {
-        "descripcion": "¼ tza de garbanzos",
+        "descripcion": "garbanzos",
         "cantidad": 0.25,
         "unidad": "taza"
       },
       {
-        "descripcion": "30g de queso panela",
+        "descripcion": "queso panela",
         "cantidad": 30,
         "unidad": "gramos"
       },
@@ -1117,32 +1117,32 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "120g de bistec de res magro",
+        "descripcion": "bistec de res magro",
         "cantidad": 120,
         "unidad": "gramos"
       },
       {
-        "descripcion": "1 tza de nopales",
+        "descripcion": "nopales",
         "cantidad": 1,
         "unidad": "taza"
       },
       {
-        "descripcion": "30g de queso manchego o oaxaca bajo en grasa",
+        "descripcion": "queso manchego o oaxaca bajo en grasa",
         "cantidad": 30,
         "unidad": "gramos"
       },
       {
-        "descripcion": "2 tortillas de maíz",
+        "descripcion": "tortillas de maíz",
         "cantidad": 2,
         "unidad": "pieza"
       },
       {
-        "descripcion": "1 cdita de aceite vegetal",
+        "descripcion": "aceite vegetal",
         "cantidad": 1,
         "unidad": "cucharadita"
       },
       {
-        "descripcion": "⅓ pza (30g) de aguacate",
+        "descripcion": "aguacate",
         "cantidad": 30,
         "unidad": "gramos"
       }
@@ -1167,7 +1167,7 @@
         "unidad": null
       },
       {
-        "descripcion": "1 tza de zanahoria, chícharo y ejotes",
+        "descripcion": "zanahoria, chícharo y ejotes",
         "cantidad": 1,
         "unidad": "taza"
       }
@@ -1187,7 +1187,7 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "120g de bistec de res magro (contrafilete, solomillo, bola de res)",
+        "descripcion": "bistec de res magro (contrafilete, solomillo, bola de res)",
         "cantidad": 120,
         "unidad": "gramos"
       },
@@ -1197,7 +1197,7 @@
         "unidad": null
       },
       {
-        "descripcion": "30g de queso manchego reducido en grasa",
+        "descripcion": "queso manchego reducido en grasa",
         "cantidad": 30,
         "unidad": "gramos"
       },
@@ -1207,7 +1207,7 @@
         "unidad": null
       },
       {
-        "descripcion": "⅓ pza (40g) de aguacate",
+        "descripcion": "aguacate",
         "cantidad": 40,
         "unidad": "gramos"
       }
@@ -1222,27 +1222,27 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "½ taza de arroz integral",
+        "descripcion": "arroz integral",
         "cantidad": 0.5,
         "unidad": "taza"
       },
       {
-        "descripcion": "120g de pechuga marinada en salsa de soya, ajo y limón",
+        "descripcion": "pechuga marinada en salsa de soya, ajo y limón",
         "cantidad": 120,
         "unidad": "gramos"
       },
       {
-        "descripcion": "30g de queso panela en cubos",
+        "descripcion": "queso panela en cubos",
         "cantidad": 30,
         "unidad": "gramos"
       },
       {
-        "descripcion": "½ aguacate en rebanadas o cubos",
+        "descripcion": "aguacate en rebanadas o cubos",
         "cantidad": 0.5,
         "unidad": "pieza"
       },
       {
-        "descripcion": "1 huevo duro en rebanadas",
+        "descripcion": "huevo duro en rebanadas",
         "cantidad": 1,
         "unidad": "pieza"
       },
@@ -1252,7 +1252,7 @@
         "unidad": null
       },
       {
-        "descripcion": "1 cdita de aceite de oliva o ajonjolí tostado",
+        "descripcion": "aceite de oliva o ajonjolí tostado",
         "cantidad": 1,
         "unidad": "cucharadita"
       },
@@ -1275,37 +1275,37 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "1 tza de pasta cocida al dente",
+        "descripcion": "pasta cocida al dente",
         "cantidad": 1,
         "unidad": "taza"
       },
       {
-        "descripcion": "100g de pechuga de pollo",
+        "descripcion": "pechuga de pollo",
         "cantidad": 100,
         "unidad": "gramos"
       },
       {
-        "descripcion": "60g de queso rallado (panela rallado, mozzarella light o parmesano natural)",
+        "descripcion": "queso rallado (panela rallado, mozzarella light o parmesano natural)",
         "cantidad": 60,
         "unidad": "gramos"
       },
       {
-        "descripcion": "2 cdas (30g aprox.) de crema baja en grasa o crema light",
+        "descripcion": "crema baja en grasa o crema light",
         "cantidad": 30,
         "unidad": "gramos"
       },
       {
-        "descripcion": "¼ taza de leche (opcional)",
+        "descripcion": "leche (opcional)",
         "cantidad": 0.25,
         "unidad": "taza"
       },
       {
-        "descripcion": "1 tza de brócoli o champiñones",
+        "descripcion": "brócoli o champiñones",
         "cantidad": 1,
         "unidad": "taza"
       },
       {
-        "descripcion": "½ diente de ajo finamente picado, sal y pimienta al gusto",
+        "descripcion": "ajo finamente picado, sal y pimienta al gusto",
         "cantidad": 0.5,
         "unidad": "diente"
       }
@@ -1326,12 +1326,12 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "120g de bistec de res",
+        "descripcion": "bistec de res",
         "cantidad": 120,
         "unidad": "gramos"
       },
       {
-        "descripcion": "30g de queso oaxaca o manchego",
+        "descripcion": "queso oaxaca o manchego",
         "cantidad": 30,
         "unidad": "gramos"
       },
@@ -1341,12 +1341,12 @@
         "unidad": null
       },
       {
-        "descripcion": "½ tza de arroz cocido con verduras",
+        "descripcion": "arroz cocido con verduras",
         "cantidad": 0.5,
         "unidad": "taza"
       },
       {
-        "descripcion": "⅓ pza (60g) de aguacate",
+        "descripcion": "aguacate",
         "cantidad": 60,
         "unidad": "gramos"
       }
@@ -1365,22 +1365,22 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "1 pza de bimbollo",
+        "descripcion": "bimbollo",
         "cantidad": 1,
         "unidad": "pieza"
       },
       {
-        "descripcion": "90g de carne molida de res magra (95-5%) preparada con jitomate, ajo, cebolla y perejil",
+        "descripcion": "carne molida de res magra (95-5%) preparada con jitomate, ajo, cebolla y perejil",
         "cantidad": 90,
         "unidad": "gramos"
       },
       {
-        "descripcion": "30g de queso oaxaca o manchego",
+        "descripcion": "queso oaxaca o manchego",
         "cantidad": 30,
         "unidad": "gramos"
       },
       {
-        "descripcion": "1 cdita de mayonesa",
+        "descripcion": "mayonesa",
         "cantidad": 1,
         "unidad": "cucharadita"
       },
@@ -1404,12 +1404,12 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "1 tza de pasta cocida al dente",
+        "descripcion": "pasta cocida al dente",
         "cantidad": 1,
         "unidad": "taza"
       },
       {
-        "descripcion": "1 lata de atún en agua (drenado)",
+        "descripcion": "atún en agua (drenado)",
         "cantidad": 1,
         "unidad": "lata"
       },
@@ -1424,7 +1424,7 @@
         "unidad": null
       },
       {
-        "descripcion": "3 cdas de crema",
+        "descripcion": "crema",
         "cantidad": 3,
         "unidad": "cucharada"
       }
@@ -1439,7 +1439,7 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "150g de carne molida de res magra (90-10%)",
+        "descripcion": "carne molida de res magra (90-10%)",
         "cantidad": 150,
         "unidad": "gramos"
       },
@@ -1459,7 +1459,7 @@
         "unidad": null
       },
       {
-        "descripcion": "60g de queso panela",
+        "descripcion": "queso panela",
         "cantidad": 60,
         "unidad": "gramos"
       }
@@ -1489,12 +1489,12 @@
         "unidad": null
       },
       {
-        "descripcion": "1 tza de zanahoria, chícharo y ejotes",
+        "descripcion": "zanahoria, chícharo y ejotes",
         "cantidad": 1,
         "unidad": "taza"
       },
       {
-        "descripcion": "2 tortillas de maíz",
+        "descripcion": "tortillas de maíz",
         "cantidad": 2,
         "unidad": "pieza"
       }
@@ -1514,12 +1514,12 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "120g de filete de pescado tilapia",
+        "descripcion": "filete de pescado tilapia",
         "cantidad": 120,
         "unidad": "gramos"
       },
       {
-        "descripcion": "1 zanahoria en rodajas",
+        "descripcion": "zanahoria en rodajas",
         "cantidad": 1,
         "unidad": "pieza"
       },
@@ -1529,7 +1529,7 @@
         "unidad": null
       },
       {
-        "descripcion": "⅓ pza (60g) de aguacate",
+        "descripcion": "aguacate",
         "cantidad": 60,
         "unidad": "gramos"
       }
@@ -1544,7 +1544,7 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "160g de filete tilapia (120g cocidos)",
+        "descripcion": "filete tilapia (120g cocidos)",
         "cantidad": 160,
         "unidad": "gramos"
       },
@@ -1554,12 +1554,12 @@
         "unidad": null
       },
       {
-        "descripcion": "3 tortillas de maíz",
+        "descripcion": "tortillas de maíz",
         "cantidad": 3,
         "unidad": "pieza"
       },
       {
-        "descripcion": "1 cdita de aceite vegetal",
+        "descripcion": "aceite vegetal",
         "cantidad": 1,
         "unidad": "cucharadita"
       },
@@ -1584,7 +1584,7 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "160g de filete de salmón",
+        "descripcion": "filete de salmón",
         "cantidad": 160,
         "unidad": "gramos"
       },
@@ -1594,12 +1594,12 @@
         "unidad": null
       },
       {
-        "descripcion": "1 cda de aceite vegetal",
+        "descripcion": "aceite vegetal",
         "cantidad": 1,
         "unidad": "cucharada"
       },
       {
-        "descripcion": "1 cdita de ralladura de limón y perejil fresco (opcional)",
+        "descripcion": "ralladura de limón y perejil fresco (opcional)",
         "cantidad": 1,
         "unidad": "cucharadita"
       },
@@ -1623,7 +1623,7 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "1 lata de atún en agua drenado",
+        "descripcion": "atún en agua drenado",
         "cantidad": 1,
         "unidad": "lata"
       },
@@ -1633,17 +1633,17 @@
         "unidad": null
       },
       {
-        "descripcion": "2 tortillas de maíz",
+        "descripcion": "tortillas de maíz",
         "cantidad": 2,
         "unidad": "pieza"
       },
       {
-        "descripcion": "1 cdita de aceite para cocinar",
+        "descripcion": "aceite para cocinar",
         "cantidad": 1,
         "unidad": "cucharadita"
       },
       {
-        "descripcion": "30g de queso panela",
+        "descripcion": "queso panela",
         "cantidad": 30,
         "unidad": "gramos"
       }
@@ -1658,22 +1658,22 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "120g de pechuga de pollo deshebrada",
+        "descripcion": "pechuga de pollo deshebrada",
         "cantidad": 120,
         "unidad": "gramos"
       },
       {
-        "descripcion": "1 huevo",
+        "descripcion": "huevo",
         "cantidad": 1,
         "unidad": "pieza"
       },
       {
-        "descripcion": "1 cda de avena en hojuelas",
+        "descripcion": "avena en hojuelas",
         "cantidad": 1,
         "unidad": "cucharada"
       },
       {
-        "descripcion": "1 cdita de aceite vegetal",
+        "descripcion": "aceite vegetal",
         "cantidad": 1,
         "unidad": "cucharadita"
       },
@@ -1683,7 +1683,7 @@
         "unidad": null
       },
       {
-        "descripcion": "2 tortillas de maíz",
+        "descripcion": "tortillas de maíz",
         "cantidad": 2,
         "unidad": "pieza"
       }
@@ -1703,17 +1703,17 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "120g de carne molida de res 90–95% magra",
+        "descripcion": "carne molida de res 90–95% magra",
         "cantidad": 120,
         "unidad": "gramos"
       },
       {
-        "descripcion": "30g de queso panela",
+        "descripcion": "queso panela",
         "cantidad": 30,
         "unidad": "gramos"
       },
       {
-        "descripcion": "⅔ tza de arroz cocido",
+        "descripcion": "arroz cocido",
         "cantidad": 0.666666667,
         "unidad": "taza"
       },
@@ -1723,12 +1723,12 @@
         "unidad": null
       },
       {
-        "descripcion": "1 tza de calabazas",
+        "descripcion": "calabazas",
         "cantidad": 1,
         "unidad": "taza"
       },
       {
-        "descripcion": "1 cdita de aceite",
+        "descripcion": "aceite",
         "cantidad": 1,
         "unidad": "cucharadita"
       },
@@ -1753,17 +1753,17 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "1½ tza de pasta cocida",
+        "descripcion": "pasta cocida",
         "cantidad": 1.5,
         "unidad": "taza"
       },
       {
-        "descripcion": "120g de pechuga de pollo",
+        "descripcion": "pechuga de pollo",
         "cantidad": 120,
         "unidad": "gramos"
       },
       {
-        "descripcion": "30g de queso panela en cubos",
+        "descripcion": "queso panela en cubos",
         "cantidad": 30,
         "unidad": "gramos"
       },
@@ -1773,7 +1773,7 @@
         "unidad": null
       },
       {
-        "descripcion": "1 cdita de aceite vegetal",
+        "descripcion": "aceite vegetal",
         "cantidad": 1,
         "unidad": "cucharadita"
       }
@@ -1788,7 +1788,7 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "200g de atún fresco (o dos latas de atún en agua)",
+        "descripcion": "atún fresco (o dos latas de atún en agua)",
         "cantidad": 200,
         "unidad": "gramos"
       },
@@ -1798,7 +1798,7 @@
         "unidad": null
       },
       {
-        "descripcion": "½ pza de mango picado",
+        "descripcion": "mango picado",
         "cantidad": 0.5,
         "unidad": "pieza"
       },
@@ -1808,12 +1808,12 @@
         "unidad": null
       },
       {
-        "descripcion": "1 cdita de aceite de oliva",
+        "descripcion": "aceite de oliva",
         "cantidad": 1,
         "unidad": "cucharadita"
       },
       {
-        "descripcion": "2 paquetes de tostadas horneadas",
+        "descripcion": "tostadas horneadas",
         "cantidad": 2,
         "unidad": "paquete"
       }
@@ -1828,17 +1828,17 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "200g de filete de pescado tilapia marinado con chipotle, jugo de limón, aceite de oliva, pimienta, ajo en polvo y sal",
+        "descripcion": "filete de pescado tilapia marinado con chipotle, jugo de limón, aceite de oliva, pimienta, ajo en polvo y sal",
         "cantidad": 200,
         "unidad": "gramos"
       },
       {
-        "descripcion": "4 tostadas horneadas",
+        "descripcion": "tostadas horneadas",
         "cantidad": 4,
         "unidad": "pieza"
       },
       {
-        "descripcion": "⅓ pza (30g) de aguacate",
+        "descripcion": "aguacate",
         "cantidad": 30,
         "unidad": "gramos"
       },
@@ -1858,7 +1858,7 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "150g de filete de salmón",
+        "descripcion": "filete de salmón",
         "cantidad": 150,
         "unidad": "gramos"
       },
@@ -1868,7 +1868,7 @@
         "unidad": null
       },
       {
-        "descripcion": "5g de mantequilla sin sal",
+        "descripcion": "mantequilla sin sal",
         "cantidad": 5,
         "unidad": "gramos"
       },
@@ -1878,7 +1878,7 @@
         "unidad": null
       },
       {
-        "descripcion": "½ tza de arroz blanco cocido con verduras (zanahoria, chícharo)",
+        "descripcion": "arroz blanco cocido con verduras (zanahoria, chícharo)",
         "cantidad": 0.5,
         "unidad": "taza"
       }
@@ -1903,17 +1903,17 @@
         "unidad": null
       },
       {
-        "descripcion": "120g de pechuga de pollo deshebrada",
+        "descripcion": "pechuga de pollo deshebrada",
         "cantidad": 120,
         "unidad": "gramos"
       },
       {
-        "descripcion": "60g de queso panela en cubos",
+        "descripcion": "queso panela en cubos",
         "cantidad": 60,
         "unidad": "gramos"
       },
       {
-        "descripcion": "1 tza de pasta cocida",
+        "descripcion": "pasta cocida",
         "cantidad": 1,
         "unidad": "taza"
       },
@@ -1933,7 +1933,7 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "120g de pechuga de pollo aplanada",
+        "descripcion": "pechuga de pollo aplanada",
         "cantidad": 120,
         "unidad": "gramos"
       },
@@ -1943,17 +1943,17 @@
         "unidad": null
       },
       {
-        "descripcion": "30g de queso oaxaca o mozarella",
+        "descripcion": "queso oaxaca o mozarella",
         "cantidad": 30,
         "unidad": "gramos"
       },
       {
-        "descripcion": "30g de aguacate",
+        "descripcion": "aguacate",
         "cantidad": 30,
         "unidad": "gramos"
       },
       {
-        "descripcion": "¾ tza de arroz cocido con verduras (chícharo, zanahoria)",
+        "descripcion": "arroz cocido con verduras (chícharo, zanahoria)",
         "cantidad": 0.75,
         "unidad": "taza"
       }
@@ -1968,12 +1968,12 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "1½ tza de pasta cocida al dente",
+        "descripcion": "pasta cocida al dente",
         "cantidad": 1.5,
         "unidad": "taza"
       },
       {
-        "descripcion": "120g de carne molida de res (90-10%)",
+        "descripcion": "carne molida de res (90-10%)",
         "cantidad": 120,
         "unidad": "gramos"
       },
@@ -1988,12 +1988,12 @@
         "unidad": null
       },
       {
-        "descripcion": "1 cda de queso parmesano",
+        "descripcion": "queso parmesano",
         "cantidad": 1,
         "unidad": "cucharada"
       },
       {
-        "descripcion": "1 pza de pan integral",
+        "descripcion": "pan integral",
         "cantidad": 1,
         "unidad": "pieza"
       },
@@ -2013,22 +2013,22 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "4 tortillas de maíz",
+        "descripcion": "tortillas de maíz",
         "cantidad": 4,
         "unidad": "pieza"
       },
       {
-        "descripcion": "120g de pechuga de pollo deshebrada",
+        "descripcion": "pechuga de pollo deshebrada",
         "cantidad": 120,
         "unidad": "gramos"
       },
       {
-        "descripcion": "60g de queso panela",
+        "descripcion": "queso panela",
         "cantidad": 60,
         "unidad": "gramos"
       },
       {
-        "descripcion": "1 cdita de crema ácida",
+        "descripcion": "crema ácida",
         "cantidad": 1,
         "unidad": "cucharadita"
       },
@@ -2058,12 +2058,12 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "120g de filete tilapia",
+        "descripcion": "filete tilapia",
         "cantidad": 120,
         "unidad": "gramos"
       },
       {
-        "descripcion": "1 pza de papa (140g aprox cruda)",
+        "descripcion": "papa (140g aprox cruda)",
         "cantidad": 140,
         "unidad": "gramos"
       },
@@ -2078,12 +2078,12 @@
         "unidad": null
       },
       {
-        "descripcion": "5g de mantequilla",
+        "descripcion": "mantequilla",
         "cantidad": 5,
         "unidad": "gramos"
       },
       {
-        "descripcion": "½ tza de arroz blanco cocido al vapor",
+        "descripcion": "arroz blanco cocido al vapor",
         "cantidad": 0.5,
         "unidad": "taza"
       },
@@ -2103,7 +2103,7 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "180g de pechuga de pollo",
+        "descripcion": "pechuga de pollo",
         "cantidad": 180,
         "unidad": "gramos"
       },
@@ -2118,12 +2118,12 @@
         "unidad": null
       },
       {
-        "descripcion": "¾ tza de arroz cocido al vapor",
+        "descripcion": "arroz cocido al vapor",
         "cantidad": 0.75,
         "unidad": "taza"
       },
       {
-        "descripcion": "1 cdita de aceite",
+        "descripcion": "aceite",
         "cantidad": 1,
         "unidad": "cucharadita"
       }
@@ -2143,17 +2143,17 @@
         "unidad": null
       },
       {
-        "descripcion": "½ tza de arroz cocido al vapor",
+        "descripcion": "arroz cocido al vapor",
         "cantidad": 0.5,
         "unidad": "taza"
       },
       {
-        "descripcion": "120g de pechuga de pollo cocida deshebrada",
+        "descripcion": "pechuga de pollo cocida deshebrada",
         "cantidad": 120,
         "unidad": "gramos"
       },
       {
-        "descripcion": "½ tza de garbanzos",
+        "descripcion": "garbanzos",
         "cantidad": 0.5,
         "unidad": "taza"
       },
@@ -2163,7 +2163,7 @@
         "unidad": null
       },
       {
-        "descripcion": "30g de queso fresco",
+        "descripcion": "queso fresco",
         "cantidad": 30,
         "unidad": "gramos"
       },
@@ -2173,12 +2173,12 @@
         "unidad": null
       },
       {
-        "descripcion": "1 cdita de aceite vegetal",
+        "descripcion": "aceite vegetal",
         "cantidad": 1,
         "unidad": "cucharadita"
       },
       {
-        "descripcion": "1 cdita de pepitas o ajonjolí",
+        "descripcion": "pepitas o ajonjolí",
         "cantidad": 1,
         "unidad": "cucharadita"
       }
@@ -2193,7 +2193,7 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "1 lata de atún en agua, drenar",
+        "descripcion": "atún en agua, drenar",
         "cantidad": 1,
         "unidad": "lata"
       },
@@ -2208,12 +2208,12 @@
         "unidad": null
       },
       {
-        "descripcion": "¼ pza (30g) de aguacate",
+        "descripcion": "aguacate",
         "cantidad": 30,
         "unidad": "gramos"
       },
       {
-        "descripcion": "2 paquetes de salmas",
+        "descripcion": "salmas",
         "cantidad": 2,
         "unidad": "paquete"
       }
@@ -2228,7 +2228,7 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "90g de pechuga de pollo deshebrada",
+        "descripcion": "pechuga de pollo deshebrada",
         "cantidad": 90,
         "unidad": "gramos"
       },
@@ -2248,12 +2248,12 @@
         "unidad": null
       },
       {
-        "descripcion": "2 paquetes de salmas",
+        "descripcion": "salmas",
         "cantidad": 2,
         "unidad": "paquete"
       },
       {
-        "descripcion": "30g de queso panela",
+        "descripcion": "queso panela",
         "cantidad": 30,
         "unidad": "gramos"
       }
@@ -2277,17 +2277,17 @@
         "unidad": null
       },
       {
-        "descripcion": "90g de pechuga deshebrada de pollo",
+        "descripcion": "pechuga deshebrada de pollo",
         "cantidad": 90,
         "unidad": "gramos"
       },
       {
-        "descripcion": "40g de queso panela",
+        "descripcion": "queso panela",
         "cantidad": 40,
         "unidad": "gramos"
       },
       {
-        "descripcion": "2 paquetes de salmas",
+        "descripcion": "salmas",
         "cantidad": 2,
         "unidad": "paquete"
       }
@@ -2306,7 +2306,7 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "60g de carne deshebrada de res",
+        "descripcion": "carne deshebrada de res",
         "cantidad": 60,
         "unidad": "gramos"
       },
@@ -2321,17 +2321,17 @@
         "unidad": null
       },
       {
-        "descripcion": "1 cdita de aceite de oliva",
+        "descripcion": "aceite de oliva",
         "cantidad": 1,
         "unidad": "cucharadita"
       },
       {
-        "descripcion": "¼ pza (30g) de aguacate",
+        "descripcion": "aguacate",
         "cantidad": 30,
         "unidad": "gramos"
       },
       {
-        "descripcion": "2 paquetes de salmas",
+        "descripcion": "salmas",
         "cantidad": 2,
         "unidad": "paquete"
       }
@@ -2346,12 +2346,12 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "100g de carne molida magra (90-10%)",
+        "descripcion": "carne molida magra (90-10%)",
         "cantidad": 100,
         "unidad": "gramos"
       },
       {
-        "descripcion": "½ pza de papa cocida",
+        "descripcion": "papa cocida",
         "cantidad": 0.5,
         "unidad": "pieza"
       },
@@ -2361,12 +2361,12 @@
         "unidad": null
       },
       {
-        "descripcion": "30g de queso oaxaca reducido en grasa",
+        "descripcion": "queso oaxaca reducido en grasa",
         "cantidad": 30,
         "unidad": "gramos"
       },
       {
-        "descripcion": "⅓ pza (30g) de aguacate",
+        "descripcion": "aguacate",
         "cantidad": 30,
         "unidad": "gramos"
       }
@@ -2381,27 +2381,27 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "1 pza de bolillo (optar por integral)",
+        "descripcion": "bolillo (optar por integral)",
         "cantidad": 1,
         "unidad": "pieza"
       },
       {
-        "descripcion": "4 cdas de frijoles machacados",
+        "descripcion": "frijoles machacados",
         "cantidad": 4,
         "unidad": "cucharada"
       },
       {
-        "descripcion": "30g de pechuga deshebrada de pollo",
+        "descripcion": "pechuga deshebrada de pollo",
         "cantidad": 30,
         "unidad": "gramos"
       },
       {
-        "descripcion": "4 rebanadas de pechuga de pavo",
+        "descripcion": "pechuga de pavo",
         "cantidad": 4,
         "unidad": "rebanada"
       },
       {
-        "descripcion": "2 rebanadas de queso manchego bajo en grasa",
+        "descripcion": "queso manchego bajo en grasa",
         "cantidad": 2,
         "unidad": "rebanada"
       },
@@ -2421,17 +2421,17 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "½ tza de avena en hojuelas",
+        "descripcion": "avena en hojuelas",
         "cantidad": 0.5,
         "unidad": "taza"
       },
       {
-        "descripcion": "2 huevos",
+        "descripcion": "huevos",
         "cantidad": 2,
         "unidad": "pieza"
       },
       {
-        "descripcion": "2 cdas de queso cottage",
+        "descripcion": "queso cottage",
         "cantidad": 2,
         "unidad": "cucharada"
       },
@@ -2441,12 +2441,12 @@
         "unidad": null
       },
       {
-        "descripcion": "½ plátano",
+        "descripcion": "plátano",
         "cantidad": 0.5,
         "unidad": "pieza"
       },
       {
-        "descripcion": "1 cdita de cacao sin azúcar",
+        "descripcion": "cacao sin azúcar",
         "cantidad": 1,
         "unidad": "cucharadita"
       },
@@ -2471,17 +2471,17 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "100g de pechuga de pollo",
+        "descripcion": "pechuga de pollo",
         "cantidad": 100,
         "unidad": "gramos"
       },
       {
-        "descripcion": "½ taza de arroz integral cocido",
+        "descripcion": "arroz integral cocido",
         "cantidad": 0.5,
         "unidad": "taza"
       },
       {
-        "descripcion": "1 cdita de aceite de canola",
+        "descripcion": "aceite de canola",
         "cantidad": 1,
         "unidad": "cucharadita"
       },
@@ -2501,17 +2501,17 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "2 tortillas de maíz",
+        "descripcion": "tortillas de maíz",
         "cantidad": 2,
         "unidad": "pieza"
       },
       {
-        "descripcion": "2 rebanadas de pechuga de pavo",
+        "descripcion": "pechuga de pavo",
         "cantidad": 2,
         "unidad": "rebanada"
       },
       {
-        "descripcion": "45g de queso panela",
+        "descripcion": "queso panela",
         "cantidad": 45,
         "unidad": "gramos"
       },
@@ -2531,7 +2531,7 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "120g de carne molida magra (90-10%)",
+        "descripcion": "carne molida magra (90-10%)",
         "cantidad": 120,
         "unidad": "gramos"
       },
@@ -2541,12 +2541,12 @@
         "unidad": null
       },
       {
-        "descripcion": "1cdita de salsa de soya",
+        "descripcion": "salsa de soya",
         "cantidad": 1,
         "unidad": "cucharadita"
       },
       {
-        "descripcion": "2 paquete de salmas",
+        "descripcion": "salmas",
         "cantidad": 2,
         "unidad": "paquete"
       }
@@ -2561,17 +2561,17 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "120 g de carne molida de res magra (90/10)",
+        "descripcion": "carne molida de res magra (90/10)",
         "cantidad": 120,
         "unidad": "gramos"
       },
       {
-        "descripcion": "1 cucharadita de aceite vegetal",
+        "descripcion": "aceite vegetal",
         "cantidad": 1,
         "unidad": "cucharadita"
       },
       {
-        "descripcion": "½ taza de papa cocida en cubos",
+        "descripcion": "papa cocida en cubos",
         "cantidad": 0.5,
         "unidad": "taza"
       },
@@ -2586,7 +2586,7 @@
         "unidad": null
       },
       {
-        "descripcion": "2 paquetes de salmas",
+        "descripcion": "salmas",
         "cantidad": 2,
         "unidad": "paquete"
       }
@@ -2601,17 +2601,17 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "2 pzas de tortilla de maíz",
+        "descripcion": "tortilla de maíz",
         "cantidad": 2,
         "unidad": "pieza"
       },
       {
-        "descripcion": "60g de pechuga de pollo deshebrada",
+        "descripcion": "pechuga de pollo deshebrada",
         "cantidad": 60,
         "unidad": "gramos"
       },
       {
-        "descripcion": "3 cditas de elote amarillo",
+        "descripcion": "elote amarillo",
         "cantidad": 3,
         "unidad": "cucharadita"
       },
@@ -2621,7 +2621,7 @@
         "unidad": null
       },
       {
-        "descripcion": "30g de queso panela en cubitos",
+        "descripcion": "queso panela en cubitos",
         "cantidad": 30,
         "unidad": "gramos"
       }
@@ -2636,27 +2636,27 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "50g de harina de maíz (PAN)",
+        "descripcion": "harina de maíz (PAN)",
         "cantidad": 50,
         "unidad": "gramos"
       },
       {
-        "descripcion": "70ml de agua aprox",
+        "descripcion": "agua aprox",
         "cantidad": 70,
         "unidad": "mililitros"
       },
       {
-        "descripcion": "120g de pechuga de pollo sazonada al gusto (sugerencia: jitomate)",
+        "descripcion": "pechuga de pollo sazonada al gusto (sugerencia: jitomate)",
         "cantidad": 120,
         "unidad": "gramos"
       },
       {
-        "descripcion": "30g de queso oaxaca o mozarella",
+        "descripcion": "queso oaxaca o mozarella",
         "cantidad": 30,
         "unidad": "gramos"
       },
       {
-        "descripcion": "1 cdita de aceite vegetal",
+        "descripcion": "aceite vegetal",
         "cantidad": 1,
         "unidad": "cucharadita"
       }
@@ -2671,7 +2671,7 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "1 lata de atún en agua",
+        "descripcion": "atún en agua",
         "cantidad": 1,
         "unidad": "lata"
       },
@@ -2691,7 +2691,7 @@
         "unidad": null
       },
       {
-        "descripcion": "2 paquetes de salmas",
+        "descripcion": "salmas",
         "cantidad": 2,
         "unidad": "paquete"
       }
@@ -2706,12 +2706,12 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "90g de pechuga de pollo deshebrada",
+        "descripcion": "pechuga de pollo deshebrada",
         "cantidad": 90,
         "unidad": "gramos"
       },
       {
-        "descripcion": "60g de queso oaxaca",
+        "descripcion": "queso oaxaca",
         "cantidad": 60,
         "unidad": "gramos"
       },
@@ -2721,7 +2721,7 @@
         "unidad": null
       },
       {
-        "descripcion": "2 piezas de tortilla de maíz",
+        "descripcion": "tortilla de maíz",
         "cantidad": 2,
         "unidad": "pieza"
       }
@@ -2736,7 +2736,7 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "1 lata de atún en agua drenado",
+        "descripcion": "atún en agua drenado",
         "cantidad": 1,
         "unidad": "lata"
       },
@@ -2746,7 +2746,7 @@
         "unidad": null
       },
       {
-        "descripcion": "1cdita de aceite vegetal",
+        "descripcion": "aceite vegetal",
         "cantidad": 1,
         "unidad": "cucharadita"
       },
@@ -2756,7 +2756,7 @@
         "unidad": null
       },
       {
-        "descripcion": "2 paquetes de salmas",
+        "descripcion": "salmas",
         "cantidad": 2,
         "unidad": "paquete"
       }
@@ -2771,22 +2771,22 @@
     "porciones": "1",
     "ingredientes": [
       {
-        "descripcion": "1 pza de sope de maíz",
+        "descripcion": "sope de maíz",
         "cantidad": 1,
         "unidad": "pieza"
       },
       {
-        "descripcion": "1cda de frijoles refritos",
+        "descripcion": "frijoles refritos",
         "cantidad": 1,
         "unidad": "cucharada"
       },
       {
-        "descripcion": "60g de pechuga deshebrada de pollo",
+        "descripcion": "pechuga deshebrada de pollo",
         "cantidad": 60,
         "unidad": "gramos"
       },
       {
-        "descripcion": "30g de queso panela",
+        "descripcion": "queso panela",
         "cantidad": 30,
         "unidad": "gramos"
       },

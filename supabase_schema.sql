@@ -3826,3 +3826,237 @@ create policy "videos-ejercicios: gestion admin superadmin" on storage.objects
 --   using (bucket_id = 'videos-ejercicios' and auth.role() = 'authenticated')
 --   with check (bucket_id = 'videos-ejercicios' and auth.role() = 'authenticated');
 -- ============================================================
+
+-- ============================================================
+-- 65. MIGRACIÓN — alimentos: columna "equivalentes"
+-- ============================================================
+-- Cada fila de alimentos representa una porción (cantidad + unidad) que
+-- por definición del sistema de equivalentes (SMAE) equivale a 1
+-- equivalente de su categoria (grupo de alimento). Se agrega como columna
+-- explícita, en vez de asumir siempre 1 en el código, para permitir casos
+-- reales donde una porción capturada equivalga a más de 1 (ej. una
+-- porción grande que en realidad son 2 equivalentes del grupo).
+--
+-- default 1 aplica automáticamente a las filas existentes (todas las
+-- porciones ya cargadas son, por diseño del catálogo actual, 1
+-- equivalente cada una) y a las nuevas si no se especifica otro valor.
+alter table alimentos
+  add column if not exists equivalentes numeric not null default 1;
+
+alter table alimentos
+  add constraint alimentos_equivalentes_non_neg check (equivalentes >= 0);
+
+-- ============================================================
+-- ROLLBACK Sección 65 (referencia — NO ejecutar salvo que se decida
+-- revertir esta sección):
+--
+-- alter table alimentos drop constraint if exists alimentos_equivalentes_non_neg;
+-- alter table alimentos drop column if exists equivalentes;
+-- ============================================================
+
+-- ============================================================
+-- 66. MIGRACIÓN — recetas: foto del platillo (columnas + bucket + RPC)
+-- ============================================================
+-- Mismo patrón ya usado por ejercicios.video_url/video_storage_path
+-- (Sección 10/11): columna pública (URL servida por Storage) + columna
+-- interna (path dentro del bucket, solo para poder borrar el archivo
+-- viejo cuando se reemplaza; null si no hay archivo propio subido).
+alter table recetas
+  add column if not exists foto_url text,
+  add column if not exists foto_storage_path text;
+
+-- Bucket público para fotos de platillos, subido desde admin-web
+-- (RecetaModal.tsx). Mismo criterio de acceso que "videos-ejercicios":
+-- lectura pública, escritura solo admin/superadmin — el catálogo de
+-- recetas ya restringe INSERT/UPDATE/DELETE de la tabla "recetas" a
+-- autenticados vía RLS (Sección 52), y esta es la misma superficie
+-- (gestión del catálogo), no contenido subido por pacientes.
+insert into storage.buckets (id, name, public)
+values ('recetas-fotos', 'recetas-fotos', true)
+on conflict (id) do nothing;
+
+drop policy if exists "recetas-fotos: lectura publica" on storage.objects;
+create policy "recetas-fotos: lectura publica"
+  on storage.objects for select using (bucket_id = 'recetas-fotos');
+
+drop policy if exists "recetas-fotos: gestion admin superadmin" on storage.objects;
+create policy "recetas-fotos: gestion admin superadmin" on storage.objects
+  for all to authenticated
+  using (bucket_id = 'recetas-fotos' and public.get_user_rol() in ('admin', 'superadmin'))
+  with check (bucket_id = 'recetas-fotos' and public.get_user_rol() in ('admin', 'superadmin'));
+
+-- actualizar_receta_completa (Sección 59) gana 2 parámetros nuevos al
+-- final para no reordenar los existentes. Cambiar la firma de una
+-- función crea un OVERLOAD en vez de reemplazarla — hay que tirar la
+-- versión vieja explícitamente antes de crear la nueva.
+drop function if exists public.actualizar_receta_completa(
+  uuid, text, text, text, text, text, int, int, int, text, int, text, numeric, numeric, numeric, jsonb, jsonb
+);
+
+create or replace function public.actualizar_receta_completa(
+  p_receta_id uuid,
+  p_nombre text,
+  p_emoji text,
+  p_tipo text,
+  p_categoria_nutricional text,
+  p_tags text,
+  p_tiempo_prep_min int,
+  p_tiempo_coccion_min int,
+  p_tiempo_min int,
+  p_nivel text,
+  p_calorias int,
+  p_porciones text,
+  p_proteinas_g numeric,
+  p_carbohidratos_g numeric,
+  p_grasas_g numeric,
+  p_ingredientes jsonb,
+  p_pasos jsonb,
+  p_foto_url text,
+  p_foto_storage_path text
+) returns uuid
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_receta_id uuid;
+  v_ing jsonb;
+  v_paso jsonb;
+  v_descripcion text;
+  v_orden int := 0;
+  v_numero int := 0;
+begin
+  update public.recetas set
+    nombre = p_nombre,
+    emoji = p_emoji,
+    tipo = p_tipo,
+    categoria_nutricional = p_categoria_nutricional,
+    tags = p_tags,
+    tiempo_prep_min = p_tiempo_prep_min,
+    tiempo_coccion_min = p_tiempo_coccion_min,
+    tiempo_min = p_tiempo_min,
+    nivel = p_nivel,
+    calorias = p_calorias,
+    porciones = p_porciones,
+    proteinas_g = p_proteinas_g,
+    carbohidratos_g = p_carbohidratos_g,
+    grasas_g = p_grasas_g,
+    foto_url = p_foto_url,
+    foto_storage_path = p_foto_storage_path
+  where id = p_receta_id
+  returning id into v_receta_id;
+
+  if v_receta_id is null then
+    raise exception 'Receta no encontrada o sin permiso para modificarla';
+  end if;
+
+  delete from public.receta_ingredientes where receta_id = v_receta_id;
+  for v_ing in select * from jsonb_array_elements(coalesce(p_ingredientes, '[]'::jsonb))
+  loop
+    if coalesce(trim(v_ing->>'descripcion'), '') = '' then
+      continue;
+    end if;
+    v_orden := v_orden + 1;
+    insert into public.receta_ingredientes (receta_id, orden, descripcion, alimento_id, cantidad, unidad)
+    values (
+      v_receta_id,
+      v_orden,
+      trim(v_ing->>'descripcion'),
+      (v_ing->>'alimento_id')::uuid,
+      (v_ing->>'cantidad')::numeric,
+      v_ing->>'unidad'
+    );
+  end loop;
+
+  delete from public.receta_pasos where receta_id = v_receta_id;
+  for v_paso in select * from jsonb_array_elements(coalesce(p_pasos, '[]'::jsonb))
+  loop
+    v_descripcion := trim(v_paso #>> '{}');
+    if coalesce(v_descripcion, '') = '' then
+      continue;
+    end if;
+    v_numero := v_numero + 1;
+    insert into public.receta_pasos (receta_id, numero, descripcion)
+    values (v_receta_id, v_numero, v_descripcion);
+  end loop;
+
+  return v_receta_id;
+end;
+$$;
+
+revoke execute on function public.actualizar_receta_completa(
+  uuid, text, text, text, text, text, int, int, int, text, int, text, numeric, numeric, numeric, jsonb, jsonb, text, text
+) from public, anon;
+grant execute on function public.actualizar_receta_completa(
+  uuid, text, text, text, text, text, int, int, int, text, int, text, numeric, numeric, numeric, jsonb, jsonb, text, text
+) to authenticated;
+
+-- ============================================================
+-- ROLLBACK Sección 66 (referencia — NO ejecutar salvo que se decida
+-- revertir esta sección):
+--
+-- drop function if exists public.actualizar_receta_completa(
+--   uuid, text, text, text, text, text, int, int, int, text, int, text, numeric, numeric, numeric, jsonb, jsonb, text, text
+-- );
+-- [recrear aquí la versión de 17 parámetros de la Sección 59 si se revierte]
+--
+-- drop policy if exists "recetas-fotos: gestion admin superadmin" on storage.objects;
+-- drop policy if exists "recetas-fotos: lectura publica" on storage.objects;
+-- delete from storage.buckets where id = 'recetas-fotos';
+--
+-- alter table recetas drop column if exists foto_storage_path;
+-- alter table recetas drop column if exists foto_url;
+-- ============================================================
+
+-- ============================================================
+-- 67. MIGRACIÓN — ejercicios: GIF subido desde admin-web
+-- ============================================================
+-- gif_url ya existía (Sección 41a), pero solo lo llenaba la Edge Function
+-- migrate-gifs (service_role, bypasea RLS) al importar el catálogo de
+-- WorkoutX — el formulario de alta manual de admin-web (EjercicioModal.tsx)
+-- nunca lo exponía, así que un ejercicio creado a mano no podía tener GIF.
+--
+-- Se agrega gif_storage_path (mismo patrón pareado que video_url/
+-- video_storage_path, Sección 10/11, y foto_url/foto_storage_path de
+-- recetas, Sección 66) para poder borrar el archivo viejo cuando se
+-- reemplaza un GIF subido desde admin-web. Los GIF importados de WorkoutX
+-- quedan con gif_storage_path = NULL (no se conoce su path real dentro del
+-- bucket) — eso es intencional y no se toca aquí.
+alter table ejercicios
+  add column if not exists gif_storage_path text;
+
+-- El bucket "exercise-gifs" estaba documentado (Sección 42) pero, según lo
+-- verificado en producción durante el barrido final de auditoría (H2,
+-- 2026-09-02), nunca se llegó a crear en el Dashboard. Se crea aquí vía SQL
+-- (mismo mecanismo ya usado para "videos-ejercicios" y "recetas-fotos" en
+-- vez de depender de un paso manual en el Dashboard que ya se demostró que
+-- se puede olvidar.
+insert into storage.buckets (id, name, public)
+values ('exercise-gifs', 'exercise-gifs', true)
+on conflict (id) do nothing;
+
+drop policy if exists "exercise-gifs: lectura publica" on storage.objects;
+create policy "exercise-gifs: lectura publica"
+  on storage.objects for select using (bucket_id = 'exercise-gifs');
+
+-- Mismo criterio que "videos-ejercicios: gestion admin superadmin"
+-- (Sección 64): la gestión del catálogo de ejercicios ya está restringida
+-- a admin/superadmin a nivel de tabla (ejercicios_insert/update/delete,
+-- Sección 40/41h) — la policy de Storage debe reflejar el mismo criterio,
+-- ya que ahora admin-web sube directo desde el navegador (no service_role).
+drop policy if exists "exercise-gifs: gestion admin superadmin" on storage.objects;
+create policy "exercise-gifs: gestion admin superadmin" on storage.objects
+  for all to authenticated
+  using (bucket_id = 'exercise-gifs' and public.get_user_rol() in ('admin', 'superadmin'))
+  with check (bucket_id = 'exercise-gifs' and public.get_user_rol() in ('admin', 'superadmin'));
+
+-- ============================================================
+-- ROLLBACK Sección 67 (referencia — NO ejecutar salvo que se decida
+-- revertir esta sección):
+--
+-- drop policy if exists "exercise-gifs: gestion admin superadmin" on storage.objects;
+-- drop policy if exists "exercise-gifs: lectura publica" on storage.objects;
+-- delete from storage.buckets where id = 'exercise-gifs';
+--
+-- alter table ejercicios drop column if exists gif_storage_path;
+-- ============================================================

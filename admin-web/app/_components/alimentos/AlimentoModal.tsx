@@ -25,6 +25,7 @@ export default function AlimentoModal({
   const [categoria, setCategoria] = useState(alimento?.categoria ?? FOOD_GROUPS[0].grupo);
   const [cantidad, setCantidad] = useState(alimento?.cantidad?.toString() ?? "");
   const [unidad, setUnidad] = useState(alimento?.unidad ?? UNIDADES_ALIMENTO[0]);
+  const [equivalentes, setEquivalentes] = useState(alimento?.equivalentes?.toString() ?? "1");
   const [pesoBruto, setPesoBruto] = useState(alimento?.peso_bruto_g?.toString() ?? "");
   const [pesoNeto, setPesoNeto] = useState(alimento?.peso_neto_g?.toString() ?? "");
   const [kcal, setKcal] = useState(alimento?.kcal?.toString() ?? "");
@@ -46,6 +47,7 @@ export default function AlimentoModal({
     }
     const numFields = [
       { label: "Cantidad", value: cantidad },
+      { label: "Equivalentes", value: equivalentes },
       { label: "Peso bruto", value: pesoBruto },
       { label: "Peso neto", value: pesoNeto },
       { label: "Kcal", value: kcal },
@@ -68,6 +70,7 @@ export default function AlimentoModal({
         categoria: categoria || null,
         cantidad: toNum(cantidad),
         unidad: unidad || null,
+        equivalentes: equivalentes.trim() === "" ? 1 : parseFloat(equivalentes),
         peso_bruto_g: toNum(pesoBruto),
         peso_neto_g: toNum(pesoNeto),
         kcal: toNum(kcal),
@@ -95,18 +98,18 @@ export default function AlimentoModal({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-100">
+        <div className="flex items-center justify-between p-6 border-b border-divider">
           <div>
-            <h2 className="font-bold text-gray-900 text-xl">
+            <h2 className="font-bold text-text-primary text-xl">
               {isEdit ? "Editar alimento" : "Agregar alimento"}
             </h2>
-            <p className="text-gray-500 text-sm">
+            <p className="text-secondary text-sm">
               Completa la información nutricional del alimento.
             </p>
           </div>
           <button
             onClick={onClose}
-            className="w-9 h-9 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400"
+            className="w-9 h-9 rounded-full hover:bg-surface-muted flex items-center justify-center text-muted"
           >
             <X size={18} />
           </button>
@@ -115,23 +118,23 @@ export default function AlimentoModal({
         <div className="p-6 flex flex-col gap-6">
           {/* 1. General */}
           <section>
-            <p className="text-sm font-bold text-gray-800 mb-3">1. Información general</p>
+            <p className="text-sm font-bold text-text-primary mb-3">1. Información general</p>
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2">
-                <label className="text-xs text-gray-500 block mb-1">Nombre del alimento *</label>
+                <label className="text-xs text-secondary block mb-1">Nombre del alimento *</label>
                 <input
                   value={nombre}
                   onChange={(e) => setNombre(e.target.value)}
                   placeholder="Ej. Pechuga de pollo cocida"
-                  className="w-full h-10 border border-gray-200 rounded-xl px-3 text-sm focus:outline-none focus:border-primary"
+                  className="w-full h-10 border border-border rounded-xl px-3 text-sm focus:outline-none focus:border-primary"
                 />
               </div>
               <div className="col-span-2">
-                <label className="text-xs text-gray-500 block mb-1">Categoría</label>
+                <label className="text-xs text-secondary block mb-1">Categoría</label>
                 <select
                   value={categoria}
                   onChange={(e) => setCategoria(e.target.value)}
-                  className="w-full h-10 border border-gray-200 rounded-xl px-3 text-sm focus:outline-none focus:border-primary"
+                  className="w-full h-10 border border-border rounded-xl px-3 text-sm focus:outline-none focus:border-primary"
                 >
                   {FOOD_GROUPS.map((g) => (
                     <option key={g.grupo} value={g.grupo}>
@@ -145,10 +148,10 @@ export default function AlimentoModal({
 
           {/* 2. Medidas */}
           <section>
-            <p className="text-sm font-bold text-gray-800 mb-3">2. Medida y peso</p>
+            <p className="text-sm font-bold text-text-primary mb-3">2. Medida y peso</p>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-gray-500 block mb-1">Cantidad</label>
+                <label className="text-xs text-secondary block mb-1">Cantidad</label>
                 <input
                   type="number"
                   min={0}
@@ -156,15 +159,15 @@ export default function AlimentoModal({
                   value={cantidad}
                   onChange={setPositive(setCantidad)}
                   placeholder="Ej. 1"
-                  className="w-full h-10 border border-gray-200 rounded-xl px-3 text-sm focus:outline-none focus:border-primary"
+                  className="w-full h-10 border border-border rounded-xl px-3 text-sm focus:outline-none focus:border-primary"
                 />
               </div>
               <div>
-                <label className="text-xs text-gray-500 block mb-1">Unidad</label>
+                <label className="text-xs text-secondary block mb-1">Unidad</label>
                 <select
                   value={unidad}
                   onChange={(e) => setUnidad(e.target.value)}
-                  className="w-full h-10 border border-gray-200 rounded-xl px-3 text-sm focus:outline-none focus:border-primary"
+                  className="w-full h-10 border border-border rounded-xl px-3 text-sm focus:outline-none focus:border-primary"
                 >
                   {UNIDADES_ALIMENTO.map((u) => (
                     <option key={u} value={u}>
@@ -174,7 +177,20 @@ export default function AlimentoModal({
                 </select>
               </div>
               <div>
-                <label className="text-xs text-gray-500 block mb-1">Peso bruto (g)</label>
+                <label className="text-xs text-secondary block mb-1">Equivalentes</label>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.1"
+                  value={equivalentes}
+                  onChange={setPositive(setEquivalentes)}
+                  placeholder="Ej. 1"
+                  className="w-full h-10 border border-border rounded-xl px-3 text-sm focus:outline-none focus:border-primary"
+                />
+                <p className="text-[10px] text-muted mt-1">Cuántos equivalentes del grupo representa esta porción.</p>
+              </div>
+              <div>
+                <label className="text-xs text-secondary block mb-1">Peso bruto (g)</label>
                 <input
                   type="number"
                   min={0}
@@ -182,11 +198,11 @@ export default function AlimentoModal({
                   value={pesoBruto}
                   onChange={setPositive(setPesoBruto)}
                   placeholder="Ej. 120"
-                  className="w-full h-10 border border-gray-200 rounded-xl px-3 text-sm focus:outline-none focus:border-primary"
+                  className="w-full h-10 border border-border rounded-xl px-3 text-sm focus:outline-none focus:border-primary"
                 />
               </div>
               <div>
-                <label className="text-xs text-gray-500 block mb-1">Peso neto (g)</label>
+                <label className="text-xs text-secondary block mb-1">Peso neto (g)</label>
                 <input
                   type="number"
                   min={0}
@@ -194,7 +210,7 @@ export default function AlimentoModal({
                   value={pesoNeto}
                   onChange={setPositive(setPesoNeto)}
                   placeholder="Ej. 100"
-                  className="w-full h-10 border border-gray-200 rounded-xl px-3 text-sm focus:outline-none focus:border-primary"
+                  className="w-full h-10 border border-border rounded-xl px-3 text-sm focus:outline-none focus:border-primary"
                 />
               </div>
             </div>
@@ -202,61 +218,61 @@ export default function AlimentoModal({
 
           {/* 3. Macros */}
           <section>
-            <p className="text-sm font-bold text-gray-800 mb-3">3. Información nutricional</p>
+            <p className="text-sm font-bold text-text-primary mb-3">3. Información nutricional</p>
             <div className="grid grid-cols-3 gap-3">
               <div className="col-span-3">
-                <label className="text-xs text-gray-500 block mb-1">Calorías (Kcal)</label>
+                <label className="text-xs text-secondary block mb-1">Calorías (Kcal)</label>
                 <input
                   type="number"
                   min={0}
                   step="0.1"
                   value={kcal}
                   onChange={setPositive(setKcal)}
-                  className="w-full h-10 border border-gray-200 rounded-xl px-3 text-sm focus:outline-none focus:border-primary"
+                  className="w-full h-10 border border-border rounded-xl px-3 text-sm focus:outline-none focus:border-primary"
                 />
               </div>
               <div>
-                <label className="text-xs text-gray-500 block mb-1">Proteínas (g)</label>
+                <label className="text-xs text-secondary block mb-1">Proteínas (g)</label>
                 <input
                   type="number"
                   min={0}
                   step="0.1"
                   value={proteinas}
                   onChange={setPositive(setProteinas)}
-                  className="w-full h-10 border border-gray-200 rounded-xl px-3 text-sm focus:outline-none focus:border-primary"
+                  className="w-full h-10 border border-border rounded-xl px-3 text-sm focus:outline-none focus:border-primary"
                 />
               </div>
               <div>
-                <label className="text-xs text-gray-500 block mb-1">Lípidos (g)</label>
+                <label className="text-xs text-secondary block mb-1">Lípidos (g)</label>
                 <input
                   type="number"
                   min={0}
                   step="0.1"
                   value={lipidos}
                   onChange={setPositive(setLipidos)}
-                  className="w-full h-10 border border-gray-200 rounded-xl px-3 text-sm focus:outline-none focus:border-primary"
+                  className="w-full h-10 border border-border rounded-xl px-3 text-sm focus:outline-none focus:border-primary"
                 />
               </div>
               <div>
-                <label className="text-xs text-gray-500 block mb-1">HCO (g)</label>
+                <label className="text-xs text-secondary block mb-1">HCO (g)</label>
                 <input
                   type="number"
                   min={0}
                   step="0.1"
                   value={hco}
                   onChange={setPositive(setHco)}
-                  className="w-full h-10 border border-gray-200 rounded-xl px-3 text-sm focus:outline-none focus:border-primary"
+                  className="w-full h-10 border border-border rounded-xl px-3 text-sm focus:outline-none focus:border-primary"
                 />
               </div>
               <div>
-                <label className="text-xs text-gray-500 block mb-1">Fibra (g)</label>
+                <label className="text-xs text-secondary block mb-1">Fibra (g)</label>
                 <input
                   type="number"
                   min={0}
                   step="0.1"
                   value={fibra}
                   onChange={setPositive(setFibra)}
-                  className="w-full h-10 border border-gray-200 rounded-xl px-3 text-sm focus:outline-none focus:border-primary"
+                  className="w-full h-10 border border-border rounded-xl px-3 text-sm focus:outline-none focus:border-primary"
                 />
               </div>
             </div>
@@ -264,15 +280,15 @@ export default function AlimentoModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100">
+        <div className="flex items-center justify-between px-6 py-4 border-t border-divider">
           <div className="flex items-center gap-3">
             <button
               onClick={onClose}
-              className="px-5 h-10 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50"
+              className="px-5 h-10 rounded-xl border border-border text-secondary text-sm hover:bg-background-secondary"
             >
               Cancelar
             </button>
-            {error && <p className="text-red-500 text-sm">{error}</p>}
+            {error && <p className="text-error text-sm">{error}</p>}
           </div>
           <button
             onClick={handleSave}

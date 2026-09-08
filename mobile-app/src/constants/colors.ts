@@ -1,5 +1,5 @@
 // ─── Paleta MyFitTrack ────────────────────────────────────────────────────────
-// Construida a partir del isotipo oficial (admin-web/public/branding/isotipo-myfittrack.svg):
+// Construida a partir del isotipo oficial (admin-web/public/branding/isotipo-myfittrack.png):
 // tinta navy #192C31, cinta métrica amarilla #FFF824, y el verde esmeralda ya
 // oficial en app.json (splash #2EBD8C / adaptive icon #144333). `primary` ya
 // evolucionaba correctamente esa dirección — se conserva. Se agregan `ink`

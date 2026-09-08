@@ -12,7 +12,7 @@ function PlanBadge({ plan }: { plan: string }) {
   return (
     <span
       className={`text-xs px-3 py-1 rounded-full font-semibold inline-flex items-center gap-1 ${
-        isPremium ? "bg-brand-soft text-primary" : "bg-gray-100 text-gray-600"
+        isPremium ? "bg-brand-soft text-primary" : "bg-surface-muted text-secondary"
       }`}
     >
       {isPremium ? <Crown size={11} /> : <Lock size={11} />}
@@ -25,7 +25,7 @@ function EstatusBadge({ perfil }: { perfil: Perfil }) {
   if (perfil.estatus === "pendiente") {
     return (
       <span className="text-xs px-2.5 py-1 rounded-full font-semibold inline-flex items-center gap-1.5 bg-warning-soft text-warning">
-        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" />
+        <span className="w-1.5 h-1.5 rounded-full bg-warning inline-block" />
         Pendiente
       </span>
     );
@@ -33,7 +33,7 @@ function EstatusBadge({ perfil }: { perfil: Perfil }) {
   if (perfil.estatus === "rechazado") {
     return (
       <span className="text-xs px-2.5 py-1 rounded-full font-semibold inline-flex items-center gap-1.5 bg-error-soft text-error">
-        <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />
+        <span className="w-1.5 h-1.5 rounded-full bg-error inline-block" />
         Rechazado
       </span>
     );
@@ -41,12 +41,12 @@ function EstatusBadge({ perfil }: { perfil: Perfil }) {
   // aprobado — muestra si está habilitado o deshabilitado
   return perfil.is_active ? (
     <span className="text-xs px-2.5 py-1 rounded-full font-semibold inline-flex items-center gap-1.5 bg-success-soft text-success">
-      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+      <span className="w-1.5 h-1.5 rounded-full bg-success inline-block" />
       Aprobado
     </span>
   ) : (
     <span className="text-xs px-2.5 py-1 rounded-full font-semibold inline-flex items-center gap-1.5 bg-error-soft text-error">
-      <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />
+      <span className="w-1.5 h-1.5 rounded-full bg-error inline-block" />
       Deshabilitado
     </span>
   );
@@ -55,7 +55,7 @@ function EstatusBadge({ perfil }: { perfil: Perfil }) {
 function ManualBadge() {
   return (
     <span
-      className="text-[10px] px-2 py-0.5 rounded-full font-semibold inline-flex items-center gap-1 bg-slate-100 text-slate-500 shrink-0"
+      className="text-[10px] px-2 py-0.5 rounded-full font-semibold inline-flex items-center gap-1 bg-surface-muted text-secondary shrink-0"
       title="Todavía no ha iniciado sesión desde la app móvil"
     >
       Sin registro móvil
@@ -70,8 +70,8 @@ function Toast({ message, onDone }: { message: string; onDone: () => void }) {
     return () => clearTimeout(t);
   }, [onDone]);
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 bg-gray-900 text-white text-sm font-semibold px-5 py-3.5 rounded-2xl shadow-2xl animate-fade-in">
-      <Check size={16} className="text-emerald-400 shrink-0" />
+    <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 bg-ink text-white text-sm font-semibold px-5 py-3.5 rounded-2xl shadow-2xl animate-fade-in">
+      <Check size={16} className="text-brand-accent shrink-0" />
       {message}
     </div>
   );
@@ -191,8 +191,8 @@ export default function UsuariosPage() {
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Pacientes</h1>
-          <p className="text-gray-500 text-sm mt-1">
+          <h1 className="text-2xl font-bold text-text-primary">Pacientes</h1>
+          <p className="text-secondary text-sm mt-1">
             Gestiona las solicitudes y pacientes asignados a tu cuenta.
           </p>
         </div>
@@ -222,13 +222,13 @@ export default function UsuariosPage() {
             className={`flex items-center gap-2 h-9 px-4 rounded-xl text-sm font-semibold transition-colors ${
               tabEstatus === key
                 ? "bg-primary text-white"
-                : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
+                : "bg-white border border-border text-secondary hover:bg-background-secondary"
             }`}
           >
             {label}
             <span
               className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${
-                tabEstatus === key ? "bg-white/20 text-white" : "bg-gray-100 text-gray-500"
+                tabEstatus === key ? "bg-white/20 text-white" : "bg-surface-muted text-secondary"
               }`}
             >
               {counts[key]}
@@ -238,18 +238,18 @@ export default function UsuariosPage() {
       </div>
 
       {/* Search */}
-      <div className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl px-4 h-11 mb-5 max-w-sm shadow-sm">
-        <Search size={16} className="text-gray-400 shrink-0" />
+      <div className="flex items-center gap-3 bg-white border border-border rounded-xl px-4 h-11 mb-5 max-w-sm shadow-sm">
+        <Search size={16} className="text-muted shrink-0" />
         <input
           placeholder="Buscar por nombre o correo..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="flex-1 text-sm focus:outline-none text-gray-700"
+          className="flex-1 text-sm focus:outline-none text-text-primary"
         />
       </div>
 
       {error && (
-        <div className="mb-4 flex items-center justify-between bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl px-4 py-3">
+        <div className="mb-4 flex items-center justify-between bg-error-soft border border-error/30 text-error text-sm rounded-xl px-4 py-3">
           <span>{error}</span>
           <button onClick={reload} className="font-semibold hover:underline">
             Reintentar
@@ -258,13 +258,13 @@ export default function UsuariosPage() {
       )}
 
       {loading ? (
-        <p className="text-sm text-gray-400 py-10 text-center">Cargando pacientes...</p>
+        <p className="text-sm text-muted py-10 text-center">Cargando pacientes...</p>
       ) : (
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-100 bg-gray-50/50">
+              <tr className="border-b border-divider bg-background-secondary/50">
                 {[
                   "Nombre",
                   "Correo",
@@ -277,30 +277,30 @@ export default function UsuariosPage() {
                 ].map((h) => (
                   <th
                     key={h}
-                    className="text-left px-4 py-3.5 text-xs font-semibold text-gray-500"
+                    className="text-left px-4 py-3.5 text-xs font-semibold text-secondary"
                   >
                     {h}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-divider">
               {filtered.map((u) => {
                 const nombre = u.nombre_completo || "Usuario sin nombre";
                 const isPendiente = u.estatus === "pendiente";
                 const isAprobado  = u.estatus === "aprobado";
 
                 const rowBg = isPendiente
-                  ? "bg-amber-50/30 hover:bg-amber-50/60"
+                  ? "bg-warning-soft/30 hover:bg-warning-soft/60"
                   : isAprobado && u.is_active
-                  ? "bg-emerald-50/30 hover:bg-emerald-50/60"
-                  : "bg-red-50/30 hover:bg-red-50/60";
+                  ? "bg-success-soft/30 hover:bg-success-soft/60"
+                  : "bg-error-soft/30 hover:bg-error-soft/60";
 
                 const avatarBg = isPendiente
-                  ? "bg-amber-100 text-amber-600"
+                  ? "bg-warning-soft text-warning"
                   : isAprobado && u.is_active
                   ? "bg-primary/10 text-primary"
-                  : "bg-red-100 text-red-500";
+                  : "bg-error-soft text-error";
 
                 return (
                   <tr key={u.id} className={`transition-colors ${rowBg}`}>
@@ -317,14 +317,14 @@ export default function UsuariosPage() {
                             .toUpperCase()}
                         </div>
                         <div className="flex flex-col gap-1">
-                          <span className="font-medium text-gray-900">{nombre}</span>
+                          <span className="font-medium text-text-primary">{nombre}</span>
                           {!u.movil_vinculado && <ManualBadge />}
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3.5 text-gray-500 text-xs">{u.email || "—"}</td>
-                    <td className="px-4 py-3.5 text-gray-500 text-xs">{u.telefono || "—"}</td>
-                    <td className="px-4 py-3.5 text-gray-600 capitalize text-xs">
+                    <td className="px-4 py-3.5 text-secondary text-xs">{u.email || "—"}</td>
+                    <td className="px-4 py-3.5 text-secondary text-xs">{u.telefono || "—"}</td>
+                    <td className="px-4 py-3.5 text-secondary capitalize text-xs">
                       {u.sexo || "—"}
                     </td>
                     <td className="px-4 py-3.5">
@@ -333,7 +333,7 @@ export default function UsuariosPage() {
                     <td className="px-4 py-3.5">
                       <EstatusBadge perfil={u} />
                     </td>
-                    <td className="px-4 py-3.5 text-gray-500 text-xs">
+                    <td className="px-4 py-3.5 text-secondary text-xs">
                       {u.created_at
                         ? new Date(u.created_at).toLocaleDateString("es-MX")
                         : "—"}
@@ -343,7 +343,7 @@ export default function UsuariosPage() {
                         {/* Ver detalle — siempre visible */}
                         <button
                           onClick={() => setSelected(u)}
-                          className="w-8 h-8 rounded-xl border border-gray-200 hover:border-primary hover:bg-primary/5 flex items-center justify-center transition-colors text-gray-500 hover:text-primary"
+                          className="w-8 h-8 rounded-xl border border-border hover:border-primary hover:bg-primary/5 flex items-center justify-center transition-colors text-secondary hover:text-primary"
                           title="Ver detalle"
                         >
                           <Eye size={15} />
@@ -354,13 +354,13 @@ export default function UsuariosPage() {
                           <>
                             <button
                               onClick={() => setPendingAction({ type: "aprobar", perfil: u })}
-                              className="h-8 px-3 rounded-xl border border-emerald-200 text-emerald-700 text-xs font-semibold hover:bg-emerald-50 hover:border-emerald-300 transition-colors inline-flex items-center gap-1"
+                              className="h-8 px-3 rounded-xl border border-success/30 text-success text-xs font-semibold hover:bg-success-soft hover:border-success/50 transition-colors inline-flex items-center gap-1"
                             >
                               <Check size={13} /> Aprobar
                             </button>
                             <button
                               onClick={() => setPendingAction({ type: "rechazar", perfil: u })}
-                              className="h-8 px-3 rounded-xl border border-red-200 text-red-600 text-xs font-semibold hover:bg-red-50 hover:border-red-300 transition-colors inline-flex items-center gap-1"
+                              className="h-8 px-3 rounded-xl border border-error/30 text-error text-xs font-semibold hover:bg-error-soft hover:border-error/50 transition-colors inline-flex items-center gap-1"
                             >
                               <X size={13} /> Rechazar
                             </button>
@@ -373,8 +373,8 @@ export default function UsuariosPage() {
                             onClick={() => setPendingAction({ type: "toggle", perfil: u })}
                             className={`h-8 px-3 rounded-xl border text-xs font-semibold transition-colors ${
                               u.is_active
-                                ? "border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300"
-                                : "border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-300"
+                                ? "border-error/30 text-error hover:bg-error-soft hover:border-error/50"
+                                : "border-success/30 text-success hover:bg-success-soft hover:border-success/50"
                             }`}
                           >
                             {u.is_active ? "Deshabilitar" : "Habilitar"}
@@ -388,7 +388,7 @@ export default function UsuariosPage() {
 
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-10 text-center text-gray-400 text-sm">
+                  <td colSpan={8} className="px-4 py-10 text-center text-muted text-sm">
                     {search
                       ? "No se encontraron pacientes con ese criterio."
                       : tabEstatus === "pendiente"

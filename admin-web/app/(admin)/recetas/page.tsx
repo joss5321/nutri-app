@@ -50,13 +50,13 @@ function Pagination({
       <button
         onClick={() => onChange(page - 1)}
         disabled={page === 1}
-        className="h-9 px-3 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        className="h-9 px-3 rounded-xl border border-border text-sm text-secondary hover:bg-background-secondary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
       >
         ← Anterior
       </button>
       {pages.map((p, i) =>
         p === "..." ? (
-          <span key={`e${i}`} className="px-1 text-gray-400 text-sm select-none">
+          <span key={`e${i}`} className="px-1 text-muted text-sm select-none">
             …
           </span>
         ) : (
@@ -66,7 +66,7 @@ function Pagination({
             className={`h-9 w-9 rounded-xl text-sm font-semibold border transition-colors ${
               p === page
                 ? "bg-primary text-white border-primary"
-                : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                : "border-border text-secondary hover:bg-background-secondary"
             }`}
           >
             {p}
@@ -76,7 +76,7 @@ function Pagination({
       <button
         onClick={() => onChange(page + 1)}
         disabled={page === totalPages}
-        className="h-9 px-3 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        className="h-9 px-3 rounded-xl border border-border text-sm text-secondary hover:bg-background-secondary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
       >
         Siguiente →
       </button>
@@ -107,11 +107,11 @@ function RecipeDetail({
   const [tab, setTab] = useState<"ing" | "prep" | "info">("ing");
 
   return (
-    <div className="w-96 shrink-0 bg-white border-l border-gray-200 flex flex-col h-full overflow-y-auto">
+    <div className="w-96 shrink-0 bg-white border-l border-border flex flex-col h-full overflow-y-auto">
       {/* Header */}
-      <div className="flex items-start gap-3 p-4 border-b border-gray-100">
+      <div className="flex items-start gap-3 p-4 border-b border-divider">
         <div className="flex-1 min-w-0">
-          <p className="font-bold text-gray-900 text-base leading-snug">{receta.nombre}</p>
+          <p className="font-bold text-text-primary text-base leading-snug">{receta.nombre}</p>
           {receta.tipo && (
             <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium inline-block mt-1">
               {receta.tipo}
@@ -120,7 +120,7 @@ function RecipeDetail({
         </div>
         <button
           onClick={onClose}
-          className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 shrink-0 text-lg"
+          className="w-8 h-8 rounded-full hover:bg-surface-muted flex items-center justify-center text-muted shrink-0 text-lg"
         >
           ×
         </button>
@@ -132,18 +132,18 @@ function RecipeDetail({
       </div>
 
       {/* Quick info */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 text-xs text-gray-500">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-divider text-xs text-secondary">
         <span className="inline-flex items-center gap-1"><Clock size={11} /> {receta.tiempo_min ?? "—"} min</span>
         <span className="inline-flex items-center gap-1"><BarChart3 size={11} /> {receta.nivel ?? "—"}</span>
         <span className="inline-flex items-center gap-1"><Flame size={11} /> {receta.calorias ?? "—"} kcal</span>
       </div>
 
       {/* Actions */}
-      <div className="flex gap-2 px-4 py-3 border-b border-gray-100">
+      <div className="flex gap-2 px-4 py-3 border-b border-divider">
         {canEdit && (
           <button
             onClick={onEdit}
-            className="flex-1 flex items-center justify-center gap-1 h-9 rounded-xl border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50"
+            className="flex-1 flex items-center justify-center gap-1 h-9 rounded-xl border border-border text-secondary text-xs font-semibold hover:bg-background-secondary"
           >
             <Pencil size={12} /> Editar
           </button>
@@ -151,7 +151,7 @@ function RecipeDetail({
         <button
           onClick={onDuplicate}
           disabled={duplicating}
-          className="flex-1 flex items-center justify-center gap-1 h-9 rounded-xl border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50 disabled:opacity-50"
+          className="flex-1 flex items-center justify-center gap-1 h-9 rounded-xl border border-border text-secondary text-xs font-semibold hover:bg-background-secondary disabled:opacity-50"
         >
           <ClipboardList size={12} /> {duplicating ? "Duplicando..." : "Duplicar"}
         </button>
@@ -159,7 +159,7 @@ function RecipeDetail({
           <button
             onClick={onDelete}
             disabled={deleting}
-            className="flex-1 flex items-center justify-center gap-1 h-9 rounded-xl border border-red-200 text-red-600 text-xs font-semibold hover:bg-red-50 disabled:opacity-50"
+            className="flex-1 flex items-center justify-center gap-1 h-9 rounded-xl border border-error/30 text-error text-xs font-semibold hover:bg-error-soft disabled:opacity-50"
           >
             <Trash2 size={12} /> {deleting ? "Eliminando..." : "Eliminar"}
           </button>
@@ -167,7 +167,7 @@ function RecipeDetail({
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-gray-100 px-4">
+      <div className="flex border-b border-divider px-4">
         {(
           [
             ["ing", "Ingredientes"],
@@ -181,7 +181,7 @@ function RecipeDetail({
             className={`py-3 px-2 text-xs font-semibold border-b-2 transition-colors ${
               tab === key
                 ? "border-primary text-primary"
-                : "border-transparent text-gray-500 hover:text-gray-700"
+                : "border-transparent text-secondary hover:text-text-primary"
             }`}
           >
             {label}
@@ -193,7 +193,7 @@ function RecipeDetail({
       <div className="p-4 flex-1">
         {tab === "ing" && (
           <div>
-            <p className="text-xs font-bold text-gray-700 mb-3">
+            <p className="text-xs font-bold text-text-primary mb-3">
               Ingredientes{receta.porciones ? ` (${receta.porciones})` : ""}
             </p>
             {receta.ingredientes.length > 0 ? (
@@ -201,22 +201,22 @@ function RecipeDetail({
                 {receta.ingredientes.map((ing) => (
                   <div
                     key={ing.id}
-                    className="flex items-center gap-2 py-2 border-b border-gray-50 last:border-0"
+                    className="flex items-center gap-2 py-2 border-b border-divider last:border-0"
                   >
                     <input type="checkbox" className="accent-primary" />
-                    <span className="text-sm text-gray-700">{ing.descripcion}</span>
+                    <span className="text-sm text-text-primary">{ing.descripcion}</span>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-gray-400">Sin ingredientes registrados.</p>
+              <p className="text-sm text-muted">Sin ingredientes registrados.</p>
             )}
           </div>
         )}
 
         {tab === "prep" && (
           <div>
-            <p className="text-xs font-bold text-gray-700 mb-3">Pasos de preparación</p>
+            <p className="text-xs font-bold text-text-primary mb-3">Pasos de preparación</p>
             {receta.pasos.length > 0 ? (
               <div className="flex flex-col gap-3">
                 {receta.pasos.map((paso) => (
@@ -224,12 +224,12 @@ function RecipeDetail({
                     <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold shrink-0 mt-0.5">
                       {paso.numero}
                     </div>
-                    <p className="text-sm text-gray-700 leading-relaxed">{paso.descripcion}</p>
+                    <p className="text-sm text-text-primary leading-relaxed">{paso.descripcion}</p>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-gray-400">Sin pasos registrados.</p>
+              <p className="text-sm text-muted">Sin pasos registrados.</p>
             )}
           </div>
         )}
@@ -237,7 +237,7 @@ function RecipeDetail({
         {tab === "info" && (
           <div className="flex flex-col gap-4">
             <div>
-              <p className="text-xs font-bold text-gray-700 mb-2">Macronutrientes (por porción)</p>
+              <p className="text-xs font-bold text-text-primary mb-2">Macronutrientes (por porción)</p>
               {[
                 { label: "Proteínas",     value: receta.proteinas_g ?? 0,     unit: "g", color: "bg-primary"    },
                 { label: "Carbohidratos", value: receta.carbohidratos_g ?? 0, unit: "g", color: "bg-blue-400"   },
@@ -245,16 +245,16 @@ function RecipeDetail({
               ].map((m) => (
                 <div key={m.label} className="flex items-center gap-2 mb-2">
                   <span className={`w-2 h-2 rounded-full ${m.color} shrink-0`} />
-                  <span className="text-sm text-gray-700 flex-1">{m.label}</span>
-                  <span className="text-sm font-bold text-gray-900">
+                  <span className="text-sm text-text-primary flex-1">{m.label}</span>
+                  <span className="text-sm font-bold text-text-primary">
                     {m.value}
                     {m.unit}
                   </span>
                 </div>
               ))}
             </div>
-            <div className="bg-gray-50 rounded-xl p-3">
-              <p className="text-xs font-bold text-gray-700 mb-2">Información adicional</p>
+            <div className="bg-background-secondary rounded-xl p-3">
+              <p className="text-xs font-bold text-text-primary mb-2">Información adicional</p>
               {[
                 { label: "Dificultad",            value: receta.nivel ?? "—" },
                 { label: "Tiempo de preparación", value: receta.tiempo_prep_min != null ? `${receta.tiempo_prep_min} min` : "—" },
@@ -264,10 +264,10 @@ function RecipeDetail({
               ].map((r) => (
                 <div
                   key={r.label}
-                  className="flex justify-between text-xs py-1 border-b border-gray-100 last:border-0"
+                  className="flex justify-between text-xs py-1 border-b border-divider last:border-0"
                 >
-                  <span className="text-gray-500">{r.label}</span>
-                  <span className="font-medium text-gray-800">{r.value}</span>
+                  <span className="text-secondary">{r.label}</span>
+                  <span className="font-medium text-text-primary">{r.value}</span>
                 </div>
               ))}
             </div>
@@ -480,8 +480,8 @@ export default function RecetasPage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Recetas</h1>
-            <p className="text-gray-500 text-sm mt-1">
+            <h1 className="text-2xl font-bold text-text-primary">Recetas</h1>
+            <p className="text-secondary text-sm mt-1">
               Gestiona y crea recetas saludables para tus planes nutricionales.
             </p>
           </div>
@@ -490,7 +490,7 @@ export default function RecetasPage() {
               <button
                 onClick={() => setShowVincular(true)}
                 title="Liga los ingredientes de las recetas al catálogo de alimentos para poder calcular sus calorías"
-                className="flex items-center gap-2 h-10 px-4 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
+                className="flex items-center gap-2 h-10 px-4 border border-border rounded-xl text-sm font-semibold text-secondary hover:bg-background-secondary transition-colors"
               >
                 <Link2 size={15} /> Vincular ingredientes
               </button>
@@ -500,7 +500,7 @@ export default function RecetasPage() {
                 onClick={handleRecalcularCalorias}
                 disabled={recalculando}
                 title="Recalcula calorías y macros de las recetas cuyos ingredientes están ligados al catálogo de alimentos"
-                className="flex items-center gap-2 h-10 px-4 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                className="flex items-center gap-2 h-10 px-4 border border-border rounded-xl text-sm font-semibold text-secondary hover:bg-background-secondary disabled:opacity-50 transition-colors"
               >
                 <RefreshCw size={15} className={recalculando ? "animate-spin" : ""} />
                 {recalculando ? "Recalculando..." : "Recalcular calorías"}
@@ -516,32 +516,32 @@ export default function RecetasPage() {
         </div>
 
         {recalcResumen && (
-          <div className="mb-4 flex items-center justify-between bg-primary/5 border border-primary/20 text-gray-700 text-sm rounded-xl px-4 py-3">
+          <div className="mb-4 flex items-center justify-between bg-primary/5 border border-primary/20 text-text-primary text-sm rounded-xl px-4 py-3">
             <span>{recalcResumen}</span>
-            <button onClick={() => setRecalcResumen(null)} className="text-gray-400 hover:text-gray-600 shrink-0 ml-3"><X size={16} /></button>
+            <button onClick={() => setRecalcResumen(null)} className="text-muted hover:text-secondary shrink-0 ml-3"><X size={16} /></button>
           </div>
         )}
 
         {/* Filters — Categoría and Dificultad removed; search + tipo remain */}
         <div className="flex flex-wrap items-end gap-3 mb-6">
           <div>
-            <label className="text-xs text-gray-400 font-medium mb-0.5 ml-1 block">&nbsp;</label>
-            <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 h-10 shadow-sm">
-              <Search size={15} className="text-gray-400 shrink-0" />
+            <label className="text-xs text-muted font-medium mb-0.5 ml-1 block">&nbsp;</label>
+            <div className="flex items-center gap-2 bg-white border border-border rounded-xl px-3 h-10 shadow-sm">
+              <Search size={15} className="text-muted shrink-0" />
               <input
                 placeholder="Buscar recetas..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-40 text-sm focus:outline-none text-gray-700"
+                className="w-40 text-sm focus:outline-none text-text-primary"
               />
             </div>
           </div>
           <div>
-            <label className="text-xs text-gray-400 font-medium mb-0.5 ml-1 block">Tipo</label>
+            <label className="text-xs text-muted font-medium mb-0.5 ml-1 block">Tipo</label>
             <select
               value={tipo}
               onChange={(e) => handleTipoChange(e.target.value)}
-              className="h-10 border border-gray-200 rounded-xl px-3 text-sm focus:outline-none focus:border-primary bg-white shadow-sm"
+              className="h-10 border border-border rounded-xl px-3 text-sm focus:outline-none focus:border-primary bg-white shadow-sm"
             >
               {["Todas", ...TIPOS_RECETA].map((o) => (
                 <option key={o}>{o}</option>
@@ -551,7 +551,7 @@ export default function RecetasPage() {
         </div>
 
         {error && (
-          <div className="mb-4 flex items-center justify-between bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl px-4 py-3">
+          <div className="mb-4 flex items-center justify-between bg-error-soft border border-error/30 text-error text-sm rounded-xl px-4 py-3">
             <span>{error}</span>
             <button onClick={reload} className="font-semibold hover:underline">
               Reintentar
@@ -560,24 +560,24 @@ export default function RecetasPage() {
         )}
 
         {loading ? (
-          <p className="text-sm text-gray-400 py-10 text-center">Cargando recetas...</p>
+          <p className="text-sm text-muted py-10 text-center">Cargando recetas...</p>
         ) : (
           <>
             {/* Counter */}
-            <p className="text-sm text-gray-500 mb-4">
+            <p className="text-sm text-secondary mb-4">
               {totalCount > 0 ? (
                 <>
                   Mostrando{" "}
-                  <span className="font-semibold text-gray-900">
+                  <span className="font-semibold text-text-primary">
                     {rangeFrom}–{rangeTo}
                   </span>{" "}
                   de{" "}
-                  <span className="font-semibold text-gray-900">{totalCount}</span>{" "}
+                  <span className="font-semibold text-text-primary">{totalCount}</span>{" "}
                   recetas
                 </>
               ) : (
                 <>
-                  <span className="font-semibold text-gray-900">0</span> recetas encontradas
+                  <span className="font-semibold text-text-primary">0</span> recetas encontradas
                 </>
               )}
             </p>
@@ -589,7 +589,7 @@ export default function RecetasPage() {
                   key={r.id}
                   onClick={() => setSelected(r.id === selected?.id ? null : r)}
                   className={`bg-white rounded-2xl border overflow-hidden cursor-pointer hover:shadow-md transition-all ${
-                    selected?.id === r.id ? "border-primary shadow-md" : "border-gray-200"
+                    selected?.id === r.id ? "border-primary shadow-md" : "border-border"
                   }`}
                 >
                   <div className="relative h-40 bg-primary/5 flex items-center justify-center">
@@ -602,14 +602,14 @@ export default function RecetasPage() {
                   </div>
 
                   <div className="p-4">
-                    <p className="font-semibold text-gray-900 text-sm leading-snug mb-2">
+                    <p className="font-semibold text-text-primary text-sm leading-snug mb-2">
                       {r.nombre}
                     </p>
-                    <div className="flex items-center gap-3 text-xs text-gray-500 mb-2">
+                    <div className="flex items-center gap-3 text-xs text-secondary mb-2">
                       <span className="inline-flex items-center gap-1"><Clock size={11} /> {r.tiempo_min ?? "—"} min</span>
                       <span className="inline-flex items-center gap-1"><BarChart3 size={11} /> {r.nivel ?? "—"}</span>
                     </div>
-                    <p className="text-sm font-bold text-gray-900">{r.calorias ?? "—"} kcal</p>
+                    <p className="text-sm font-bold text-text-primary">{r.calorias ?? "—"} kcal</p>
                     {r.categoria_nutricional && (
                       <span className="mt-2 inline-block text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">
                         {r.categoria_nutricional}
@@ -623,7 +623,7 @@ export default function RecetasPage() {
                       {canEdit(r) && (
                         <button
                           onClick={() => setEditing(r)}
-                          className="flex-1 flex items-center justify-center gap-1 h-9 rounded-xl border border-gray-200 text-gray-600 text-xs font-semibold hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors"
+                          className="flex-1 flex items-center justify-center gap-1 h-9 rounded-xl border border-border text-secondary text-xs font-semibold hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors"
                         >
                           <Pencil size={12} /> Editar
                         </button>
@@ -631,7 +631,7 @@ export default function RecetasPage() {
                       <button
                         onClick={() => handleDuplicate(r)}
                         disabled={duplicatingId === r.id}
-                        className="h-9 px-3 rounded-xl border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50 flex items-center justify-center"
+                        className="h-9 px-3 rounded-xl border border-border text-secondary text-xs font-semibold hover:bg-background-secondary transition-colors disabled:opacity-50 flex items-center justify-center"
                       >
                         {duplicatingId === r.id ? "..." : <ClipboardList size={13} />}
                       </button>
@@ -639,7 +639,7 @@ export default function RecetasPage() {
                         <button
                           onClick={() => setConfirmDeleteId(r.id)}
                           disabled={deletingId === r.id}
-                          className="h-9 px-3 rounded-xl border border-gray-200 text-red-500 text-xs font-semibold hover:border-red-300 hover:bg-red-50 transition-colors disabled:opacity-50 flex items-center justify-center"
+                          className="h-9 px-3 rounded-xl border border-border text-error text-xs font-semibold hover:border-error/50 hover:bg-error-soft transition-colors disabled:opacity-50 flex items-center justify-center"
                         >
                           {deletingId === r.id ? "..." : <Trash2 size={13} />}
                         </button>
@@ -650,7 +650,7 @@ export default function RecetasPage() {
               ))}
 
               {recetas.length === 0 && (
-                <div className="col-span-3 flex flex-col items-center justify-center py-16 text-gray-400">
+                <div className="col-span-3 flex flex-col items-center justify-center py-16 text-muted">
                   <div className="w-14 h-14 rounded-full bg-brand-soft flex items-center justify-center mb-3">
                     <Utensils size={24} className="text-primary" />
                   </div>

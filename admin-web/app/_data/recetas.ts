@@ -1,6 +1,8 @@
 import { supabase } from "@/lib/supabase";
 import type { Alimento } from "./alimentos";
 
+const FOTOS_BUCKET = "recetas-fotos";
+
 export const TIPOS_RECETA = ["Desayuno", "Almuerzo", "Cena", "Colación", "Comida"] as const;
 export const NIVELES_RECETA = ["Fácil", "Medio", "Difícil"] as const;
 export const CATEGORIAS_NUTRICIONALES = [
@@ -49,6 +51,8 @@ export type Receta = {
   proteinas_g: number | null;
   carbohidratos_g: number | null;
   grasas_g: number | null;
+  foto_url: string | null;
+  foto_storage_path: string | null;
   user_id: string | null;
   receta_base_id: string | null;
   created_by: string | null;
@@ -300,10 +304,30 @@ export async function updateReceta(id: string, input: RecetaInput): Promise<Rece
     p_grasas_g: recetaData.grasas_g,
     p_ingredientes: ingredientes,
     p_pasos: pasos,
+    p_foto_url: recetaData.foto_url,
+    p_foto_storage_path: recetaData.foto_storage_path,
   });
   if (error) throw error;
 
   return fetchRecetaById(id);
+}
+
+/** Sube la foto de un platillo al bucket "recetas-fotos". */
+export async function uploadRecetaFoto(file: File): Promise<{ url: string; path: string }> {
+  const ext  = file.name.split(".").pop();
+  const path = `${crypto.randomUUID()}.${ext}`;
+
+  const { error } = await supabase.storage.from(FOTOS_BUCKET).upload(path, file);
+  if (error) throw error;
+
+  const { data } = supabase.storage.from(FOTOS_BUCKET).getPublicUrl(path);
+  return { url: data.publicUrl, path };
+}
+
+/** Elimina una foto previamente subida al bucket "recetas-fotos". */
+export async function deleteRecetaFoto(path: string): Promise<void> {
+  const { error } = await supabase.storage.from(FOTOS_BUCKET).remove([path]);
+  if (error) throw error;
 }
 
 export async function deleteReceta(id: string): Promise<void> {

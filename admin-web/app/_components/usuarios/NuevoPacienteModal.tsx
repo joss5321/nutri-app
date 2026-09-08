@@ -2,8 +2,8 @@
 import { useState } from "react";
 import { crearPacienteWeb } from "@/app/_data/nuevo_paciente";
 
-const IC = "w-full h-10 border border-gray-200 rounded-xl px-3 text-sm focus:outline-none focus:border-primary";
-const LB = "text-xs text-gray-500 font-medium block mb-1";
+const IC = "w-full h-10 border border-border rounded-xl px-3 text-sm focus:outline-none focus:border-primary";
+const LB = "text-xs text-secondary font-medium block mb-1";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -55,9 +55,9 @@ export default function NuevoPacienteModal({
         className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-6 border-b border-gray-100">
-          <h2 className="font-bold text-gray-900 text-lg">Nuevo paciente</h2>
-          <p className="text-sm text-gray-500 mt-1">
+        <div className="p-6 border-b border-divider">
+          <h2 className="font-bold text-text-primary text-lg">Nuevo paciente</h2>
+          <p className="text-sm text-secondary mt-1">
             Regístralo directamente aunque todavía no use la app móvil. Quedará asignado a tu
             cuenta y podrás asignarle rutinas, planes y citas de inmediato.
           </p>
@@ -117,14 +117,14 @@ export default function NuevoPacienteModal({
             </div>
           </div>
 
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-muted">
             Le enviaremos un correo de invitación para que active su acceso a la app móvil cuando
             quiera. Mientras tanto, aparecerá como &ldquo;Sin registro móvil&rdquo; en tu lista de
             pacientes, pero ya puedes asignarle rutinas, planes de alimentación y citas.
           </p>
 
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl px-4 py-3">
+            <div className="bg-error-soft border border-error/30 text-error text-sm rounded-xl px-4 py-3">
               {error}
             </div>
           )}
@@ -134,7 +134,7 @@ export default function NuevoPacienteModal({
           <button
             onClick={onClose}
             disabled={saving}
-            className="px-4 h-10 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50 disabled:opacity-50"
+            className="px-4 h-10 rounded-xl border border-border text-secondary text-sm hover:bg-background-secondary disabled:opacity-50"
           >
             Cancelar
           </button>

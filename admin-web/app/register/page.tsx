@@ -65,8 +65,8 @@ export default function RegisterPage() {
         {/* Logo */}
         <div className="relative z-10 flex items-center gap-3 p-8">
           <div className="w-10 h-10 rounded-xl bg-white shrink-0 flex items-center justify-center p-1.5">
-            {/* eslint-disable-next-line @next/next/no-img-element -- SVG local, next/image requiere dangerouslyAllowSVG */}
-            <img src="/branding/isotipo-myfittrack.svg" alt="MyFitTrack" width={612} height={792} className="w-full h-full object-contain" />
+            {/* eslint-disable-next-line @next/next/no-img-element -- asset de marca local, no requiere el pipeline de next/image */}
+            <img src="/branding/isotipo-myfittrack.png" alt="MyFitTrack" width={900} height={900} className="w-full h-full object-contain" />
           </div>
           <span className="text-white font-semibold text-lg tracking-wide">MyFitTrack</span>
         </div>
@@ -109,8 +109,8 @@ export default function RegisterPage() {
                 <MailCheck size={28} className="text-primary" />
               </div>
               <h2 className="text-2xl font-extrabold text-primary">¡Cuenta creada!</h2>
-              <p className="text-gray-500 text-sm">
-                Revisa tu correo <span className="font-semibold text-gray-700">{email}</span> para
+              <p className="text-secondary text-sm">
+                Revisa tu correo <span className="font-semibold text-text-primary">{email}</span> para
                 confirmar tu cuenta antes de iniciar sesión.
               </p>
               <button
@@ -124,85 +124,85 @@ export default function RegisterPage() {
             <>
               <div className="mb-8 text-center flex flex-col items-center">
                 <div className="mb-4 flex items-center gap-2.5">
-                  {/* eslint-disable-next-line @next/next/no-img-element -- SVG local, next/image requiere dangerouslyAllowSVG */}
-                  <img src="/branding/isotipo-myfittrack.svg" alt="MyFitTrack" width={612} height={792} className="h-14 w-auto" />
-                  <span className="text-xl font-extrabold text-gray-900 tracking-wide">MyFitTrack</span>
+                  {/* eslint-disable-next-line @next/next/no-img-element -- asset de marca local, no requiere el pipeline de next/image */}
+                  <img src="/branding/isotipo-myfittrack.png" alt="MyFitTrack" width={900} height={900} className="h-14 w-auto" />
+                  <span className="text-xl font-extrabold text-text-primary tracking-wide">MyFitTrack</span>
                 </div>
                 <h2 className="text-3xl font-extrabold text-primary">Crear cuenta</h2>
-                <p className="text-gray-500 mt-2 text-sm">Regístrate para administrar la plataforma</p>
+                <p className="text-secondary mt-2 text-sm">Regístrate para administrar la plataforma</p>
               </div>
 
               <form onSubmit={handleRegister} className="flex flex-col gap-4">
                 {/* Nombre */}
                 <div>
-                  <div className="flex items-center gap-3 bg-gray-100 rounded-2xl px-4 h-14 border border-transparent focus-within:border-primary transition-colors">
-                    <User size={18} className="text-gray-400 shrink-0" />
+                  <div className="flex items-center gap-3 bg-surface-muted rounded-2xl px-4 h-14 border border-transparent focus-within:border-primary transition-colors">
+                    <User size={18} className="text-muted shrink-0" />
                     <input
                       type="text"
                       placeholder="Nombre completo"
                       value={name}
                       onChange={(e) => { setName(e.target.value); setErrors((er) => ({ ...er, name: "" })); }}
-                      className="flex-1 bg-transparent outline-none text-gray-700 text-sm"
+                      className="flex-1 bg-transparent outline-none text-text-primary text-sm"
                     />
                   </div>
-                  {errors.name && <p className="text-red-500 text-xs mt-1 ml-4">{errors.name}</p>}
+                  {errors.name && <p className="text-error text-xs mt-1 ml-4">{errors.name}</p>}
                 </div>
 
                 {/* Email */}
                 <div>
-                  <div className="flex items-center gap-3 bg-gray-100 rounded-2xl px-4 h-14 border border-transparent focus-within:border-primary transition-colors">
-                    <Mail size={18} className="text-gray-400 shrink-0" />
+                  <div className="flex items-center gap-3 bg-surface-muted rounded-2xl px-4 h-14 border border-transparent focus-within:border-primary transition-colors">
+                    <Mail size={18} className="text-muted shrink-0" />
                     <input
                       type="email"
                       placeholder="Correo electrónico"
                       value={email}
                       onChange={(e) => { setEmail(e.target.value); setErrors((er) => ({ ...er, email: "" })); }}
-                      className="flex-1 bg-transparent outline-none text-gray-700 text-sm"
+                      className="flex-1 bg-transparent outline-none text-text-primary text-sm"
                     />
                   </div>
-                  {errors.email && <p className="text-red-500 text-xs mt-1 ml-4">{errors.email}</p>}
+                  {errors.email && <p className="text-error text-xs mt-1 ml-4">{errors.email}</p>}
                 </div>
 
                 {/* Password */}
                 <div>
-                  <div className="flex items-center gap-3 bg-gray-100 rounded-2xl px-4 h-14 border border-transparent focus-within:border-primary transition-colors">
-                    <Lock size={18} className="text-gray-400 shrink-0" />
+                  <div className="flex items-center gap-3 bg-surface-muted rounded-2xl px-4 h-14 border border-transparent focus-within:border-primary transition-colors">
+                    <Lock size={18} className="text-muted shrink-0" />
                     <input
                       type={showPass ? "text" : "password"}
                       placeholder="Contraseña"
                       value={password}
                       onChange={(e) => { setPassword(e.target.value); setErrors((er) => ({ ...er, password: "" })); }}
-                      className="flex-1 bg-transparent outline-none text-gray-700 text-sm"
+                      className="flex-1 bg-transparent outline-none text-text-primary text-sm"
                     />
-                    <button type="button" onClick={() => setShowPass((v) => !v)} className="text-gray-400 hover:text-gray-600">
+                    <button type="button" onClick={() => setShowPass((v) => !v)} className="text-muted hover:text-secondary">
                       {showPass ? (
-                          <EyeOff size={18} className="text-gray-400 hover:text-gray-600 cursor-pointer" />) : 
-                          (<Eye size={18} className="text-gray-400 hover:text-gray-600 cursor-pointer" />)
+                          <EyeOff size={18} className="text-muted hover:text-secondary cursor-pointer" />) : 
+                          (<Eye size={18} className="text-muted hover:text-secondary cursor-pointer" />)
                       }
                     </button>
                   </div>
-                  {errors.password && <p className="text-red-500 text-xs mt-1 ml-4">{errors.password}</p>}
+                  {errors.password && <p className="text-error text-xs mt-1 ml-4">{errors.password}</p>}
                 </div>
 
                 {/* Confirm password */}
                 <div>
-                  <div className="flex items-center gap-3 bg-gray-100 rounded-2xl px-4 h-14 border border-transparent focus-within:border-primary transition-colors">
-                    <Lock size={18} className="text-gray-400 shrink-0" />
+                  <div className="flex items-center gap-3 bg-surface-muted rounded-2xl px-4 h-14 border border-transparent focus-within:border-primary transition-colors">
+                    <Lock size={18} className="text-muted shrink-0" />
                     <input
                       type={showConfirm ? "text" : "password"}
                       placeholder="Confirmar contraseña"
                       value={confirmPassword}
                       onChange={(e) => { setConfirmPassword(e.target.value); setErrors((er) => ({ ...er, confirmPassword: "" })); }}
-                      className="flex-1 bg-transparent outline-none text-gray-700 text-sm"
+                      className="flex-1 bg-transparent outline-none text-text-primary text-sm"
                     />
-                    <button type="button" onClick={() => setShowConfirm((v) => !v)} className="text-gray-400 hover:text-gray-600">
+                    <button type="button" onClick={() => setShowConfirm((v) => !v)} className="text-muted hover:text-secondary">
                       {showConfirm ? (
-                          <EyeOff size={18} className="text-gray-400 hover:text-gray-600 cursor-pointer" />) : 
-                          (<Eye size={18} className="text-gray-400 hover:text-gray-600 cursor-pointer" />)
+                          <EyeOff size={18} className="text-muted hover:text-secondary cursor-pointer" />) : 
+                          (<Eye size={18} className="text-muted hover:text-secondary cursor-pointer" />)
                       }
                     </button>
                   </div>
-                  {errors.confirmPassword && <p className="text-red-500 text-xs mt-1 ml-4">{errors.confirmPassword}</p>}
+                  {errors.confirmPassword && <p className="text-error text-xs mt-1 ml-4">{errors.confirmPassword}</p>}
                 </div>
 
                 {/* Submit */}
@@ -217,7 +217,7 @@ export default function RegisterPage() {
 
               {/* Footer */}
               <div className="flex items-center justify-center gap-1 mt-6">
-                <span className="text-gray-500 text-sm">¿Ya tienes cuenta?</span>
+                <span className="text-secondary text-sm">¿Ya tienes cuenta?</span>
                 <a href="/login" className="text-primary text-sm font-semibold hover:underline">
                   Inicia sesión
                 </a>

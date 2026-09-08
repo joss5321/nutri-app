@@ -36,14 +36,14 @@ function imcInfo(imc: number) {
   return            { label: "Obesidad",      color: "bg-red-50 text-red-600" };
 }
 
-const IC  = "w-full h-10 border border-gray-200 rounded-xl px-3 text-sm focus:outline-none focus:border-primary";
-const LB  = "text-xs text-gray-500 font-medium block mb-1";
-const TXA = "w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary resize-none";
+const IC  = "w-full h-10 border border-border rounded-xl px-3 text-sm focus:outline-none focus:border-primary";
+const LB  = "text-xs text-secondary font-medium block mb-1";
+const TXA = "w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary resize-none";
 
 // ── UI atoms ─────────────────────────────────────────────────
 function Nota({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
-    <div className="border-t border-dashed border-gray-200 pt-3 mt-1">
+    <div className="border-t border-dashed border-border pt-3 mt-1">
       <label className={`${LB} inline-flex items-center gap-1`}><StickyNote size={12} /> Nota clínica</label>
       <textarea value={value} onChange={(e) => onChange(e.target.value)}
         rows={2} placeholder="Notas adicionales para esta sección..."
@@ -57,7 +57,7 @@ function Ck({ label, checked, onChange }: { label: string; checked: boolean; onC
     <label className="flex items-center gap-2 cursor-pointer select-none">
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)}
         className="w-4 h-4 rounded accent-primary shrink-0" />
-      <span className="text-sm text-gray-700">{label}</span>
+      <span className="text-sm text-text-primary">{label}</span>
     </label>
   );
 }
@@ -72,7 +72,7 @@ function AfRow({ label, checked, onCheck, quien, onQuien }: {
       {checked && (
         <input value={quien} onChange={(e) => onQuien(e.target.value)}
           placeholder="¿Quién en la familia?"
-          className="flex-1 h-8 border border-gray-200 rounded-lg px-2 text-sm focus:outline-none focus:border-primary" />
+          className="flex-1 h-8 border border-border rounded-lg px-2 text-sm focus:outline-none focus:border-primary" />
       )}
     </div>
   );
@@ -89,7 +89,7 @@ function YesNo({ value, onChange, labels = ["Sí", "No"] }: {
           className={`px-4 h-8 rounded-xl text-xs font-semibold border transition-colors ${
             value === b
               ? "bg-primary text-white border-primary"
-              : "border-gray-200 text-gray-600 hover:bg-gray-50"
+              : "border-border text-secondary hover:bg-background-secondary"
           }`}>
           {labels[i]}
         </button>
@@ -104,13 +104,13 @@ function Accordion({ title, icon: Icon, isOpen, onToggle, children }: {
   title: string; icon: LucideIcon; isOpen: boolean; onToggle: () => void; children: React.ReactNode;
 }) {
   return (
-    <div className="border border-gray-200 rounded-xl overflow-hidden">
+    <div className="border border-border rounded-xl overflow-hidden">
       <button type="button" onClick={onToggle}
-        className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left">
-        <span className="flex items-center gap-2 font-semibold text-gray-800 text-sm">
+        className="w-full flex items-center justify-between px-4 py-3 bg-background-secondary hover:bg-surface-muted transition-colors text-left">
+        <span className="flex items-center gap-2 font-semibold text-text-primary text-sm">
           <Icon size={15} className="text-primary shrink-0" /> {title}
         </span>
-        {isOpen ? <ChevronUp size={15} className="text-gray-400" /> : <ChevronDown size={15} className="text-gray-400" />}
+        {isOpen ? <ChevronUp size={15} className="text-muted" /> : <ChevronDown size={15} className="text-muted" />}
       </button>
       {isOpen && <div className="p-4 space-y-4">{children}</div>}
     </div>
@@ -405,10 +405,10 @@ export default function InformacionPersonalForm({
     }
   };
 
-  if (loading) return <p className="text-sm text-gray-400 text-center py-10">Cargando información...</p>;
+  if (loading) return <p className="text-sm text-muted text-center py-10">Cargando información...</p>;
   if (error) return (
     <div className="flex flex-col items-center justify-center gap-3 py-10">
-      <p className="text-sm text-red-600">{error}</p>
+      <p className="text-sm text-error">{error}</p>
       <button onClick={load} className="text-sm font-semibold text-primary hover:underline">Reintentar</button>
     </div>
   );
@@ -416,7 +416,7 @@ export default function InformacionPersonalForm({
   const SaveBtn = ({ label = "Guardar datos personales" }: { label?: string }) => (
     <div className="flex items-center justify-end gap-3">
       {perfilFeedback && (
-        <span className={`text-xs font-medium ${perfilFeedback.type === "success" ? "text-green-600" : "text-red-600"}`}>
+        <span className={`text-xs font-medium ${perfilFeedback.type === "success" ? "text-success" : "text-error"}`}>
           {perfilFeedback.text}
         </span>
       )}
@@ -448,14 +448,14 @@ export default function InformacionPersonalForm({
         <button
           type="button"
           onClick={handleExportPdf}
-          className="flex items-center gap-2 h-9 px-4 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
+          className="flex items-center gap-2 h-9 px-4 rounded-xl border border-border text-sm font-semibold text-text-primary hover:bg-background-secondary transition-colors">
           <FileText size={15} /> Exportar historial a PDF
         </button>
       </div>
 
       {/* Banner de borrador no guardado */}
       {hasDraft && (
-        <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 font-medium">
+        <div className="flex items-center gap-2 px-4 py-2.5 bg-warning-soft border border-warning/30 rounded-xl text-xs text-warning font-medium">
           <StickyNote size={14} className="shrink-0" />
           <span>Borrador restaurado — tienes cambios sin guardar en este formulario.</span>
           <button
@@ -469,7 +469,7 @@ export default function InformacionPersonalForm({
               setReady(false);
               load();
             }}
-            className="ml-auto shrink-0 text-amber-600 hover:text-amber-800 underline font-semibold">
+            className="ml-auto shrink-0 text-warning hover:opacity-70 underline font-semibold">
             Descartar cambios
           </button>
         </div>
@@ -479,8 +479,8 @@ export default function InformacionPersonalForm({
           SECCIÓN 1 — DATOS PERSONALES
       ═══════════════════════════════════════════════ */}
       <div>
-        <p className="font-semibold text-gray-900">Datos personales</p>
-        <p className="text-sm text-gray-500">Información básica del usuario.</p>
+        <p className="font-semibold text-text-primary">Datos personales</p>
+        <p className="text-sm text-secondary">Información básica del usuario.</p>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
@@ -502,7 +502,7 @@ export default function InformacionPersonalForm({
         </div>
         <div>
           <label className={LB}>Edad</label>
-          <div className="h-10 border border-gray-100 bg-gray-50 rounded-xl px-3 flex items-center text-sm text-gray-600">
+          <div className="h-10 border border-divider bg-background-secondary rounded-xl px-3 flex items-center text-sm text-secondary">
             {edad != null ? `${edad} años` : "—"}
           </div>
         </div>
@@ -536,14 +536,14 @@ export default function InformacionPersonalForm({
 
       <SaveBtn />
 
-      <div className="border-t border-gray-200" />
+      <div className="border-t border-border" />
 
       {/* ═══════════════════════════════════════════════
           SECCIÓN 2 — MEDIDAS ANTROPOMÉTRICAS (sin cambios)
       ═══════════════════════════════════════════════ */}
       <div>
-        <p className="font-semibold text-gray-900">Medidas antropométricas</p>
-        <p className="text-sm text-gray-500">Al guardar se creará un nuevo registro en el historial de progreso. Si no seleccionas una fecha, se usará la de hoy.</p>
+        <p className="font-semibold text-text-primary">Medidas antropométricas</p>
+        <p className="text-sm text-secondary">Al guardar se creará un nuevo registro en el historial de progreso. Si no seleccionas una fecha, se usará la de hoy.</p>
       </div>
 
       <div className="max-w-[200px]">
@@ -583,8 +583,8 @@ export default function InformacionPersonalForm({
 
       <div className="flex items-center justify-between bg-primary/5 border border-primary/20 rounded-xl px-4 py-3">
         <div>
-          <p className="text-sm font-bold text-gray-900">Índice de Masa Corporal (IMC)</p>
-          <p className="text-xs text-gray-500">Calculado automáticamente: Peso / (Altura² en m)</p>
+          <p className="text-sm font-bold text-text-primary">Índice de Masa Corporal (IMC)</p>
+          <p className="text-xs text-secondary">Calculado automáticamente: Peso / (Altura² en m)</p>
         </div>
         {imc ? (
           <div className="text-right">
@@ -592,7 +592,7 @@ export default function InformacionPersonalForm({
             <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${imcInfo(imc).color}`}>{imcInfo(imc).label}</span>
           </div>
         ) : (
-          <p className="text-sm text-gray-400">Ingresa peso y altura</p>
+          <p className="text-sm text-muted">Ingresa peso y altura</p>
         )}
       </div>
 
@@ -622,32 +622,32 @@ export default function InformacionPersonalForm({
 
       <div className="flex items-center justify-end gap-3">
         {medidasFeedback && (
-          <span className={`text-xs font-medium ${medidasFeedback.type === "success" ? "text-green-600" : "text-red-600"}`}>
+          <span className={`text-xs font-medium ${medidasFeedback.type === "success" ? "text-success" : "text-error"}`}>
             {medidasFeedback.text}
           </span>
         )}
         <button onClick={() => setShowMedidasConfirm(true)} disabled={savingMedidas}
-          className="flex items-center gap-2 px-4 h-10 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800 disabled:opacity-50">
+          className="flex items-center gap-2 px-4 h-10 rounded-xl bg-ink text-white text-sm font-semibold hover:bg-ink/90 disabled:opacity-50">
           {!savingMedidas && <BarChart3 size={15} />}
           {savingMedidas ? "Guardando..." : "Registrar medidas"}
         </button>
       </div>
 
-      <div className="border-t border-gray-200" />
+      <div className="border-t border-border" />
 
       {/* ═══════════════════════════════════════════════
           HISTORIA CLÍNICA — Secciones colapsibles
       ═══════════════════════════════════════════════ */}
       <div>
-        <p className="font-semibold text-gray-900">Historia clínica</p>
-        <p className="text-sm text-gray-500">Haz clic en cada sección para expandirla. Los datos se guardan con el botón verde.</p>
+        <p className="font-semibold text-text-primary">Historia clínica</p>
+        <p className="text-sm text-secondary">Haz clic en cada sección para expandirla. Los datos se guardan con el botón verde.</p>
       </div>
 
       {/* ── Antecedentes personales ── */}
       <Accordion title="Antecedentes personales" icon={Stethoscope}
         isOpen={openSecs.has("ap")} onToggle={() => tog("ap")}>
 
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Síntomas gastrointestinales</p>
+        <p className="text-xs font-semibold text-secondary uppercase tracking-wide">Síntomas gastrointestinales</p>
         <div className="grid grid-cols-3 gap-3">
           <Ck label="Diarrea"       checked={hist.ap_diarrea}       onChange={sh("ap_diarrea")} />
           <Ck label="Vómito"        checked={hist.ap_vomito}        onChange={sh("ap_vomito")} />
@@ -658,7 +658,7 @@ export default function InformacionPersonalForm({
           <Ck label="Colitis"       checked={hist.ap_colitis}       onChange={sh("ap_colitis")} />
         </div>
 
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Enfermedades</p>
+        <p className="text-xs font-semibold text-secondary uppercase tracking-wide">Enfermedades</p>
         <div className="grid grid-cols-3 gap-3">
           <Ck label="Obesidad"               checked={hist.ap_obesidad}             onChange={sh("ap_obesidad")} />
           <Ck label="Diabetes"               checked={hist.ap_diabetes}             onChange={sh("ap_diabetes")} />
@@ -801,7 +801,7 @@ export default function InformacionPersonalForm({
             className={IC} placeholder="Ej. Alto, moderado / situación actual..." />
         </div>
 
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Consumo</p>
+        <p className="text-xs font-semibold text-secondary uppercase tracking-wide">Consumo</p>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={LB}>Alcohol</label>
@@ -919,7 +919,7 @@ export default function InformacionPersonalForm({
           </div>
         </div>
 
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">R24 — Recordatorio 24 horas</p>
+        <p className="text-xs font-semibold text-secondary uppercase tracking-wide">R24 — Recordatorio 24 horas</p>
         <div className="space-y-3">
           <div>
             <label className={LB}>Desayuno</label>
@@ -930,10 +930,10 @@ export default function InformacionPersonalForm({
           {showColacionAM ? (
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-xs text-gray-500 font-medium">Colación (entre desayuno y comida)</label>
+                <label className="text-xs text-secondary font-medium">Colación (entre desayuno y comida)</label>
                 <button type="button"
                   onClick={() => { setColacionAMVisible(false); sh("id_r24_colacion_am")(""); }}
-                  className="text-xs text-red-500 hover:underline inline-flex items-center gap-1">
+                  className="text-xs text-error hover:underline inline-flex items-center gap-1">
                   <X size={12} /> Quitar
                 </button>
               </div>
@@ -956,10 +956,10 @@ export default function InformacionPersonalForm({
           {showColacionPM ? (
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-xs text-gray-500 font-medium">Colación (entre comida y cena)</label>
+                <label className="text-xs text-secondary font-medium">Colación (entre comida y cena)</label>
                 <button type="button"
                   onClick={() => { setColacionPMVisible(false); sh("id_r24_colacion_pm")(""); }}
-                  className="text-xs text-red-500 hover:underline inline-flex items-center gap-1">
+                  className="text-xs text-error hover:underline inline-flex items-center gap-1">
                   <X size={12} /> Quitar
                 </button>
               </div>
@@ -990,7 +990,7 @@ export default function InformacionPersonalForm({
                   className={`px-3 h-8 rounded-xl text-xs font-semibold border capitalize transition-colors ${
                     hist.id_apetito === v
                       ? "bg-primary text-white border-primary"
-                      : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                      : "border-border text-secondary hover:bg-background-secondary"
                   }`}>
                   {v}
                 </button>
@@ -1137,15 +1137,15 @@ export default function InformacionPersonalForm({
       {/* Botón guardar historial (copia) */}
       <SaveBtn label="Guardar historial clínico" />
 
-      <div className="border-t border-gray-200" />
+      <div className="border-t border-border" />
 
       {/* ═══════════════════════════════════════════════
           SEGUIMIENTOS
       ═══════════════════════════════════════════════ */}
       <div className="flex items-center justify-between">
         <div>
-          <p className="font-semibold text-gray-900">Seguimientos</p>
-          <p className="text-sm text-gray-500">{(hist.seguimientos ?? []).length} consulta{(hist.seguimientos ?? []).length !== 1 ? "s" : ""} registrada{(hist.seguimientos ?? []).length !== 1 ? "s" : ""}</p>
+          <p className="font-semibold text-text-primary">Seguimientos</p>
+          <p className="text-sm text-secondary">{(hist.seguimientos ?? []).length} consulta{(hist.seguimientos ?? []).length !== 1 ? "s" : ""} registrada{(hist.seguimientos ?? []).length !== 1 ? "s" : ""}</p>
         </div>
         <button
           onClick={() => { setShowNewSeg(true); setNewSeg(emptySeg()); setEditingSegId(null); }}
@@ -1158,18 +1158,18 @@ export default function InformacionPersonalForm({
       {showNewSeg && (
         <div className="border-2 border-primary/30 rounded-xl p-5 space-y-4 bg-primary/3">
           <div className="flex items-center justify-between">
-            <p className="font-semibold text-gray-900 text-sm">
+            <p className="font-semibold text-text-primary text-sm">
               {editingSegId ? "Editar consulta de seguimiento" : "Nueva consulta de seguimiento"}
             </p>
             <div>
               <label className={LB}>Fecha</label>
               <input type="date" value={newSeg.fecha}
                 onChange={(e) => setSF("fecha")(e.target.value)}
-                className="h-9 border border-gray-200 rounded-xl px-3 text-sm focus:outline-none focus:border-primary" />
+                className="h-9 border border-border rounded-xl px-3 text-sm focus:outline-none focus:border-primary" />
             </div>
           </div>
 
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Nutrición</p>
+          <p className="text-xs font-semibold text-secondary uppercase tracking-wide">Nutrición</p>
           <div className="grid grid-cols-2 gap-3">
             {([
               ["¿Cómo se sintió?",                 "como_se_sintio"],
@@ -1202,7 +1202,7 @@ export default function InformacionPersonalForm({
               rows={2} className={TXA} />
           </div>
 
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Entrenamiento</p>
+          <p className="text-xs font-semibold text-secondary uppercase tracking-wide">Entrenamiento</p>
           <div className="grid grid-cols-2 gap-3">
             {([
               ["¿Qué tal sintió la rutina?",   "rutina_sintio"],
@@ -1227,7 +1227,7 @@ export default function InformacionPersonalForm({
 
           <div className="flex items-center justify-end gap-3 pt-2 border-t border-primary/20">
             <button onClick={() => { setShowNewSeg(false); setEditingSegId(null); }}
-              className="h-9 px-4 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50">
+              className="h-9 px-4 rounded-xl border border-border text-sm text-secondary hover:bg-background-secondary">
               Cancelar
             </button>
             <button onClick={handleSaveSeguimiento} disabled={savingSeg}
@@ -1247,15 +1247,15 @@ export default function InformacionPersonalForm({
             const d = new Date(seg.fecha + "T12:00:00");
             const fechaFmt = d.toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" });
             return (
-              <div key={seg.id} className="border border-gray-200 rounded-xl overflow-hidden">
-                <div className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors">
+              <div key={seg.id} className="border border-border rounded-xl overflow-hidden">
+                <div className="w-full flex items-center justify-between px-4 py-3 bg-background-secondary hover:bg-surface-muted transition-colors">
                   <button type="button" onClick={() => togSeg(seg.id)}
                     className="flex-1 flex items-center gap-3 text-left min-w-0">
-                    <span className="text-sm font-semibold text-gray-800 shrink-0 inline-flex items-center gap-1.5">
+                    <span className="text-sm font-semibold text-text-primary shrink-0 inline-flex items-center gap-1.5">
                       <CalendarDays size={14} className="text-primary" /> Seguimiento — {fechaFmt}
                     </span>
                     {seg.como_se_sintio && (
-                      <span className="text-xs text-gray-500 truncate max-w-[200px]">{seg.como_se_sintio}</span>
+                      <span className="text-xs text-secondary truncate max-w-[200px]">{seg.como_se_sintio}</span>
                     )}
                   </button>
                   <div className="flex items-center gap-3 shrink-0 pl-3">
@@ -1264,7 +1264,7 @@ export default function InformacionPersonalForm({
                       className="text-xs font-semibold text-primary hover:underline inline-flex items-center gap-1">
                       <Pencil size={12} /> Editar
                     </button>
-                    <button type="button" onClick={() => togSeg(seg.id)} className="text-gray-400">
+                    <button type="button" onClick={() => togSeg(seg.id)} className="text-muted">
                       {isOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
                     </button>
                   </div>
@@ -1295,8 +1295,8 @@ export default function InformacionPersonalForm({
                       ["Intervención",                       seg.intervencion],
                     ].filter(([, v]) => v).map(([label, value]) => (
                       <div key={label as string} className="flex gap-2">
-                        <span className="text-xs text-gray-500 font-medium w-48 shrink-0">{label}:</span>
-                        <span className="text-xs text-gray-800">{value}</span>
+                        <span className="text-xs text-secondary font-medium w-48 shrink-0">{label}:</span>
+                        <span className="text-xs text-text-primary">{value}</span>
                       </div>
                     ))}
                   </div>

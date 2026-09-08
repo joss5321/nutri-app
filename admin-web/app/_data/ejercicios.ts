@@ -7,6 +7,7 @@ import type {
 } from "@/app/_data/exercises";
 
 const VIDEOS_BUCKET = "videos-ejercicios";
+const GIFS_BUCKET = "exercise-gifs";
 const DEFAULT_PAGE_SIZE = 24;
 
 // ── Lectura — compatible con RutinaBuilderModal y otros consumidores ──────
@@ -173,5 +174,25 @@ export async function uploadEjercicioVideo(file: File): Promise<{ url: string; p
 /** Elimina un video previamente subido al bucket "videos-ejercicios". */
 export async function deleteEjercicioVideo(path: string): Promise<void> {
   const { error } = await supabase.storage.from(VIDEOS_BUCKET).remove([path]);
+  if (error) throw error;
+}
+
+// ── Storage — GIFs propios ────────────────────────────────────────────────
+
+/** Sube un GIF al bucket público "exercise-gifs" y devuelve su URL pública y ruta de storage. */
+export async function uploadEjercicioGif(file: File): Promise<{ url: string; path: string }> {
+  const ext  = file.name.split(".").pop();
+  const path = `${crypto.randomUUID()}.${ext}`;
+
+  const { error } = await supabase.storage.from(GIFS_BUCKET).upload(path, file);
+  if (error) throw error;
+
+  const { data } = supabase.storage.from(GIFS_BUCKET).getPublicUrl(path);
+  return { url: data.publicUrl, path };
+}
+
+/** Elimina un GIF previamente subido al bucket "exercise-gifs". */
+export async function deleteEjercicioGif(path: string): Promise<void> {
+  const { error } = await supabase.storage.from(GIFS_BUCKET).remove([path]);
   if (error) throw error;
 }

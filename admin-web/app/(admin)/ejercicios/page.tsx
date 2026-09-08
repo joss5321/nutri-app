@@ -177,11 +177,11 @@ export default function EjerciciosPage() {
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Ejercicios</h1>
-          <p className="text-gray-500 text-sm mt-1">
+          <h1 className="text-2xl font-bold text-text-primary">Ejercicios</h1>
+          <p className="text-secondary text-sm mt-1">
             Catálogo de ejercicios disponibles para las rutinas.
             {total > 0 && (
-              <span className="ml-2 text-xs text-gray-400">
+              <span className="ml-2 text-xs text-muted">
                 {total.toLocaleString()} ejercicio{total !== 1 ? "s" : ""} en total
               </span>
             )}
@@ -196,16 +196,16 @@ export default function EjerciciosPage() {
       </div>
 
       {/* Filtros */}
-      <div className="bg-white border border-gray-200 rounded-2xl p-4 mb-5 shadow-sm space-y-3">
+      <div className="bg-white border border-border rounded-2xl p-4 mb-5 shadow-sm space-y-3">
         {/* Fila 1: búsqueda + origen */}
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 flex-1 border border-gray-200 rounded-xl px-3 h-10">
-            <Search size={15} className="text-gray-400 shrink-0" />
+          <div className="flex items-center gap-2 flex-1 border border-border rounded-xl px-3 h-10">
+            <Search size={15} className="text-muted shrink-0" />
             <input
               placeholder="Buscar por nombre..."
               value={search}
               onChange={(e) => handleSearchChange(e.target.value)}
-              className="flex-1 text-sm focus:outline-none text-gray-700"
+              className="flex-1 text-sm focus:outline-none text-text-primary"
             />
           </div>
           <FilterSelect
@@ -265,7 +265,7 @@ export default function EjerciciosPage() {
               setEquipment(""); setDifficulty(""); setCategory(""); setSource("todos");
               setPage(1);
             }}
-            className="text-xs text-gray-400 hover:text-gray-600 underline"
+            className="text-xs text-muted hover:text-secondary underline"
           >
             Limpiar filtros
           </button>
@@ -274,7 +274,7 @@ export default function EjerciciosPage() {
 
       {/* Error */}
       {error && (
-        <div className="mb-4 flex items-center justify-between bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl px-4 py-3">
+        <div className="mb-4 flex items-center justify-between bg-error-soft border border-error/30 text-error text-sm rounded-xl px-4 py-3">
           <span>{error}</span>
           <button onClick={() => loadExercises()} className="font-semibold hover:underline ml-4">
             Reintentar
@@ -284,7 +284,7 @@ export default function EjerciciosPage() {
 
       {/* Grid */}
       {loading ? (
-        <p className="text-sm text-gray-400 py-10 text-center">Cargando ejercicios...</p>
+        <p className="text-sm text-muted py-10 text-center">Cargando ejercicios...</p>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -301,7 +301,7 @@ export default function EjerciciosPage() {
             ))}
 
             {exercises.length === 0 && (
-              <div className="col-span-full flex flex-col items-center justify-center py-16 text-gray-400">
+              <div className="col-span-full flex flex-col items-center justify-center py-16 text-muted">
                 <div className="w-14 h-14 rounded-full bg-brand-soft flex items-center justify-center mb-3">
                   <Search size={24} className="text-primary" />
                 </div>
@@ -316,7 +316,7 @@ export default function EjerciciosPage() {
               <PaginationBtn disabled={page <= 1} onClick={() => setPage(page - 1)}>
                 ← Anterior
               </PaginationBtn>
-              <span className="text-sm text-gray-500">
+              <span className="text-sm text-secondary">
                 Página {page} de {totalPages}
               </span>
               <PaginationBtn disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
@@ -411,10 +411,10 @@ function ExerciseCard({
   })();
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 hover:border-primary/50 transition-colors flex flex-col">
+    <div className="bg-white rounded-2xl border border-border shadow-sm p-4 hover:border-primary/50 transition-colors flex flex-col">
       {/* Imagen */}
       <div
-        className="bg-gray-900 rounded-xl flex items-center justify-center mb-3 overflow-hidden relative h-36 cursor-pointer"
+        className="bg-ink rounded-xl flex items-center justify-center mb-3 overflow-hidden relative h-36 cursor-pointer"
         onClick={onView}
       >
         {media}
@@ -429,12 +429,12 @@ function ExerciseCard({
       {/* Info */}
       <div className="flex-1">
         <p
-          className="font-bold text-gray-900 text-sm truncate cursor-pointer hover:text-primary"
+          className="font-bold text-text-primary text-sm truncate cursor-pointer hover:text-primary"
           onClick={onView}
         >
           {ex.nombre}
         </p>
-        <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">
+        <p className="text-xs text-muted mt-0.5 line-clamp-2">
           {ex.descripcion || "Sin descripción"}
         </p>
       </div>
@@ -452,7 +452,7 @@ function ExerciseCard({
           </span>
         )}
         {ex.grupos_secundarios?.slice(0, 2).map((g) => (
-          <span key={g} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+          <span key={g} className="text-xs bg-surface-muted text-secondary px-2 py-0.5 rounded-full">
             {tx(MUSCLE_ES, g)}
           </span>
         ))}
@@ -462,7 +462,7 @@ function ExerciseCard({
       <div className="flex items-center gap-2 mt-3">
         <button
           onClick={onView}
-          className="flex-1 flex items-center justify-center gap-1 h-9 rounded-xl border border-gray-200 text-gray-600 text-sm font-semibold hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors"
+          className="flex-1 flex items-center justify-center gap-1 h-9 rounded-xl border border-border text-secondary text-sm font-semibold hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors"
         >
           <Eye size={14} /> Ver
         </button>
@@ -470,20 +470,20 @@ function ExerciseCard({
           <>
             <button
               onClick={onEdit}
-              className="flex-1 flex items-center justify-center gap-1 h-9 rounded-xl border border-gray-200 text-gray-600 text-sm font-semibold hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors"
+              className="flex-1 flex items-center justify-center gap-1 h-9 rounded-xl border border-border text-secondary text-sm font-semibold hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors"
             >
               <Pencil size={13} /> Editar
             </button>
             <button
               onClick={onDelete}
               disabled={deleting}
-              className="h-9 px-3 rounded-xl border border-gray-200 text-red-500 text-sm font-semibold hover:border-red-300 hover:bg-red-50 transition-colors disabled:opacity-50 flex items-center justify-center"
+              className="h-9 px-3 rounded-xl border border-border text-error text-sm font-semibold hover:border-error/50 hover:bg-error-soft transition-colors disabled:opacity-50 flex items-center justify-center"
             >
               {deleting ? "..." : <Trash2 size={14} />}
             </button>
           </>
         ) : (
-          <span className="text-xs text-gray-400 italic">
+          <span className="text-xs text-muted italic">
             {isWorkoutX ? "WorkoutX" : "Solo lectura"}
           </span>
         )}
@@ -509,7 +509,7 @@ function FilterSelect({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="h-10 border border-gray-200 rounded-xl px-3 text-sm bg-white focus:outline-none focus:border-primary w-full"
+      className="h-10 border border-border rounded-xl px-3 text-sm bg-white focus:outline-none focus:border-primary w-full"
     >
       {children}
     </select>
@@ -529,7 +529,7 @@ function PaginationBtn({
     <button
       disabled={disabled}
       onClick={onClick}
-      className="px-4 h-9 rounded-xl border border-gray-200 text-sm text-gray-600 font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+      className="px-4 h-9 rounded-xl border border-border text-sm text-secondary font-semibold hover:bg-background-secondary disabled:opacity-40 disabled:cursor-not-allowed"
     >
       {children}
     </button>

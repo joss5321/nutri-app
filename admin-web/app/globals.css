@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /* ─── Sistema visual MyFitTrack (admin-web) ──────────────────────────────
-   Construido a partir del isotipo oficial (public/branding/isotipo-myfittrack.svg:
+   Construido a partir del isotipo oficial (public/branding/isotipo-myfittrack.png:
    tinta navy #192C31, cinta métrica amarilla #FFF824) y del verde esmeralda ya
    oficial en la config de la app móvil (splash #2EBD8C / adaptive icon #144333),
    que este panel ya usaba como `--color-primary` — se conserva y se completa.

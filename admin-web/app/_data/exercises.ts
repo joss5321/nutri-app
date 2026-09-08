@@ -34,6 +34,7 @@ export type Exercise = {
 
   // Multimedia
   gif_url: string | null;
+  gif_storage_path: string | null;
 
   // Campos WorkoutX
   body_part: string | null;
@@ -68,6 +69,8 @@ export type ExerciseInput = {
   grupos_secundarios: string[];
   video_url: string | null;
   video_storage_path: string | null;
+  gif_url: string | null;
+  gif_storage_path: string | null;
 };
 
 // ── Parámetros para el catálogo paginado ─────────────────────────────────

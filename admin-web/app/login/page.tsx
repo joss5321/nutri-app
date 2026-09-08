@@ -81,13 +81,11 @@ export default function LoginPage() {
           }}
         />
 
-        {/* Logo */}
-        <div className="relative z-10 flex items-center gap-3 p-8">
-          <div className="w-[90px] h-[90px] rounded-xl bg-white shrink-0 flex items-center justify-center p-2.5">
-            {/* eslint-disable-next-line @next/next/no-img-element -- SVG local, next/image requiere dangerouslyAllowSVG */}
-            <img src="/branding/isotipo-myfittrack.svg" alt="MyFitTrack" width={612} height={792} className="w-full h-full object-contain" />
-          </div>
-          <span className="text-white font-semibold text-xl tracking-wide">MyFitTrack</span>
+        {/* Nombre de marca */}
+        <div className="relative z-10 p-8">
+          <span className="text-5xl font-extrabold tracking-tight drop-shadow-[0_2px_16px_rgba(255,248,36,0.35)]">
+            <span className="text-white">My</span><span className="text-highlight">FitTrack</span>
+          </span>
         </div>
 
         {/* Heading central */}
@@ -124,32 +122,32 @@ export default function LoginPage() {
         <div className="w-full max-w-sm">
           <div className="mb-8 text-center flex flex-col items-center">
             <div className="mb-4 flex items-center gap-3">
-              {/* eslint-disable-next-line @next/next/no-img-element -- SVG local, next/image requiere dangerouslyAllowSVG */}
-              <img src="/branding/isotipo-myfittrack.svg" alt="MyFitTrack" width={612} height={792} className="h-20 w-auto" />
-              <span className="text-2xl font-extrabold text-gray-900 tracking-wide">MyFitTrack</span>
+              {/* eslint-disable-next-line @next/next/no-img-element -- asset de marca local, no requiere el pipeline de next/image */}
+              <img src="/branding/isotipo-myfittrack.png" alt="MyFitTrack" width={900} height={900} className="h-20 w-auto" />
+              <span className="text-2xl font-extrabold text-text-primary tracking-wide">MyFitTrack</span>
             </div>
             <h2 className="text-3xl font-extrabold text-primary">¡Bienvenido de nuevo!</h2>
-            <p className="text-gray-500 mt-2 text-sm">Inicia sesión para continuar</p>
+            <p className="text-secondary mt-2 text-sm">Inicia sesión para continuar</p>
           </div>
 
           <form onSubmit={handleLogin} className="flex flex-col gap-4">
             {/* Email */}
-            <div className="flex items-center gap-3 bg-gray-100 rounded-2xl px-4 h-14 border border-transparent focus-within:border-primary transition-colors">
-              <Mail size={18} className="text-gray-400 shrink-0" />
+            <div className="flex items-center gap-3 bg-surface-muted rounded-2xl px-4 h-14 border border-transparent focus-within:border-primary transition-colors">
+              <Mail size={18} className="text-muted shrink-0" />
               <input
                 type="email"
                 placeholder="Correo electrónico"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="flex-1 bg-transparent outline-none text-gray-700 text-sm"
+                className="flex-1 bg-transparent outline-none text-text-primary text-sm"
               />
             </div>
 
             {/* Password */}
             <PasswordInput value={password} onChange={setPassword} />
 
-            {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+            {error && <p className="text-error text-sm text-center">{error}</p>}
 
             {/* Submit */}
             <button

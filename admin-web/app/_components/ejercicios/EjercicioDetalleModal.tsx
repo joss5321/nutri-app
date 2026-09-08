@@ -32,12 +32,12 @@ export default function EjercicioDetalleModal({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-start justify-between p-6 border-b border-gray-100">
+        <div className="flex items-start justify-between p-6 border-b border-divider">
           <div className="flex items-center gap-3 min-w-0">
             <span className="text-3xl shrink-0">{exercise.emoji || "💪"}</span>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="font-bold text-gray-900 text-xl leading-tight">{exercise.nombre}</h2>
+                <h2 className="font-bold text-text-primary text-xl leading-tight">{exercise.nombre}</h2>
                 {isWorkoutX && (
                   <span className="shrink-0 text-xs bg-violet-100 text-violet-700 font-bold px-2.5 py-0.5 rounded-full">
                     WorkoutX
@@ -45,13 +45,13 @@ export default function EjercicioDetalleModal({
                 )}
               </div>
               {exercise.category && (
-                <p className="text-sm text-gray-500 mt-0.5">{tx(CATEGORY_ES, exercise.category)}</p>
+                <p className="text-sm text-secondary mt-0.5">{tx(CATEGORY_ES, exercise.category)}</p>
               )}
             </div>
           </div>
           <button
             onClick={onClose}
-            className="shrink-0 w-9 h-9 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 ml-3"
+            className="shrink-0 w-9 h-9 rounded-full hover:bg-surface-muted flex items-center justify-center text-muted ml-3"
           >
             <X size={18} />
           </button>
@@ -59,7 +59,7 @@ export default function EjercicioDetalleModal({
 
         <div className="p-6 space-y-6">
           {/* GIF / video / emoji */}
-          <div className="bg-gray-900 rounded-xl overflow-hidden flex items-center justify-center h-56">
+          <div className="bg-ink rounded-xl overflow-hidden flex items-center justify-center h-56">
             {proxyGifUrl(exercise.gif_url) ? (
               /* eslint-disable-next-line @next/next/no-img-element */
               <img
@@ -97,7 +97,7 @@ export default function EjercicioDetalleModal({
           {exercise.descripcion && (
             <div>
               <Label>Descripción</Label>
-              <p className="text-sm text-gray-700 leading-relaxed">{exercise.descripcion}</p>
+              <p className="text-sm text-text-primary leading-relaxed">{exercise.descripcion}</p>
             </div>
           )}
 
@@ -107,7 +107,7 @@ export default function EjercicioDetalleModal({
               <Label>Instrucciones</Label>
               <ol className="space-y-2">
                 {exercise.instrucciones.map((step, i) => (
-                  <li key={i} className="flex gap-3 text-sm text-gray-700">
+                  <li key={i} className="flex gap-3 text-sm text-text-primary">
                     <span className="shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center">
                       {i + 1}
                     </span>
@@ -155,7 +155,7 @@ export default function EjercicioDetalleModal({
               <Label>Etiquetas</Label>
               <div className="flex flex-wrap gap-1.5">
                 {exercise.movement_tags.map((t) => (
-                  <span key={t} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                  <span key={t} className="text-xs bg-surface-muted text-secondary px-2 py-0.5 rounded-full">
                     {t}
                   </span>
                 ))}
@@ -164,15 +164,15 @@ export default function EjercicioDetalleModal({
           )}
 
           {exercise.is_unilateral && (
-            <p className="text-xs text-gray-400 italic">Ejercicio unilateral</p>
+            <p className="text-xs text-muted italic">Ejercicio unilateral</p>
           )}
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-100 flex justify-end">
+        <div className="px-6 py-4 border-t border-divider flex justify-end">
           <button
             onClick={onClose}
-            className="px-5 h-10 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50"
+            className="px-5 h-10 rounded-xl border border-border text-secondary text-sm hover:bg-background-secondary"
           >
             Cerrar
           </button>
@@ -185,12 +185,12 @@ export default function EjercicioDetalleModal({
 // ── Átomos de UI locales ──────────────────────────────────────────────────
 
 function Label({ children }: { children: React.ReactNode }) {
-  return <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">{children}</p>;
+  return <p className="text-xs font-bold text-secondary uppercase tracking-wide mb-2">{children}</p>;
 }
 
 const CHIP_COLORS = {
   primary: "bg-primary/10 text-primary",
-  gray:    "bg-gray-100 text-gray-600",
+  gray:    "bg-surface-muted text-secondary",
   amber:   "bg-amber-50 text-amber-700",
   blue:    "bg-blue-50 text-blue-700",
   teal:    "bg-teal-50 text-teal-700",
@@ -218,9 +218,9 @@ function Stat({
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-gray-50 rounded-xl px-4 py-3">
-      <p className="text-xs text-gray-400 mb-0.5">{label}</p>
-      <p className="text-sm font-semibold text-gray-800">{children}</p>
+    <div className="bg-background-secondary rounded-xl px-4 py-3">
+      <p className="text-xs text-muted mb-0.5">{label}</p>
+      <p className="text-sm font-semibold text-text-primary">{children}</p>
     </div>
   );
 }

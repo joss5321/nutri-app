@@ -244,11 +244,11 @@ export default function NutricionEquivalentesForm({ userId }: { userId: string }
     }
   };
 
-  if (loading) return <p className="text-sm text-gray-400 text-center py-10">Cargando equivalentes...</p>;
+  if (loading) return <p className="text-sm text-muted text-center py-10">Cargando equivalentes...</p>;
 
   if (error) return (
     <div className="flex flex-col items-center justify-center gap-3 py-10">
-      <p className="text-sm text-red-600">{error}</p>
+      <p className="text-sm text-error">{error}</p>
       <button onClick={load} className="text-sm font-semibold text-primary hover:underline">Reintentar</button>
     </div>
   );
@@ -301,7 +301,7 @@ export default function NutricionEquivalentesForm({ userId }: { userId: string }
   return (
     <div className="space-y-6">
       {hasDraft && (
-        <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 font-medium">
+        <div className="flex items-center gap-2 px-4 py-2.5 bg-warning-soft border border-warning/30 rounded-xl text-xs text-warning font-medium">
           <StickyNote size={14} className="shrink-0" />
           <span>Borrador restaurado — tienes cambios sin guardar en este formulario.</span>
           <button
@@ -312,24 +312,24 @@ export default function NutricionEquivalentesForm({ userId }: { userId: string }
               setReady(false);
               load();
             }}
-            className="ml-auto shrink-0 text-amber-600 hover:text-amber-800 underline font-semibold">
+            className="ml-auto shrink-0 text-warning hover:opacity-70 underline font-semibold">
             Descartar cambios
           </button>
         </div>
       )}
       <div>
-        <p className="font-semibold text-gray-900">Tabla de equivalentes</p>
-        <p className="text-sm text-gray-500">
+        <p className="font-semibold text-text-primary">Tabla de equivalentes</p>
+        <p className="text-sm text-secondary">
           Ingresa el total de raciones y distribúyelas en los tiempos de comida. Al guardar se validará que coincidan.
         </p>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-gray-200">
+      <div className="overflow-x-auto rounded-xl border border-border">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-primary/5">
-              <th className="text-left px-3 py-2 text-xs font-semibold text-gray-600">Grupo</th>
-              <th className="px-2 py-2 text-xs font-semibold text-gray-800 text-center bg-primary/10"># Raciones</th>
+              <th className="text-left px-3 py-2 text-xs font-semibold text-secondary">Grupo</th>
+              <th className="px-2 py-2 text-xs font-semibold text-text-primary text-center bg-primary/10"># Raciones</th>
               {MEAL_LABELS.map((m) => (
                 <th key={m} className="px-2 py-2 text-xs font-semibold text-primary text-center">{m}</th>
               ))}
@@ -346,11 +346,11 @@ export default function NutricionEquivalentesForm({ userId }: { userId: string }
               const rac = racList[gi];
               const mismatch = (rac > 0 || mealSum > 0) && rac !== mealSum;
               return (
-                <tr key={row.grupo} className={`border-t border-gray-100 ${mismatch ? "bg-red-50/40" : "hover:bg-gray-50/50"}`}>
+                <tr key={row.grupo} className={`border-t border-divider ${mismatch ? "bg-error-soft/50" : "hover:bg-background-secondary/50"}`}>
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-2">
                       <span className="text-lg">{row.icono}</span>
-                      <span className="text-gray-700 text-xs font-medium whitespace-nowrap">{row.grupo}</span>
+                      <span className="text-text-primary text-xs font-medium whitespace-nowrap">{row.grupo}</span>
                     </div>
                   </td>
                   <td className="px-1 py-1.5 bg-primary/5">
@@ -361,7 +361,7 @@ export default function NutricionEquivalentesForm({ userId }: { userId: string }
                         onFocus={(e) => e.target.select()}
                         className={`w-12 h-8 text-center border-2 rounded-lg text-xs font-bold focus:outline-none shrink-0 ${
                           mismatch
-                            ? "border-red-400 text-red-600 bg-red-50"
+                            ? "border-error text-error bg-error-soft"
                             : "border-primary/40 text-primary focus:border-primary"
                         }`}
                       />
@@ -373,13 +373,13 @@ export default function NutricionEquivalentesForm({ userId }: { userId: string }
                                 ? `Faltan ${rac - mealSum} ración(es) por distribuir en los tiempos de comida`
                                 : `Sobran ${mealSum - rac} ración(es) distribuidas de más`
                             }
-                            className="text-[10px] font-bold text-red-500 whitespace-nowrap"
+                            className="text-[10px] font-bold text-error whitespace-nowrap"
                           >
                             {mealSum < rac ? `−${rac - mealSum}` : `+${mealSum - rac}`}
                           </span>
                         ) : (
                           <span title="Raciones distribuidas correctamente" className="shrink-0">
-                            <Check size={14} className="text-emerald-500" />
+                            <Check size={14} className="text-success" />
                           </span>
                         )
                       )}
@@ -391,7 +391,7 @@ export default function NutricionEquivalentesForm({ userId }: { userId: string }
                         type="number" min={0} value={row[key]}
                         onChange={(e) => updateMeal(gi, key, e.target.value)}
                         onFocus={(e) => e.target.select()}
-                        className="w-12 h-8 text-center border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-primary mx-auto block"
+                        className="w-12 h-8 text-center border border-border rounded-lg text-xs focus:outline-none focus:border-primary mx-auto block"
                       />
                     </td>
                   ))}
@@ -404,27 +404,27 @@ export default function NutricionEquivalentesForm({ userId }: { userId: string }
             })}
           </tbody>
           <tfoot>
-            <tr className="border-t-2 border-gray-300 bg-gray-50 font-bold">
-              <td className="px-3 py-2.5 text-xs text-gray-700">TOTAL</td>
+            <tr className="border-t-2 border-border bg-background-secondary font-bold">
+              <td className="px-3 py-2.5 text-xs text-text-primary">TOTAL</td>
               <td className="px-2 py-2.5 text-center bg-primary/5">
                 <span className="text-sm font-extrabold bg-primary text-white px-3 py-1 rounded-full">{totalRacList}</span>
               </td>
               {MEAL_KEYS.map((k) => (
-                <td key={k} className="px-2 py-2.5 text-center text-xs text-gray-500 font-semibold">{mealTotals[k]}</td>
+                <td key={k} className="px-2 py-2.5 text-center text-xs text-secondary font-semibold">{mealTotals[k]}</td>
               ))}
               <td className="px-2 py-2.5 text-center text-xs text-amber-700 font-extrabold">{totalHCO.toFixed(0)}</td>
               <td className="px-2 py-2.5 text-center text-xs text-red-600 font-extrabold">{totalProt.toFixed(0)}</td>
               <td className="px-2 py-2.5 text-center text-xs text-purple-600 font-extrabold">{totalLip.toFixed(0)}</td>
               <td className="px-2 py-2.5 text-center text-sm text-green-700 font-extrabold">{totalKcal.toFixed(0)}</td>
             </tr>
-            <tr className="border-t border-gray-200 bg-green-50/60">
+            <tr className="border-t border-border bg-green-50/60">
               <td className="px-3 py-2 text-xs text-green-800 font-bold" colSpan={2}>Kcal por tiempo</td>
               {MEAL_KEYS.map((k) => (
                 <td key={k} className="px-2 py-2 text-center text-xs text-green-800 font-bold">
                   {mealKcalTotals[k].toFixed(0)}
                 </td>
               ))}
-              <td className="px-2 py-2 text-center text-xs text-gray-400" colSpan={3}>—</td>
+              <td className="px-2 py-2 text-center text-xs text-muted" colSpan={3}>—</td>
               <td className="px-2 py-2 text-center text-sm text-green-800 font-extrabold">{totalMealKcal.toFixed(0)}</td>
             </tr>
           </tfoot>
@@ -433,11 +433,11 @@ export default function NutricionEquivalentesForm({ userId }: { userId: string }
 
       {/* Distribución de macronutrientes */}
       {totalMacroKcalActual > 0 && (
-        <div className="rounded-xl border border-gray-200 p-4 space-y-4 bg-gray-50">
+        <div className="rounded-xl border border-border p-4 space-y-4 bg-background-secondary">
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <p className="text-sm font-semibold text-gray-800">Distribución de macronutrientes</p>
-            <div className="flex items-center gap-4 text-xs text-gray-500">
-              <span>Actual: <span className="font-bold text-gray-800">{totalKcal.toFixed(0)} kcal</span></span>
+            <p className="text-sm font-semibold text-text-primary">Distribución de macronutrientes</p>
+            <div className="flex items-center gap-4 text-xs text-secondary">
+              <span>Actual: <span className="font-bold text-text-primary">{totalKcal.toFixed(0)} kcal</span></span>
               {targetKcal != null && (
                 <span>Meta GET: <span className="font-bold text-primary">{targetKcal.toFixed(0)} kcal</span></span>
               )}
@@ -447,14 +447,14 @@ export default function NutricionEquivalentesForm({ userId }: { userId: string }
           {/* Barra actual */}
           <div>
             <div className="flex justify-between items-center mb-1">
-              <span className="text-[10px] font-semibold text-gray-600 uppercase tracking-wide">Actual</span>
+              <span className="text-[10px] font-semibold text-secondary uppercase tracking-wide">Actual</span>
               <div className="flex gap-3 text-[10px]">
                 <span className="text-amber-600 font-medium">HCO {actualHCOPct.toFixed(1)}%</span>
                 <span className="text-red-500 font-medium">Prot {actualProtPct.toFixed(1)}%</span>
                 <span className="text-purple-500 font-medium">Líp {actualLipPct.toFixed(1)}%</span>
               </div>
             </div>
-            <div className="h-5 bg-gray-200 rounded-full overflow-hidden flex">
+            <div className="h-5 bg-surface-muted rounded-full overflow-hidden flex">
               {actualHCOPct > 0 && <div className="bg-amber-400 h-full transition-all duration-300" style={{ width: `${Math.min(actualHCOPct, 100)}%` }} />}
               {actualProtPct > 0 && <div className="bg-red-400 h-full transition-all duration-300" style={{ width: `${Math.min(actualProtPct, 100)}%` }} />}
               {actualLipPct > 0 && <div className="bg-purple-400 h-full transition-all duration-300" style={{ width: `${Math.min(actualLipPct, 100)}%` }} />}
@@ -479,14 +479,14 @@ export default function NutricionEquivalentesForm({ userId }: { userId: string }
           {targetHCOPct != null ? (
             <div>
               <div className="flex justify-between items-center mb-1">
-                <span className="text-[10px] font-semibold text-gray-600 uppercase tracking-wide">Meta (Dietocálculo)</span>
+                <span className="text-[10px] font-semibold text-secondary uppercase tracking-wide">Meta (Dietocálculo)</span>
                 <div className="flex gap-3 text-[10px]">
                   <span className="text-amber-500 font-medium">HCO {targetHCOPct.toFixed(1)}%</span>
                   <span className="text-red-400 font-medium">Prot {targetProtPct?.toFixed(1)}%</span>
                   <span className="text-purple-400 font-medium">Líp {targetLipPct?.toFixed(1)}%</span>
                 </div>
               </div>
-              <div className="h-3 bg-gray-200 rounded-full overflow-hidden flex opacity-70">
+              <div className="h-3 bg-surface-muted rounded-full overflow-hidden flex opacity-70">
                 {targetHCOPct > 0 && <div className="bg-amber-300 h-full" style={{ width: `${Math.min(targetHCOPct, 100)}%` }} />}
                 {(targetProtPct ?? 0) > 0 && <div className="bg-red-300 h-full" style={{ width: `${Math.min(targetProtPct ?? 0, 100)}%` }} />}
                 {(targetLipPct ?? 0) > 0 && <div className="bg-purple-300 h-full" style={{ width: `${Math.min(targetLipPct ?? 0, 100)}%` }} />}
@@ -507,12 +507,12 @@ export default function NutricionEquivalentesForm({ userId }: { userId: string }
               </div>
             </div>
           ) : (
-            <p className="text-xs text-gray-400 italic">Guarda el Dietocálculo para ver la distribución meta de macronutrientes.</p>
+            <p className="text-xs text-muted italic">Guarda el Dietocálculo para ver la distribución meta de macronutrientes.</p>
           )}
         </div>
       )}
 
-      <div className="flex items-center justify-between gap-3 pt-2 border-t border-gray-100 flex-wrap">
+      <div className="flex items-center justify-between gap-3 pt-2 border-t border-divider flex-wrap">
         <button
           onClick={handleSugerir}
           disabled={!dietocalculo?.get_ajustado}
@@ -524,7 +524,7 @@ export default function NutricionEquivalentesForm({ userId }: { userId: string }
 
         <div className="flex items-center gap-3">
           {feedback && (
-            <p className={`text-xs font-medium ${feedback.type === "success" ? "text-green-600" : "text-red-600"}`}>
+            <p className={`text-xs font-medium ${feedback.type === "success" ? "text-success" : "text-error"}`}>
               {feedback.text}
             </p>
           )}

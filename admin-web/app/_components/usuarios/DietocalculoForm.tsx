@@ -215,13 +215,13 @@ export default function DietocalculoForm({ userId }: { userId: string }) {
     }
   };
 
-  if (loading) return <p className="text-sm text-gray-400 text-center py-10">Cargando datos del usuario...</p>;
-  if (error) return <p className="text-sm text-red-600 text-center py-10">{error}</p>;
+  if (loading) return <p className="text-sm text-muted text-center py-10">Cargando datos del usuario...</p>;
+  if (error) return <p className="text-sm text-error text-center py-10">{error}</p>;
 
   return (
     <div className="space-y-6">
       {hasDraft && (
-        <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 font-medium">
+        <div className="flex items-center gap-2 px-4 py-2.5 bg-warning-soft border border-warning/30 rounded-xl text-xs text-warning font-medium">
           <StickyNote size={14} className="shrink-0" />
           <span>Borrador restaurado — tienes cambios sin guardar en este formulario.</span>
           <button
@@ -233,20 +233,20 @@ export default function DietocalculoForm({ userId }: { userId: string }) {
               setLoading(true);
               loadData();
             }}
-            className="ml-auto shrink-0 text-amber-600 hover:text-amber-800 underline font-semibold">
+            className="ml-auto shrink-0 text-warning hover:opacity-70 underline font-semibold">
             Descartar cambios
           </button>
         </div>
       )}
       {existingId && (
-        <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-2 text-xs text-green-700 flex items-center gap-2">
+        <div className="bg-success-soft border border-success/30 rounded-xl px-4 py-2 text-xs text-success flex items-center gap-2">
           <CircleCheck size={14} className="shrink-0" /> Este usuario ya tiene un dietocálculo guardado. Los cambios se actualizarán al guardar.
         </div>
       )}
 
       {/* Datos del usuario */}
       <div>
-        <p className="font-semibold text-gray-900 mb-2">Datos del usuario</p>
+        <p className="font-semibold text-text-primary mb-2">Datos del usuario</p>
         <div className="grid grid-cols-4 gap-3">
           {[
             { label: "Peso (kg)", value: peso },
@@ -254,9 +254,9 @@ export default function DietocalculoForm({ userId }: { userId: string }) {
             { label: "Edad (años)", value: edad },
             { label: "Sexo", value: sexo.charAt(0).toUpperCase() + sexo.slice(1) },
           ].map((d) => (
-            <div key={d.label} className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-              <p className="text-xs text-gray-500">{d.label}</p>
-              <p className="font-bold text-gray-900 text-sm mt-0.5">{d.value || "—"}</p>
+            <div key={d.label} className="bg-background-secondary rounded-xl p-3 border border-divider">
+              <p className="text-xs text-secondary">{d.label}</p>
+              <p className="font-bold text-text-primary text-sm mt-0.5">{d.value || "—"}</p>
             </div>
           ))}
         </div>
@@ -265,18 +265,18 @@ export default function DietocalculoForm({ userId }: { userId: string }) {
       {/* Fórmula + actividad */}
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="text-xs text-gray-500 font-medium block mb-1">Fórmula</label>
+          <label className="text-xs text-secondary font-medium block mb-1">Fórmula</label>
           <select value={formula} onChange={(e) => setFormula(e.target.value as Formula)}
-            className="w-full h-10 border border-gray-200 rounded-xl px-3 text-sm bg-white focus:outline-none focus:border-primary">
+            className="w-full h-10 border border-border rounded-xl px-3 text-sm bg-white focus:outline-none focus:border-primary">
             {(Object.keys(FORMULA_LABELS) as Formula[]).map((f) => (
               <option key={f} value={f}>{FORMULA_LABELS[f]}</option>
             ))}
           </select>
         </div>
         <div>
-          <label className="text-xs text-gray-500 font-medium block mb-1">Factor de actividad física ({factorAF})</label>
+          <label className="text-xs text-secondary font-medium block mb-1">Factor de actividad física ({factorAF})</label>
           <select value={actividad} onChange={(e) => setActividad(e.target.value as ActividadKey)}
-            className="w-full h-10 border border-gray-200 rounded-xl px-3 text-sm bg-white focus:outline-none focus:border-primary">
+            className="w-full h-10 border border-border rounded-xl px-3 text-sm bg-white focus:outline-none focus:border-primary">
             {(Object.keys(ACTIVIDAD_LABELS) as ActividadKey[]).map((a) => (
               <option key={a} value={a}>{(formula === "valencia" || formula === "schofield") ? ACTIVIDAD_LABELS_VS[a] : ACTIVIDAD_LABELS[a]} — {FACTORES[formula][a]}</option>
             ))}
@@ -306,33 +306,33 @@ export default function DietocalculoForm({ userId }: { userId: string }) {
       {/* Objetivo */}
       <div className="grid grid-cols-3 gap-4 items-end">
         <div>
-          <label className="text-xs text-gray-500 font-medium block mb-1">Objetivo</label>
+          <label className="text-xs text-secondary font-medium block mb-1">Objetivo</label>
           <select value={objetivo} onChange={(e) => setObjetivo(e.target.value as Objetivo)}
-            className="w-full h-10 border border-gray-200 rounded-xl px-3 text-sm bg-white focus:outline-none focus:border-primary">
+            className="w-full h-10 border border-border rounded-xl px-3 text-sm bg-white focus:outline-none focus:border-primary">
             <option value="deficit">Déficit calórico</option>
             <option value="mantenimiento">Mantenimiento</option>
             <option value="superavit">Superávit calórico</option>
           </select>
         </div>
         <div>
-          <label className="text-xs text-gray-500 font-medium block mb-1">
+          <label className="text-xs text-secondary font-medium block mb-1">
             Nivel de {objetivo === "deficit" ? "déficit" : objetivo === "superavit" ? "superávit" : "—"} (%)
           </label>
           <input type="number" min={5} max={20} value={nivelPct} onChange={(e) => setNivelPct(e.target.value)}
             disabled={objetivo === "mantenimiento"} placeholder="5 – 20"
-            className="w-full h-10 border border-gray-200 rounded-xl px-3 text-sm focus:outline-none focus:border-primary disabled:bg-gray-50 disabled:text-gray-400" />
+            className="w-full h-10 border border-border rounded-xl px-3 text-sm focus:outline-none focus:border-primary disabled:bg-background-secondary disabled:text-muted" />
         </div>
         <div className="bg-primary/5 rounded-xl p-3 border border-primary/20">
           <p className="text-xs text-primary font-medium">GET Ajustado</p>
           <p className="text-2xl font-extrabold text-primary">{getAjustado != null ? getAjustado.toFixed(0) : "—"}</p>
-          <p className="text-xs text-gray-500">kcal</p>
+          <p className="text-xs text-secondary">kcal</p>
         </div>
       </div>
 
       {/* Macronutrientes */}
       <div>
-        <p className="font-semibold text-gray-900 mb-2">Distribución de macronutrientes</p>
-        <p className="text-xs text-gray-500 mb-3">Ingresa gramos por kilogramo de peso corporal.</p>
+        <p className="font-semibold text-text-primary mb-2">Distribución de macronutrientes</p>
+        <p className="text-xs text-secondary mb-3">Ingresa gramos por kilogramo de peso corporal.</p>
         <div className="grid grid-cols-3 gap-4">
           {[
             { label: "Carbohidratos", grKg: carbsGrKg, setGrKg: setCarbsGrKg, kcal: carbsKcal, pct: carbsPct, factor: "4 kcal/g", color: "bg-amber-50 border-amber-200 text-amber-700" },
@@ -343,7 +343,7 @@ export default function DietocalculoForm({ userId }: { userId: string }) {
               <p className="text-xs font-semibold mb-2">{m.label} <span className="font-normal opacity-70">({m.factor})</span></p>
               <div className="flex items-center gap-2 mb-2">
                 <input type="number" min={0} step="0.1" value={m.grKg} onChange={(e) => m.setGrKg(e.target.value)}
-                  placeholder="gr/kg" className="w-20 h-9 border border-gray-200 rounded-lg px-2 text-sm text-center focus:outline-none focus:border-primary bg-white" />
+                  placeholder="gr/kg" className="w-20 h-9 border border-border rounded-lg px-2 text-sm text-center focus:outline-none focus:border-primary bg-white" />
                 <span className="text-xs opacity-70">gr × kg</span>
               </div>
               <p className="text-xs opacity-80">{m.kcal.toFixed(0)} kcal</p>
@@ -354,24 +354,24 @@ export default function DietocalculoForm({ userId }: { userId: string }) {
 
         {totalMacroKcal > 0 && (
           <div className="mt-3">
-            <div className="flex justify-between text-xs text-gray-500 mb-1">
+            <div className="flex justify-between text-xs text-secondary mb-1">
               <span>Total macros: {totalMacroKcal.toFixed(0)} kcal</span>
               <span>GET ajustado: {getAjustado?.toFixed(0) ?? "—"} kcal</span>
             </div>
-            <div className="h-4 bg-gray-100 rounded-full overflow-hidden flex">
+            <div className="h-4 bg-surface-muted rounded-full overflow-hidden flex">
               {carbsPct > 0 && <div className="bg-amber-400 h-full" style={{ width: `${Math.min(carbsPct, 100)}%` }} />}
               {protePct > 0 && <div className="bg-red-400 h-full" style={{ width: `${Math.min(protePct, 100)}%` }} />}
               {lipidosPct > 0 && <div className="bg-purple-400 h-full" style={{ width: `${Math.min(lipidosPct, 100)}%` }} />}
             </div>
-            <div className="flex justify-between text-[10px] text-gray-500 mt-1">
+            <div className="flex justify-between text-[10px] text-secondary mt-1">
               <span className="text-amber-600 font-medium">Carbs <strong>{(carbsGr * peso).toFixed(0)}g</strong> ({carbsPct.toFixed(1)}%)</span>
               <span className="text-red-500 font-medium">Prot <strong>{(proteGr * peso).toFixed(0)}g</strong> ({protePct.toFixed(1)}%)</span>
               <span className="text-purple-500 font-medium">Líp <strong>{(lipidosGr * peso).toFixed(0)}g</strong> ({lipidosPct.toFixed(1)}%)</span>
             </div>
             {getAjustado != null && totalMacroKcal > getAjustado && (
-              <div className="mt-2 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-                <TriangleAlert size={14} className="text-amber-500 shrink-0" />
-                <p className="text-xs text-amber-700">
+              <div className="mt-2 flex items-start gap-2 bg-warning-soft border border-warning/30 rounded-xl px-3 py-2">
+                <TriangleAlert size={14} className="text-warning shrink-0" />
+                <p className="text-xs text-warning">
                   Los macronutrientes suman <strong>{totalMacroKcal.toFixed(0)} kcal</strong> y exceden el GET ajustado de <strong>{getAjustado.toFixed(0)} kcal</strong> en <strong>{(totalMacroKcal - getAjustado).toFixed(0)} kcal</strong>.
                 </p>
               </div>
@@ -381,9 +381,9 @@ export default function DietocalculoForm({ userId }: { userId: string }) {
       </div>
 
       {/* Guardar */}
-      <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-100">
+      <div className="flex items-center justify-end gap-3 pt-2 border-t border-divider">
         {feedback && (
-          <span className={`text-xs font-medium ${feedback.type === "success" ? "text-green-600" : "text-red-600"}`}>
+          <span className={`text-xs font-medium ${feedback.type === "success" ? "text-success" : "text-error"}`}>
             {feedback.text}
           </span>
         )}

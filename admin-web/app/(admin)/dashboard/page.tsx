@@ -89,18 +89,18 @@ function CitasPendientesModal({ onClose }: { onClose: () => void }) {
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-divider shrink-0">
           <div>
-            <h2 className="font-bold text-gray-900 text-lg">Citas pendientes próximas</h2>
+            <h2 className="font-bold text-text-primary text-lg">Citas pendientes próximas</h2>
             {!loading && (
-              <p className="text-xs text-gray-400 mt-0.5">
+              <p className="text-xs text-muted mt-0.5">
                 {citas.length} cita{citas.length !== 1 ? "s" : ""} por confirmar
               </p>
             )}
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400"
+            className="w-8 h-8 rounded-full hover:bg-surface-muted flex items-center justify-center text-muted"
           >
             <X size={18} />
           </button>
@@ -109,33 +109,33 @@ function CitasPendientesModal({ onClose }: { onClose: () => void }) {
         {/* Body */}
         <div className="overflow-y-auto flex-1">
           {loading ? (
-            <p className="text-sm text-gray-400 text-center py-12">Cargando citas...</p>
+            <p className="text-sm text-muted text-center py-12">Cargando citas...</p>
           ) : error ? (
-            <p className="text-sm text-red-500 text-center py-12">{error}</p>
+            <p className="text-sm text-error text-center py-12">{error}</p>
           ) : citas.length === 0 ? (
             <div className="text-center py-14">
               <div className="w-14 h-14 rounded-full bg-brand-soft flex items-center justify-center mx-auto mb-3">
                 <PartyPopper size={26} className="text-primary" />
               </div>
-              <p className="text-gray-500 text-sm">No hay citas pendientes próximas.</p>
+              <p className="text-secondary text-sm">No hay citas pendientes próximas.</p>
             </div>
           ) : (
-            <div className="divide-y divide-gray-50">
+            <div className="divide-y divide-divider">
               {citas.map((c) => {
                 const nombre = c.perfiles?.nombre_completo || c.perfiles?.email || "Usuario";
                 const initials = nombre.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
                 const TipoIcon = TIPO_ICONS[c.tipo];
                 const ModIcon = c.modalidad ? MOD_ICONS[c.modalidad] : null;
                 return (
-                  <div key={c.id} className="flex items-center gap-4 px-6 py-4 hover:bg-gray-50/50">
+                  <div key={c.id} className="flex items-center gap-4 px-6 py-4 hover:bg-background-secondary/50">
                     {/* Avatar */}
                     <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 text-sm font-bold shrink-0">
                       {initials}
                     </div>
                     {/* Info */}
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900 truncate">{nombre}</p>
-                      <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
+                      <p className="text-sm font-semibold text-text-primary truncate">{nombre}</p>
+                      <p className="text-xs text-secondary mt-0.5 flex items-center gap-1">
                         {TipoIcon && <TipoIcon size={12} className="shrink-0" />}
                         {TIPO_LABELS[c.tipo] ?? c.tipo}
                         {c.modalidad && (
@@ -149,7 +149,7 @@ function CitasPendientesModal({ onClose }: { onClose: () => void }) {
                     </div>
                     {/* Fecha y hora */}
                     <div className="text-right shrink-0">
-                      <p className="text-sm font-semibold text-gray-800">{formatFecha(c.fecha)}</p>
+                      <p className="text-sm font-semibold text-text-primary">{formatFecha(c.fecha)}</p>
                       <p className="text-xs text-purple-600 font-medium mt-0.5">{formatHora(c.hora)}</p>
                     </div>
                   </div>
@@ -232,8 +232,8 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="p-8">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Dashboard</h1>
-        <p className="text-sm text-gray-400 text-center py-20">Cargando datos...</p>
+        <h1 className="text-2xl font-bold text-text-primary mb-2">Dashboard</h1>
+        <p className="text-sm text-muted text-center py-20">Cargando datos...</p>
       </div>
     );
   }
@@ -241,8 +241,8 @@ export default function DashboardPage() {
   return (
     <div className="p-8">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-500 text-sm mt-1">Resumen general de la plataforma</p>
+        <h1 className="text-2xl font-bold text-text-primary">Dashboard</h1>
+        <p className="text-secondary text-sm mt-1">Resumen general de la plataforma</p>
       </div>
 
       {/* KPI cards */}
@@ -253,19 +253,19 @@ export default function DashboardPage() {
             <Tag
               key={s.label}
               onClick={s.clickable ? () => setShowCitasModal(true) : undefined}
-              className={`bg-white rounded-2xl border border-gray-200 p-5 shadow-sm text-left w-full ${
+              className={`bg-white rounded-2xl border border-border p-5 shadow-sm text-left w-full ${
                 s.clickable
                   ? "cursor-pointer hover:border-purple-300 hover:shadow-md transition-all group"
                   : ""
               }`}
             >
               <div className="flex items-start justify-between mb-3">
-                <span className="text-sm text-gray-500 font-medium">{s.label}</span>
+                <span className="text-sm text-secondary font-medium">{s.label}</span>
                 <span className={`w-9 h-9 rounded-xl flex items-center justify-center ${s.color}`}>
                   <s.Icon size={18} />
                 </span>
               </div>
-              <p className="text-3xl font-extrabold text-gray-900">{s.value}</p>
+              <p className="text-3xl font-extrabold text-text-primary">{s.value}</p>
               <p className={`text-xs font-medium mt-1 ${s.clickable ? "text-purple-600 group-hover:underline" : "text-primary"}`}>
                 {s.sub}
               </p>
@@ -276,11 +276,11 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         {/* Usuarios recientes */}
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-            <h2 className="font-bold text-gray-900">Últimos usuarios registrados</h2>
+        <div className="bg-white rounded-2xl border border-border shadow-sm">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-divider">
+            <h2 className="font-bold text-text-primary">Últimos usuarios registrados</h2>
           </div>
-          <div className="divide-y divide-gray-50">
+          <div className="divide-y divide-divider">
             {recentUsers.map((u) => {
               const nombre = u.nombre_completo || "Sin nombre";
               const isPremium = u.plan_membresia === "premium";
@@ -290,13 +290,13 @@ export default function DashboardPage() {
                     {nombre.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-gray-900 truncate">{nombre}</p>
-                    <p className="text-xs text-gray-500">Se registró</p>
+                    <p className="text-sm font-semibold text-text-primary truncate">{nombre}</p>
+                    <p className="text-xs text-secondary">Se registró</p>
                   </div>
                   <div className="flex flex-col items-end gap-1 shrink-0">
-                    <span className="text-xs text-gray-400">{timeAgo(u.created_at)}</span>
+                    <span className="text-xs text-muted">{timeAgo(u.created_at)}</span>
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1 ${
-                      isPremium ? "bg-brand-soft text-primary" : "bg-gray-100 text-gray-600"
+                      isPremium ? "bg-brand-soft text-primary" : "bg-surface-muted text-secondary"
                     }`}>
                       {isPremium ? <Crown size={11} /> : <Lock size={11} />}
                       {isPremium ? "Premium" : "Básico"}
@@ -306,33 +306,33 @@ export default function DashboardPage() {
               );
             })}
             {recentUsers.length === 0 && (
-              <p className="text-sm text-gray-400 text-center py-8">No hay usuarios registrados aún.</p>
+              <p className="text-sm text-muted text-center py-8">No hay usuarios registrados aún.</p>
             )}
           </div>
         </div>
 
         {/* Distribución de planes */}
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm">
-          <div className="px-6 py-4 border-b border-gray-100">
-            <h2 className="font-bold text-gray-900">Distribución de planes</h2>
+        <div className="bg-white rounded-2xl border border-border shadow-sm">
+          <div className="px-6 py-4 border-b border-divider">
+            <h2 className="font-bold text-text-primary">Distribución de planes</h2>
           </div>
           <div className="p-6 flex flex-col gap-4">
             {[
               { label: "Premium", value: stats.totalPremium, pct: pctPremium, color: "bg-primary" },
-              { label: "Básico",  value: stats.totalBasico,  pct: pctBasico,  color: "bg-gray-300" },
+              { label: "Básico",  value: stats.totalBasico,  pct: pctBasico,  color: "bg-surface-muted" },
             ].map((p) => (
               <div key={p.label}>
                 <div className="flex justify-between text-sm mb-1.5">
-                  <span className="font-medium text-gray-700">{p.label}</span>
-                  <span className="text-gray-500">{p.value} usuarios ({p.pct}%)</span>
+                  <span className="font-medium text-text-primary">{p.label}</span>
+                  <span className="text-secondary">{p.value} usuarios ({p.pct}%)</span>
                 </div>
-                <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                <div className="h-2.5 bg-surface-muted rounded-full overflow-hidden">
                   <div className={`h-full ${p.color} rounded-full`} style={{ width: `${p.pct}%` }} />
                 </div>
               </div>
             ))}
             <div className="mt-4 p-4 bg-primary/5 rounded-xl border border-primary/20">
-              <p className="text-sm font-semibold text-gray-700">Total usuarios</p>
+              <p className="text-sm font-semibold text-text-primary">Total usuarios</p>
               <p className="text-2xl font-extrabold text-primary mt-1">{stats.totalUsuarios}</p>
             </div>
           </div>

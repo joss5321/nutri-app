@@ -25,6 +25,7 @@ export type Alimento = {
   lipidos_g: number | null;
   hco_g: number | null;
   fibra_g: number | null;
+  equivalentes: number;
   created_by: string | null;
   created_at?: string;
 };

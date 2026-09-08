@@ -11,9 +11,9 @@ const MONTH_SHORT = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SE
 const WEEKDAYS = ["Lu", "Ma", "Mi", "Ju", "Vi", "Sá", "Do"];
 
 const ESTADO_STYLES: Record<string, string> = {
-  pendiente: "bg-yellow-100 text-yellow-700",
-  confirmada: "bg-green-100 text-green-700",
-  cancelada: "bg-gray-100 text-gray-500",
+  pendiente: "bg-warning-soft text-warning",
+  confirmada: "bg-success-soft text-success",
+  cancelada: "bg-surface-muted text-secondary",
 };
 
 function parseFecha(fecha: string) {
@@ -112,13 +112,13 @@ export default function CitasManager({ userId }: { userId: string }) {
   };
 
   if (loading) {
-    return <p className="text-sm text-gray-400 text-center py-10">Cargando citas...</p>;
+    return <p className="text-sm text-muted text-center py-10">Cargando citas...</p>;
   }
 
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-10">
-        <p className="text-sm text-red-600">{error}</p>
+        <p className="text-sm text-error">{error}</p>
         <button onClick={load} className="text-sm font-semibold text-primary hover:underline">Reintentar</button>
       </div>
     );
@@ -140,13 +140,13 @@ export default function CitasManager({ userId }: { userId: string }) {
   return (
     <div className="grid grid-cols-3 gap-4">
       {/* Calendario */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <div className="bg-white rounded-xl border border-border p-4">
         <div className="flex items-center justify-center mb-3">
-          <p className="font-bold text-gray-900 text-sm">{MONTH_LABELS[month]} {year}</p>
+          <p className="font-bold text-text-primary text-sm">{MONTH_LABELS[month]} {year}</p>
         </div>
         <div className="grid grid-cols-7 gap-1 text-center">
           {WEEKDAYS.map((d) => (
-            <span key={d} className="text-xs text-gray-400 font-medium py-1">{d}</span>
+            <span key={d} className="text-xs text-muted font-medium py-1">{d}</span>
           ))}
           {Array.from({ length: firstWeekday }).map((_, i) => <span key={`b${i}`} />)}
           {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => {
@@ -156,64 +156,64 @@ export default function CitasManager({ userId }: { userId: string }) {
               <span key={d} className={`text-xs h-7 w-7 mx-auto rounded-full flex items-center justify-center ${
                 isToday ? "bg-primary text-white font-bold" :
                 hasCita ? "bg-primary/10 text-primary font-semibold" :
-                "text-gray-700"
+                "text-text-primary"
               }`}>{d}</span>
             );
           })}
         </div>
         <div className="mt-3 p-2.5 bg-primary/5 rounded-xl border border-primary/20">
           <p className="text-xs font-semibold text-primary inline-flex items-center gap-1"><CalendarDays size={12} /> {MONTH_LABELS[month]}</p>
-          <p className="text-xs text-gray-500 mt-0.5">
+          <p className="text-xs text-secondary mt-0.5">
             {citaDaysInMonth.size === 0 ? "Sin citas programadas este mes." : `${citaDaysInMonth.size} día(s) con citas programadas.`}
           </p>
         </div>
       </div>
 
       {/* Formulario nueva cita */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
-        <p className="font-bold text-gray-900 text-sm mb-3 inline-flex items-center gap-1.5"><ClipboardList size={14} className="text-primary" /> Registrar nueva cita</p>
+      <div className="bg-white rounded-xl border border-border p-4">
+        <p className="font-bold text-text-primary text-sm mb-3 inline-flex items-center gap-1.5"><ClipboardList size={14} className="text-primary" /> Registrar nueva cita</p>
         <div className="flex flex-col gap-3">
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-xs text-gray-500 block mb-1">Fecha</label>
+              <label className="text-xs text-secondary block mb-1">Fecha</label>
               <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)}
                 min={`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`}
-                className="w-full h-9 border border-gray-200 rounded-xl px-3 text-xs focus:outline-none focus:border-primary" />
+                className="w-full h-9 border border-border rounded-xl px-3 text-xs focus:outline-none focus:border-primary" />
             </div>
             <div>
-              <label className="text-xs text-gray-500 block mb-1">Hora</label>
+              <label className="text-xs text-secondary block mb-1">Hora</label>
               <input type="time" value={hora} onChange={(e) => setHora(e.target.value)}
-                className="w-full h-9 border border-gray-200 rounded-xl px-3 text-xs focus:outline-none focus:border-primary" />
+                className="w-full h-9 border border-border rounded-xl px-3 text-xs focus:outline-none focus:border-primary" />
             </div>
           </div>
           <div>
-            <label className="text-xs text-gray-500 block mb-1">Tipo de cita</label>
+            <label className="text-xs text-secondary block mb-1">Tipo de cita</label>
             <select value={tipo} onChange={(e) => setTipo(e.target.value)}
-              className="w-full h-9 border border-gray-200 rounded-xl px-3 text-xs focus:outline-none focus:border-primary">
+              className="w-full h-9 border border-border rounded-xl px-3 text-xs focus:outline-none focus:border-primary">
               {["Nutrición", "Entrenamiento", "Seguimiento"].map((o) => <option key={o}>{o}</option>)}
             </select>
           </div>
           <div>
-            <label className="text-xs text-gray-500 block mb-1">Profesional</label>
+            <label className="text-xs text-secondary block mb-1">Profesional</label>
             <input value={profesional} onChange={(e) => setProfesional(e.target.value)}
               placeholder="Ej. Lic. Ana Torres"
-              className="w-full h-9 border border-gray-200 rounded-xl px-3 text-xs focus:outline-none focus:border-primary" />
+              className="w-full h-9 border border-border rounded-xl px-3 text-xs focus:outline-none focus:border-primary" />
           </div>
           <div>
-            <label className="text-xs text-gray-500 block mb-1">Modalidad</label>
+            <label className="text-xs text-secondary block mb-1">Modalidad</label>
             <select value={modalidad} onChange={(e) => setModalidad(e.target.value)}
-              className="w-full h-9 border border-gray-200 rounded-xl px-3 text-xs focus:outline-none focus:border-primary">
+              className="w-full h-9 border border-border rounded-xl px-3 text-xs focus:outline-none focus:border-primary">
               {["Presencial", "En línea"].map((o) => <option key={o}>{o}</option>)}
             </select>
           </div>
           <div>
-            <label className="text-xs text-gray-500 block mb-1">Notas (opcional)</label>
+            <label className="text-xs text-secondary block mb-1">Notas (opcional)</label>
             <textarea value={notas} onChange={(e) => setNotas(e.target.value)}
               placeholder="Escribe alguna nota adicional..."
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-primary resize-none h-16" />
+              className="w-full border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-primary resize-none h-16" />
           </div>
           {feedback && (
-            <span className={`text-xs font-medium ${feedback.type === "success" ? "text-green-600" : "text-red-600"}`}>
+            <span className={`text-xs font-medium ${feedback.type === "success" ? "text-success" : "text-error"}`}>
               {feedback.text}
             </span>
           )}
@@ -230,35 +230,35 @@ export default function CitasManager({ userId }: { userId: string }) {
 
       {/* Lista de citas */}
       <div className="flex flex-col gap-3">
-        <p className="font-bold text-gray-900 text-sm">
+        <p className="font-bold text-text-primary text-sm">
           {citas.length === 0 ? "Sin citas programadas" : `${citas.length} cita(s) programada(s)`}
         </p>
         {citas.map((c) => {
           const { month: cMonth, day } = parseFecha(c.fecha);
           return (
-            <div key={c.id} className="bg-white rounded-xl border border-gray-200 p-3 flex gap-3">
+            <div key={c.id} className="bg-white rounded-xl border border-border p-3 flex gap-3">
               <div className="flex flex-col items-center bg-primary text-white rounded-xl px-3 py-2 text-center shrink-0">
                 <span className="text-xs font-bold opacity-80">{MONTH_SHORT[cMonth]}</span>
                 <span className="text-lg font-extrabold">{day}</span>
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex justify-between items-start">
-                  <p className="font-semibold text-gray-900 text-xs">{c.hora}</p>
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${ESTADO_STYLES[c.estado] ?? "bg-gray-100 text-gray-500"}`}>
+                  <p className="font-semibold text-text-primary text-xs">{c.hora}</p>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${ESTADO_STYLES[c.estado] ?? "bg-surface-muted text-secondary"}`}>
                     {c.estado}
                   </span>
                 </div>
-                <p className="font-bold text-gray-800 text-sm mt-0.5">{c.tipo}</p>
-                {c.profesional && <p className="text-xs text-gray-500">{c.profesional}</p>}
-                {c.modalidad && <p className="text-xs text-gray-400 inline-flex items-center gap-1"><MapPin size={11} /> {c.modalidad}</p>}
-                {c.notas && <p className="text-xs text-gray-400 mt-1 inline-flex items-center gap-1"><StickyNote size={11} /> {c.notas}</p>}
+                <p className="font-bold text-text-primary text-sm mt-0.5">{c.tipo}</p>
+                {c.profesional && <p className="text-xs text-secondary">{c.profesional}</p>}
+                {c.modalidad && <p className="text-xs text-muted inline-flex items-center gap-1"><MapPin size={11} /> {c.modalidad}</p>}
+                {c.notas && <p className="text-xs text-muted mt-1 inline-flex items-center gap-1"><StickyNote size={11} /> {c.notas}</p>}
               </div>
-              <button onClick={() => handleRemoveCita(c.id)} className="text-gray-400 hover:text-red-500 self-start"><X size={15} /></button>
+              <button onClick={() => handleRemoveCita(c.id)} className="text-muted hover:text-error self-start"><X size={15} /></button>
             </div>
           );
         })}
         {citas.length === 0 && (
-          <p className="text-xs text-gray-400 text-center py-6">Aún no hay citas registradas para este usuario.</p>
+          <p className="text-xs text-muted text-center py-6">Aún no hay citas registradas para este usuario.</p>
         )}
       </div>
     </div>

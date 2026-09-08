@@ -123,7 +123,7 @@ export default function MiPerfilPage() {
   if (loading) {
     return (
       <div className="p-8">
-        <p className="text-sm text-gray-400 text-center py-20">Cargando perfil...</p>
+        <p className="text-sm text-muted text-center py-20">Cargando perfil...</p>
       </div>
     );
   }
@@ -131,12 +131,12 @@ export default function MiPerfilPage() {
   return (
     <div className="p-8 max-w-3xl">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Mi Perfil</h1>
-        <p className="text-gray-500 text-sm mt-1">Administra tu información personal y seguridad.</p>
+        <h1 className="text-2xl font-bold text-text-primary">Mi Perfil</h1>
+        <p className="text-secondary text-sm mt-1">Administra tu información personal y seguridad.</p>
       </div>
 
       {/* Profile card */}
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 mb-6">
+      <div className="bg-white rounded-2xl border border-border shadow-sm p-6 mb-6">
         <div className="flex items-center gap-5 mb-6">
           <div className="relative group">
             {perfil?.avatar_url ? (
@@ -168,8 +168,8 @@ export default function MiPerfilPage() {
             />
           </div>
           <div>
-            <h2 className="font-bold text-gray-900 text-xl">{perfil?.nombre_completo || "Administrador"}</h2>
-            <p className="text-gray-500 text-sm">{email}</p>
+            <h2 className="font-bold text-text-primary text-xl">{perfil?.nombre_completo || "Administrador"}</h2>
+            <p className="text-secondary text-sm">{email}</p>
             <div className="flex items-center gap-2 mt-1">
               <span className="text-xs px-3 py-0.5 rounded-full font-semibold bg-purple-100 text-purple-700 inline-flex items-center gap-1">
                 <ShieldCheck size={12} /> Administrador
@@ -179,27 +179,27 @@ export default function MiPerfilPage() {
         </div>
 
         {avatarFeedback && (
-          <p className={`text-xs font-medium mb-3 ${avatarFeedback.type === "success" ? "text-green-600" : "text-red-600"}`}>
+          <p className={`text-xs font-medium mb-3 ${avatarFeedback.type === "success" ? "text-success" : "text-error"}`}>
             {avatarFeedback.text}
           </p>
         )}
 
         <div className="grid grid-cols-2 gap-4 text-sm">
-          <div className="bg-gray-50 rounded-xl p-3">
-            <p className="text-xs text-gray-400 font-medium">Correo electrónico</p>
-            <p className="text-gray-700 font-medium mt-1">{email}</p>
+          <div className="bg-background-secondary rounded-xl p-3">
+            <p className="text-xs text-muted font-medium">Correo electrónico</p>
+            <p className="text-text-primary font-medium mt-1">{email}</p>
           </div>
-          <div className="bg-gray-50 rounded-xl p-3">
-            <p className="text-xs text-gray-400 font-medium">Rol</p>
-            <p className="text-gray-700 font-medium mt-1 capitalize">{perfil?.rol ?? "admin"}</p>
+          <div className="bg-background-secondary rounded-xl p-3">
+            <p className="text-xs text-muted font-medium">Rol</p>
+            <p className="text-text-primary font-medium mt-1 capitalize">{perfil?.rol ?? "admin"}</p>
           </div>
-          <div className="bg-gray-50 rounded-xl p-3">
-            <p className="text-xs text-gray-400 font-medium">Sexo</p>
-            <p className="text-gray-700 font-medium mt-1 capitalize">{perfil?.sexo ?? "—"}</p>
+          <div className="bg-background-secondary rounded-xl p-3">
+            <p className="text-xs text-muted font-medium">Sexo</p>
+            <p className="text-text-primary font-medium mt-1 capitalize">{perfil?.sexo ?? "—"}</p>
           </div>
-          <div className="bg-gray-50 rounded-xl p-3">
-            <p className="text-xs text-gray-400 font-medium">Registrado</p>
-            <p className="text-gray-700 font-medium mt-1">
+          <div className="bg-background-secondary rounded-xl p-3">
+            <p className="text-xs text-muted font-medium">Registrado</p>
+            <p className="text-text-primary font-medium mt-1">
               {perfil?.created_at ? new Date(perfil.created_at).toLocaleDateString("es-MX") : "—"}
             </p>
           </div>
@@ -207,22 +207,22 @@ export default function MiPerfilPage() {
       </div>
 
       {/* Edit name */}
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 mb-6">
-        <h3 className="font-bold text-gray-900 mb-1">Editar información</h3>
-        <p className="text-sm text-gray-500 mb-4">Actualiza tu nombre visible en la plataforma.</p>
+      <div className="bg-white rounded-2xl border border-border shadow-sm p-6 mb-6">
+        <h3 className="font-bold text-text-primary mb-1">Editar información</h3>
+        <p className="text-sm text-secondary mb-4">Actualiza tu nombre visible en la plataforma.</p>
 
         <div className="mb-4">
-          <label className="text-xs text-gray-500 font-medium block mb-1">Nombre completo</label>
+          <label className="text-xs text-secondary font-medium block mb-1">Nombre completo</label>
           <input
             value={nombre}
             onChange={(e) => setNombre(e.target.value)}
-            className="w-full h-10 border border-gray-200 rounded-xl px-3 text-sm focus:outline-none focus:border-primary"
+            className="w-full h-10 border border-border rounded-xl px-3 text-sm focus:outline-none focus:border-primary"
           />
         </div>
 
         <div className="flex items-center justify-end gap-3">
           {profileFeedback && (
-            <span className={`text-xs font-medium ${profileFeedback.type === "success" ? "text-green-600" : "text-red-600"}`}>
+            <span className={`text-xs font-medium ${profileFeedback.type === "success" ? "text-success" : "text-error"}`}>
               {profileFeedback.text}
             </span>
           )}
@@ -237,43 +237,43 @@ export default function MiPerfilPage() {
       </div>
 
       {/* Change password */}
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
-        <h3 className="font-bold text-gray-900 mb-1">Cambiar contraseña</h3>
-        <p className="text-sm text-gray-500 mb-4">Ingresa tu nueva contraseña (mínimo 8 caracteres).</p>
+      <div className="bg-white rounded-2xl border border-border shadow-sm p-6">
+        <h3 className="font-bold text-text-primary mb-1">Cambiar contraseña</h3>
+        <p className="text-sm text-secondary mb-4">Ingresa tu nueva contraseña (mínimo 8 caracteres).</p>
 
         <div className="grid grid-cols-2 gap-4 mb-4">
           <div>
-            <label className="text-xs text-gray-500 font-medium block mb-1">Nueva contraseña</label>
+            <label className="text-xs text-secondary font-medium block mb-1">Nueva contraseña</label>
             <input
               type="password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               placeholder="Mínimo 8 caracteres"
-              className="w-full h-10 border border-gray-200 rounded-xl px-3 text-sm focus:outline-none focus:border-primary"
+              className="w-full h-10 border border-border rounded-xl px-3 text-sm focus:outline-none focus:border-primary"
             />
           </div>
           <div>
-            <label className="text-xs text-gray-500 font-medium block mb-1">Confirmar contraseña</label>
+            <label className="text-xs text-secondary font-medium block mb-1">Confirmar contraseña</label>
             <input
               type="password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               placeholder="Repite la contraseña"
-              className="w-full h-10 border border-gray-200 rounded-xl px-3 text-sm focus:outline-none focus:border-primary"
+              className="w-full h-10 border border-border rounded-xl px-3 text-sm focus:outline-none focus:border-primary"
             />
           </div>
         </div>
 
         <div className="flex items-center justify-end gap-3">
           {passwordFeedback && (
-            <span className={`text-xs font-medium ${passwordFeedback.type === "success" ? "text-green-600" : "text-red-600"}`}>
+            <span className={`text-xs font-medium ${passwordFeedback.type === "success" ? "text-success" : "text-error"}`}>
               {passwordFeedback.text}
             </span>
           )}
           <button
             onClick={handleChangePassword}
             disabled={savingPassword}
-            className="px-4 h-10 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800 disabled:opacity-50 inline-flex items-center gap-2"
+            className="px-4 h-10 rounded-xl bg-ink text-white text-sm font-semibold hover:bg-ink/90 disabled:opacity-50 inline-flex items-center gap-2"
           >
             {!savingPassword && <Lock size={14} />}
             {savingPassword ? "Cambiando..." : "Cambiar contraseña"}

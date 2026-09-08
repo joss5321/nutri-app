@@ -53,14 +53,14 @@ export default function ConfirmModal({
           <div className={`w-14 h-14 rounded-full ${v.iconBg} flex items-center justify-center`}>
             <v.Icon size={26} className={v.iconColor} />
           </div>
-          <h3 className="font-bold text-gray-900 text-lg">{title}</h3>
-          <p className="text-sm text-gray-500 leading-relaxed">{message}</p>
+          <h3 className="font-bold text-text-primary text-lg">{title}</h3>
+          <p className="text-sm text-secondary leading-relaxed">{message}</p>
         </div>
         <div className="flex gap-3 px-6 pb-6">
           <button
             onClick={onCancel}
             disabled={loading}
-            className="flex-1 h-11 rounded-xl border border-gray-200 text-gray-600 text-sm font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50"
+            className="flex-1 h-11 rounded-xl border border-border text-secondary text-sm font-semibold hover:bg-background-secondary transition-colors disabled:opacity-50"
           >
             {cancelLabel}
           </button>

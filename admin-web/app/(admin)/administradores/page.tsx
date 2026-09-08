@@ -217,7 +217,7 @@ export default function AdministradoresPage() {
   if (checkingAuth || !authorized) {
     return (
       <div className="p-8">
-        <p className="text-sm text-gray-400 py-10 text-center">Cargando...</p>
+        <p className="text-sm text-muted py-10 text-center">Cargando...</p>
       </div>
     );
   }
@@ -227,8 +227,8 @@ export default function AdministradoresPage() {
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Administradores</h1>
-          <p className="text-gray-500 text-sm mt-1">Gestiona las cuentas con acceso al panel de administración.</p>
+          <h1 className="text-2xl font-bold text-text-primary">Administradores</h1>
+          <p className="text-secondary text-sm mt-1">Gestiona las cuentas con acceso al panel de administración.</p>
         </div>
         <button
           onClick={() => { setShowForm(!showForm); setFeedback(null); }}
@@ -242,7 +242,7 @@ export default function AdministradoresPage() {
       {/* Feedback */}
       {feedback && (
         <div className={`mb-4 text-sm rounded-xl px-4 py-3 ${
-          feedback.type === "success" ? "bg-green-50 border border-green-200 text-green-700" : "bg-red-50 border border-red-200 text-red-600"
+          feedback.type === "success" ? "bg-success-soft border border-success/30 text-success" : "bg-error-soft border border-error/30 text-error"
         }`}>
           {feedback.text}
         </div>
@@ -250,24 +250,24 @@ export default function AdministradoresPage() {
 
       {/* Create form */}
       {showForm && (
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 mb-6">
-          <h3 className="font-bold text-gray-900 mb-1">Crear nuevo administrador</h3>
-          <p className="text-sm text-gray-500 mb-4">Esta cuenta podrá acceder al panel de administración.</p>
+        <div className="bg-white rounded-2xl border border-border shadow-sm p-6 mb-6">
+          <h3 className="font-bold text-text-primary mb-1">Crear nuevo administrador</h3>
+          <p className="text-sm text-secondary mb-4">Esta cuenta podrá acceder al panel de administración.</p>
           <div className="grid grid-cols-3 gap-4 mb-4">
             <div>
-              <label className="text-xs text-gray-500 font-medium block mb-1">Nombre completo</label>
+              <label className="text-xs text-secondary font-medium block mb-1">Nombre completo</label>
               <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej. Dr. Carlos Vega"
-                className="w-full h-10 border border-gray-200 rounded-xl px-3 text-sm focus:outline-none focus:border-primary" />
+                className="w-full h-10 border border-border rounded-xl px-3 text-sm focus:outline-none focus:border-primary" />
             </div>
             <div>
-              <label className="text-xs text-gray-500 font-medium block mb-1">Correo electrónico</label>
+              <label className="text-xs text-secondary font-medium block mb-1">Correo electrónico</label>
               <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="admin@ejemplo.com"
-                className="w-full h-10 border border-gray-200 rounded-xl px-3 text-sm focus:outline-none focus:border-primary" />
+                className="w-full h-10 border border-border rounded-xl px-3 text-sm focus:outline-none focus:border-primary" />
             </div>
             <div>
-              <label className="text-xs text-gray-500 font-medium block mb-1">Contraseña (mín. 8 caracteres)</label>
+              <label className="text-xs text-secondary font-medium block mb-1">Contraseña (mín. 8 caracteres)</label>
               <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••"
-                className="w-full h-10 border border-gray-200 rounded-xl px-3 text-sm focus:outline-none focus:border-primary" />
+                className="w-full h-10 border border-border rounded-xl px-3 text-sm focus:outline-none focus:border-primary" />
             </div>
           </div>
           <div className="flex justify-end">
@@ -282,7 +282,7 @@ export default function AdministradoresPage() {
 
       {/* Error */}
       {error && (
-        <div className="mb-4 flex items-center justify-between bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl px-4 py-3">
+        <div className="mb-4 flex items-center justify-between bg-error-soft border border-error/30 text-error text-sm rounded-xl px-4 py-3">
           <span>{error}</span>
           <button onClick={() => { setLoading(true); setError(null); loadAdmins(); }} className="font-semibold hover:underline">Reintentar</button>
         </div>
@@ -290,24 +290,24 @@ export default function AdministradoresPage() {
 
       {/* Table */}
       {loading ? (
-        <p className="text-sm text-gray-400 py-10 text-center">Cargando administradores...</p>
+        <p className="text-sm text-muted py-10 text-center">Cargando administradores...</p>
       ) : (
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-100 bg-gray-50/50">
+              <tr className="border-b border-divider bg-background-secondary/50">
                 {["Nombre", "Registrado", "Acciones"].map((h) => (
-                  <th key={h} className="text-left px-4 py-3.5 text-xs font-semibold text-gray-500">{h}</th>
+                  <th key={h} className="text-left px-4 py-3.5 text-xs font-semibold text-secondary">{h}</th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody className="divide-y divide-divider">
               {admins.map((a) => {
                 const adminNombre = a.nombre_completo || "Sin nombre";
                 const isSelf = a.id === currentUserId;
                 return (
-                  <tr key={a.id} className="hover:bg-gray-50/50 transition-colors">
+                  <tr key={a.id} className="hover:bg-background-secondary/50 transition-colors">
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-3">
                         {a.avatar_url ? (
@@ -318,7 +318,7 @@ export default function AdministradoresPage() {
                           </div>
                         )}
                         <div>
-                          <span className="font-medium text-gray-900">{adminNombre}</span>
+                          <span className="font-medium text-text-primary">{adminNombre}</span>
                           {isSelf && (
                             <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-brand-soft text-primary font-semibold">Tú</span>
                           )}
@@ -328,18 +328,18 @@ export default function AdministradoresPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3.5 text-gray-500">
+                    <td className="px-4 py-3.5 text-secondary">
                       {a.created_at ? new Date(a.created_at).toLocaleDateString("es-MX") : "—"}
                     </td>
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-2">
                         <button onClick={() => openEdit(a)}
-                          className="w-9 h-9 rounded-xl border border-gray-200 hover:border-primary hover:bg-primary/5 flex items-center justify-center transition-colors text-gray-500 hover:text-primary" title="Editar">
+                          className="w-9 h-9 rounded-xl border border-border hover:border-primary hover:bg-primary/5 flex items-center justify-center transition-colors text-secondary hover:text-primary" title="Editar">
                           <Pencil size={15} />
                         </button>
                         {!isSelf && a.rol !== "superadmin" && (
                           <button onClick={() => setConfirmRemove(a)}
-                            className="w-9 h-9 rounded-xl border border-red-200 hover:border-red-400 hover:bg-red-50 flex items-center justify-center transition-colors text-red-500" title="Quitar acceso">
+                            className="w-9 h-9 rounded-xl border border-error/30 hover:border-error/60 hover:bg-error-soft flex items-center justify-center transition-colors text-error" title="Quitar acceso">
                             <Trash2 size={15} />
                           </button>
                         )}
@@ -350,7 +350,7 @@ export default function AdministradoresPage() {
               })}
               {admins.length === 0 && (
                 <tr>
-                  <td colSpan={3} className="px-4 py-10 text-center text-gray-400 text-sm">
+                  <td colSpan={3} className="px-4 py-10 text-center text-muted text-sm">
                     No hay administradores registrados.
                   </td>
                 </tr>
@@ -365,9 +365,9 @@ export default function AdministradoresPage() {
       {editing && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setEditing(null)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-6 border-b border-gray-100">
-              <h2 className="font-bold text-gray-900 text-lg">Editar administrador</h2>
-              <button onClick={() => setEditing(null)} className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400"><X size={18} /></button>
+            <div className="flex items-center justify-between p-6 border-b border-divider">
+              <h2 className="font-bold text-text-primary text-lg">Editar administrador</h2>
+              <button onClick={() => setEditing(null)} className="w-8 h-8 rounded-full hover:bg-surface-muted flex items-center justify-center text-muted"><X size={18} /></button>
             </div>
             <div className="p-6 space-y-5">
               {/* Avatar */}
@@ -385,37 +385,37 @@ export default function AdministradoresPage() {
                   </div>
                 </div>
                 <input ref={editFileRef} type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" />
-                <p className="text-xs text-gray-400">Haz clic para cambiar la foto</p>
+                <p className="text-xs text-muted">Haz clic para cambiar la foto</p>
               </div>
 
               {/* Nombre */}
               <div>
-                <label className="text-xs text-gray-500 font-medium block mb-1">Nombre completo</label>
+                <label className="text-xs text-secondary font-medium block mb-1">Nombre completo</label>
                 <input value={editNombre} onChange={(e) => setEditNombre(e.target.value)}
-                  className="w-full h-10 border border-gray-200 rounded-xl px-3 text-sm focus:outline-none focus:border-primary" />
+                  className="w-full h-10 border border-border rounded-xl px-3 text-sm focus:outline-none focus:border-primary" />
               </div>
 
               {/* Contraseña */}
               <div>
-                <label className="text-xs text-gray-500 font-medium block mb-1">
-                  Nueva contraseña <span className="text-gray-400">(dejar vacío para no cambiar)</span>
+                <label className="text-xs text-secondary font-medium block mb-1">
+                  Nueva contraseña <span className="text-muted">(dejar vacío para no cambiar)</span>
                 </label>
                 <input type="password" value={editNewPassword} onChange={(e) => setEditNewPassword(e.target.value)}
                   placeholder="Mínimo 8 caracteres"
-                  className="w-full h-10 border border-gray-200 rounded-xl px-3 text-sm focus:outline-none focus:border-primary" />
+                  className="w-full h-10 border border-border rounded-xl px-3 text-sm focus:outline-none focus:border-primary" />
                 {editing.id !== currentUserId && (
-                  <p className="text-xs text-amber-600 mt-1">Solo puedes cambiar tu propia contraseña.</p>
+                  <p className="text-xs text-warning mt-1">Solo puedes cambiar tu propia contraseña.</p>
                 )}
               </div>
 
               {editFeedback && (
-                <p className={`text-xs font-medium ${editFeedback.type === "success" ? "text-green-600" : "text-red-600"}`}>
+                <p className={`text-xs font-medium ${editFeedback.type === "success" ? "text-success" : "text-error"}`}>
                   {editFeedback.text}
                 </p>
               )}
             </div>
-            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100">
-              <button onClick={() => setEditing(null)} className="px-4 h-10 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50">
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-divider">
+              <button onClick={() => setEditing(null)} className="px-4 h-10 rounded-xl border border-border text-secondary text-sm hover:bg-background-secondary">
                 Cancelar
               </button>
               <button onClick={handleSaveEdit} disabled={savingEdit}

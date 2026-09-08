@@ -316,48 +316,48 @@ export default function RutinaBuilderModal({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-100">
+        <div className="flex items-center justify-between p-6 border-b border-divider">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-full bg-primary/15 flex items-center justify-center text-primary font-bold text-lg">
               {patient.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
             </div>
             <div>
-              <h2 className="font-bold text-gray-900 text-xl">{nombre}</h2>
+              <h2 className="font-bold text-text-primary text-xl">{nombre}</h2>
             </div>
           </div>
-          <button onClick={onClose} className="w-9 h-9 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 text-xl">×</button>
+          <button onClick={onClose} className="w-9 h-9 rounded-full hover:bg-surface-muted flex items-center justify-center text-muted text-xl">×</button>
         </div>
 
         {loadingRutina ? (
-          <div className="flex-1 flex items-center justify-center p-10 text-gray-400 text-sm">Cargando rutina...</div>
+          <div className="flex-1 flex items-center justify-center p-10 text-muted text-sm">Cargando rutina...</div>
         ) : error ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-3 p-10">
-            <p className="text-sm text-red-600">{error}</p>
+            <p className="text-sm text-error">{error}</p>
             <button onClick={retryLoadRutina} className="text-sm font-semibold text-primary hover:underline">Reintentar</button>
           </div>
         ) : (
           <div className="grid grid-cols-3 gap-6 p-6 flex-1">
             {/* ── Catálogo de ejercicios ── */}
             <div className="col-span-1 flex flex-col gap-3">
-              <p className="text-sm font-bold text-gray-800">Catálogo de ejercicios</p>
-              <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 h-10">
-                <Search size={15} className="text-gray-400 shrink-0" />
+              <p className="text-sm font-bold text-text-primary">Catálogo de ejercicios</p>
+              <div className="flex items-center gap-2 bg-background-secondary border border-border rounded-xl px-3 h-10">
+                <Search size={15} className="text-muted shrink-0" />
                 <input
                   placeholder="Buscar ejercicio..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="flex-1 text-sm bg-transparent focus:outline-none text-gray-700"
+                  className="flex-1 text-sm bg-transparent focus:outline-none text-text-primary"
                 />
               </div>
               <select value={grupo} onChange={(e) => setGrupo(e.target.value)}
-                className="h-10 border border-gray-200 rounded-xl px-3 text-sm bg-white focus:outline-none focus:border-primary">
+                className="h-10 border border-border rounded-xl px-3 text-sm bg-white focus:outline-none focus:border-primary">
                 <option>Todos</option>
                 {muscleGroups.map((m) => <option key={m}>{m}</option>)}
               </select>
 
               <div className="flex flex-col gap-2 overflow-y-auto max-h-[32rem] pr-1">
                 {loadingExercises && (
-                  <p className="text-xs text-gray-400 text-center py-6">Cargando catálogo...</p>
+                  <p className="text-xs text-muted text-center py-6">Cargando catálogo...</p>
                 )}
                 {!loadingExercises && catalog.map((ex) => (
                   <div
@@ -365,25 +365,25 @@ export default function RutinaBuilderModal({
                     draggable
                     onDragStart={(e) => e.dataTransfer.setData("text/plain", ex.id)}
                     onClick={() => addExercise(ex.id)}
-                    className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 cursor-grab active:cursor-grabbing hover:border-primary/50 transition-colors"
+                    className="flex items-center gap-2 bg-background-secondary border border-border rounded-xl px-3 py-2 cursor-grab active:cursor-grabbing hover:border-primary/50 transition-colors"
                     title="Arrastra o haz clic para agregar al día seleccionado"
                   >
-                    <span className="text-gray-400 text-xs">⠿</span>
+                    <span className="text-muted text-xs">⠿</span>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-gray-800 truncate">{ex.nombre}</p>
+                      <p className="text-sm font-medium text-text-primary truncate">{ex.nombre}</p>
                       <div className="flex flex-wrap gap-1 mt-0.5">
                         {ex.grupo_muscular && (
                           <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">{ex.grupo_muscular}</span>
                         )}
                         {ex.grupos_secundarios.map((g) => (
-                          <span key={g} className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{g}</span>
+                          <span key={g} className="text-xs bg-surface-muted text-secondary px-2 py-0.5 rounded-full">{g}</span>
                         ))}
                       </div>
                     </div>
                   </div>
                 ))}
                 {!loadingExercises && catalog.length === 0 && (
-                  <p className="text-xs text-gray-400 text-center py-6">No se encontraron ejercicios.</p>
+                  <p className="text-xs text-muted text-center py-6">No se encontraron ejercicios.</p>
                 )}
               </div>
             </div>
@@ -391,19 +391,19 @@ export default function RutinaBuilderModal({
             {/* ── Rutina por día ── */}
             <div className="col-span-2 flex flex-col gap-3">
               <div className="flex items-center justify-between">
-                <p className="text-sm font-bold text-gray-800">
+                <p className="text-sm font-bold text-text-primary">
                   Rutina semanal · {totalAsignados} ejercicio{totalAsignados !== 1 ? "s" : ""} asignados
                 </p>
                 {/* Unidad por defecto para nuevos ejercicios */}
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-gray-400">Unidad por defecto:</span>
-                  <div className="flex items-center bg-gray-100 rounded-xl p-0.5">
+                  <span className="text-xs text-muted">Unidad por defecto:</span>
+                  <div className="flex items-center bg-surface-muted rounded-xl p-0.5">
                     {(["kg", "lbs"] as const).map((u) => (
                       <button
                         key={u}
                         onClick={() => setPesoUnidad(u)}
                         className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
-                          pesoUnidad === u ? "bg-white text-gray-900 shadow-sm" : "text-gray-400 hover:text-gray-600"
+                          pesoUnidad === u ? "bg-white text-text-primary shadow-sm" : "text-muted hover:text-secondary"
                         }`}
                       >
                         {u}
@@ -420,7 +420,7 @@ export default function RutinaBuilderModal({
                     key={d}
                     onClick={() => setActiveDay(d)}
                     className={`px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors ${
-                      activeDay === d ? "bg-primary text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                      activeDay === d ? "bg-primary text-white" : "bg-surface-muted text-secondary hover:bg-surface-muted"
                     }`}
                   >
                     {d} {assigned[d].length > 0 && <span className="ml-1 opacity-75">({assigned[d].length})</span>}
@@ -439,11 +439,11 @@ export default function RutinaBuilderModal({
                   setDragOver(false);
                 }}
                 className={`series-scroll h-[36rem] rounded-xl border-2 border-dashed p-3 flex flex-col gap-3 overflow-y-auto transition-colors ${
-                  dragOver ? "border-primary bg-primary/5" : "border-gray-200"
+                  dragOver ? "border-primary bg-primary/5" : "border-border"
                 }`}
               >
                 {assigned[activeDay].length === 0 && (
-                  <div className="flex-1 flex flex-col items-center justify-center text-gray-400 gap-1">
+                  <div className="flex-1 flex flex-col items-center justify-center text-muted gap-1">
                     <Dumbbell size={28} />
                     <p className="text-sm">Arrastra ejercicios aquí para {activeDay}</p>
                   </div>
@@ -453,14 +453,14 @@ export default function RutinaBuilderModal({
                   const ex = exerciseById(a.exerciseId);
                   if (!ex) return null;
                   return (
-                    <div key={a.uid} className="shrink-0 bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                    <div key={a.uid} className="shrink-0 bg-white border border-border rounded-xl overflow-hidden shadow-sm">
                       {/* Exercise header */}
-                      <div className="flex items-center gap-2 px-3 py-2.5 bg-gray-50/80 border-b border-gray-100">
+                      <div className="flex items-center gap-2 px-3 py-2.5 bg-background-secondary/80 border-b border-divider">
                         <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-base shrink-0">
                           {ex.emoji || "🏋️"}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="font-semibold text-gray-900 text-sm truncate">{ex.nombre}</p>
+                          <p className="font-semibold text-text-primary text-sm truncate">{ex.nombre}</p>
                           {ex.grupo_muscular && (
                             <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded-full font-medium">{ex.grupo_muscular}</span>
                           )}
@@ -469,18 +469,18 @@ export default function RutinaBuilderModal({
                         <div className="flex items-center gap-2 shrink-0">
                           {/* Series */}
                           <div className="flex flex-col items-center">
-                            <span className="text-[10px] text-gray-400 mb-0.5">Series</span>
+                            <span className="text-[10px] text-muted mb-0.5">Series</span>
                             <div className="flex items-center">
                               <button type="button" onClick={() => stepSeries(a.uid, -1)}
-                                className="w-6 h-7 flex items-center justify-center border border-gray-200 rounded-l-lg text-xs text-gray-500 hover:bg-gray-50 active:bg-gray-100 select-none">−</button>
-                              <span className="w-7 h-7 flex items-center justify-center border-t border-b border-gray-200 text-xs font-semibold text-gray-900 select-none">{a.series}</span>
+                                className="w-6 h-7 flex items-center justify-center border border-border rounded-l-lg text-xs text-secondary hover:bg-background-secondary active:bg-surface-muted select-none">−</button>
+                              <span className="w-7 h-7 flex items-center justify-center border-t border-b border-border text-xs font-semibold text-text-primary select-none">{a.series}</span>
                               <button type="button" onClick={() => stepSeries(a.uid, 1)}
-                                className="w-6 h-7 flex items-center justify-center border border-gray-200 rounded-r-lg text-xs text-gray-500 hover:bg-gray-50 active:bg-gray-100 select-none">+</button>
+                                className="w-6 h-7 flex items-center justify-center border border-border rounded-r-lg text-xs text-secondary hover:bg-background-secondary active:bg-surface-muted select-none">+</button>
                             </div>
                           </div>
                           {/* RIR */}
                           <div className="flex flex-col items-center">
-                            <span className="text-[10px] text-gray-400 mb-0.5">RIR</span>
+                            <span className="text-[10px] text-muted mb-0.5">RIR</span>
                             <input
                               type="number"
                               min="0"
@@ -488,12 +488,12 @@ export default function RutinaBuilderModal({
                               value={a.rir}
                               onChange={(e) => updateExerciseField(a.uid, "rir", e.target.value)}
                               placeholder="—"
-                              className="w-12 h-7 text-center border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-primary text-gray-500"
+                              className="w-12 h-7 text-center border border-border rounded-lg text-xs focus:outline-none focus:border-primary text-secondary"
                             />
                           </div>
                           {/* RPE */}
                           <div className="flex flex-col items-center">
-                            <span className="text-[10px] text-gray-400 mb-0.5">RPE</span>
+                            <span className="text-[10px] text-muted mb-0.5">RPE</span>
                             <input
                               type="number"
                               min="1"
@@ -502,12 +502,12 @@ export default function RutinaBuilderModal({
                               value={a.rpe}
                               onChange={(e) => updateExerciseField(a.uid, "rpe", e.target.value)}
                               placeholder="—"
-                              className="w-12 h-7 text-center border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-primary text-gray-500"
+                              className="w-12 h-7 text-center border border-border rounded-lg text-xs focus:outline-none focus:border-primary text-secondary"
                             />
                           </div>
                           {/* Descanso */}
                           <div className="flex flex-col items-center">
-                            <span className="text-[10px] text-gray-400 mb-0.5">Desc. (s)</span>
+                            <span className="text-[10px] text-muted mb-0.5">Desc. (s)</span>
                             <input
                               type="number"
                               min="0"
@@ -515,12 +515,12 @@ export default function RutinaBuilderModal({
                               value={a.descanso}
                               onChange={(e) => updateExerciseField(a.uid, "descanso", e.target.value)}
                               placeholder="—"
-                              className="w-14 h-7 text-center border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-orange-400 text-gray-500"
+                              className="w-14 h-7 text-center border border-border rounded-lg text-xs focus:outline-none focus:border-orange-400 text-secondary"
                             />
                           </div>
                           <button
                             onClick={() => removeExercise(a.uid)}
-                            className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                            className="w-7 h-7 flex items-center justify-center text-muted hover:text-error hover:bg-error-soft rounded-lg transition-colors"
                           >
                             <X size={14} />
                           </button>
@@ -528,9 +528,9 @@ export default function RutinaBuilderModal({
                       </div>
 
                       {/* Series rows */}
-                      <div className="divide-y divide-gray-50">
+                      <div className="divide-y divide-divider">
                         {/* Column labels */}
-                        <div className="grid grid-cols-[32px_1fr_1fr] gap-2 px-3 py-1.5 bg-gray-50/40 items-center">
+                        <div className="grid grid-cols-[32px_1fr_1fr] gap-2 px-3 py-1.5 bg-background-secondary/40 items-center">
                           <span />
                           {/* Toggle Reps / Tiempo */}
                           <button
@@ -545,14 +545,14 @@ export default function RutinaBuilderModal({
                             {a.tipoEsfuerzo === "reps" ? "Reps" : "Tiempo (seg)"}
                           </button>
                           <div className="flex items-center justify-center gap-1">
-                            <span className="text-[10px] text-gray-400 font-medium">Peso</span>
-                            <div className="flex items-center bg-gray-100 rounded-md p-0.5">
+                            <span className="text-[10px] text-muted font-medium">Peso</span>
+                            <div className="flex items-center bg-surface-muted rounded-md p-0.5">
                               {(["kg", "lbs"] as const).map((u) => (
                                 <button
                                   key={u}
                                   onClick={() => updateExerciseUnit(a.uid, u)}
                                   className={`px-1.5 py-0.5 rounded text-[9px] font-semibold transition-colors ${
-                                    a.unidadPeso === u ? "bg-white text-gray-900 shadow-sm" : "text-gray-400"
+                                    a.unidadPeso === u ? "bg-white text-text-primary shadow-sm" : "text-muted"
                                   }`}
                                 >
                                   {u}
@@ -563,12 +563,12 @@ export default function RutinaBuilderModal({
                         </div>
                         {/* Scrollable rows */}
                         <div
-                          className="series-scroll divide-y divide-gray-50 overflow-y-auto max-h-44"
+                          className="series-scroll divide-y divide-divider overflow-y-auto max-h-44"
                           style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(0,0,0,0.08) transparent" }}
                         >
                           {a.seriesRows.map((row, si) => (
                             <div key={si} className="grid grid-cols-[32px_1fr_1fr] gap-2 items-center px-3 py-2">
-                              <span className="text-xs font-bold text-gray-400">S{si + 1}</span>
+                              <span className="text-xs font-bold text-muted">S{si + 1}</span>
                               <input
                                 type={a.tipoEsfuerzo === "tiempo" ? "number" : "text"}
                                 min={a.tipoEsfuerzo === "tiempo" ? "0" : undefined}
@@ -578,7 +578,7 @@ export default function RutinaBuilderModal({
                                 className={`h-8 text-center border rounded-lg text-sm focus:outline-none w-full ${
                                   a.tipoEsfuerzo === "tiempo"
                                     ? "border-orange-200 focus:border-orange-400"
-                                    : "border-gray-200 focus:border-primary"
+                                    : "border-border focus:border-primary"
                                 }`}
                               />
                               <input
@@ -588,7 +588,7 @@ export default function RutinaBuilderModal({
                                 value={row.peso}
                                 onChange={(e) => updateSerieRow(a.uid, si, "peso", e.target.value.replace(/^-/, ""))}
                                 placeholder="—"
-                                className="h-8 text-center border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary w-full"
+                                className="h-8 text-center border border-border rounded-lg text-sm focus:outline-none focus:border-primary w-full"
                               />
                             </div>
                           ))}
@@ -625,29 +625,29 @@ export default function RutinaBuilderModal({
           const totalEjercicios = new Set(Object.values(assigned).flat().map((a) => a.exerciseId)).size;
 
           return (
-            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50">
+            <div className="px-6 py-4 border-t border-divider bg-background-secondary/50">
               <div className="flex items-center justify-between mb-3">
-                <p className="font-bold text-gray-900 text-sm flex items-center gap-1.5"><BarChart3 size={14} className="text-primary" /> Distribución muscular semanal</p>
-                <div className="flex gap-3 text-xs text-gray-500">
-                  <span><span className="font-bold text-gray-900">{totalEjercicios}</span> ejercicios</span>
-                  <span><span className="font-bold text-gray-900">{totalSeries}</span> series totales</span>
-                  <span><span className="font-bold text-gray-900">{entries.length}</span> músculos</span>
+                <p className="font-bold text-text-primary text-sm flex items-center gap-1.5"><BarChart3 size={14} className="text-primary" /> Distribución muscular semanal</p>
+                <div className="flex gap-3 text-xs text-secondary">
+                  <span><span className="font-bold text-text-primary">{totalEjercicios}</span> ejercicios</span>
+                  <span><span className="font-bold text-text-primary">{totalSeries}</span> series totales</span>
+                  <span><span className="font-bold text-text-primary">{entries.length}</span> músculos</span>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 {entries.map(([muscle, data]) => {
                   const pct = (data.series / maxSeries) * 100;
                   return (
-                    <div key={muscle} className="flex items-center gap-2 bg-white rounded-lg p-2 border border-gray-100">
+                    <div key={muscle} className="flex items-center gap-2 bg-white rounded-lg p-2 border border-divider">
                       <div className="min-w-0 flex-1">
                         <div className="flex justify-between items-center mb-1">
-                          <span className="text-xs font-semibold text-gray-700 truncate">{muscle}</span>
+                          <span className="text-xs font-semibold text-text-primary truncate">{muscle}</span>
                           <span className="text-xs font-bold text-primary shrink-0">{data.series} series</span>
                         </div>
-                        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div className="h-1.5 bg-surface-muted rounded-full overflow-hidden">
                           <div className="h-full bg-primary rounded-full" style={{ width: `${pct}%` }} />
                         </div>
-                        <p className="text-[10px] text-gray-400 mt-0.5 truncate">
+                        <p className="text-[10px] text-muted mt-0.5 truncate">
                           {data.ejercicios.size} ej: {[...data.ejercicios].slice(0, 3).join(", ")}{data.ejercicios.size > 3 ? "..." : ""}
                         </p>
                       </div>
@@ -660,15 +660,15 @@ export default function RutinaBuilderModal({
         })()}
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100">
+        <div className="flex items-center justify-between px-6 py-4 border-t border-divider">
           <div className="flex items-center gap-3">
-            <button onClick={onClose} className="px-5 h-10 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50">
+            <button onClick={onClose} className="px-5 h-10 rounded-xl border border-border text-secondary text-sm hover:bg-background-secondary">
               Cancelar
             </button>
             <button
               onClick={handleExportPdf}
               disabled={loadingRutina || !!error}
-              className="flex items-center gap-2 px-5 h-10 rounded-xl border border-gray-200 text-gray-600 text-sm font-semibold hover:bg-gray-50 disabled:opacity-50"
+              className="flex items-center gap-2 px-5 h-10 rounded-xl border border-border text-secondary text-sm font-semibold hover:bg-background-secondary disabled:opacity-50"
             >
               <FileText size={15} /> Exportar PDF
             </button>
@@ -676,7 +676,7 @@ export default function RutinaBuilderModal({
               <button
                 onClick={() => setShowDeleteConfirm(true)}
                 disabled={deleting || saving}
-                className="flex items-center gap-2 px-5 h-10 rounded-xl border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50 disabled:opacity-50"
+                className="flex items-center gap-2 px-5 h-10 rounded-xl border border-error/30 text-error text-sm font-semibold hover:bg-error-soft disabled:opacity-50"
               >
                 {!deleting && <Trash2 size={14} />}
                 {deleting ? "Eliminando..." : "Eliminar rutina"}
@@ -685,7 +685,7 @@ export default function RutinaBuilderModal({
           </div>
           <div className="flex items-center gap-3">
             {feedback && (
-              <span className={`text-xs font-medium ${feedback.type === "success" ? "text-green-600" : "text-red-600"}`}>
+              <span className={`text-xs font-medium ${feedback.type === "success" ? "text-success" : "text-error"}`}>
                 {feedback.text}
               </span>
             )}
