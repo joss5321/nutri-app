@@ -4060,3 +4060,1771 @@ create policy "exercise-gifs: gestion admin superadmin" on storage.objects
 --
 -- alter table ejercicios drop column if exists gif_storage_path;
 -- ============================================================
+
+-- ============================================================
+-- 72. MIGRACIÓN — MyFitTrack Radar (R4B): perfiles.radar_started_at
+-- ============================================================
+-- Verificado contra el schema real (Sección 38) antes de asumir nada:
+-- ninguna columna existente marca el momento de aprobación real — el
+-- cambio de estatus a 'aprobado' es un UPDATE sin timestamp propio.
+-- radar_started_at cierra ese hueco con la semántica mínima y objetiva
+-- que SÍ se puede poblar con certeza: el momento en que la cuenta del
+-- paciente fue aprobada. La segunda condición de la definición conceptual
+-- ("al menos un dominio aplicable activo") NO se guarda aquí — instrumentar
+-- triggers en rutinas y planes_nutricionales solo para sostener esta fecha
+-- sería sobre-ingeniería; en vez de eso, calcular_radar_paciente (Sección
+-- 74) evalúa esa condición en vivo cada vez que corre.
+alter table perfiles add column if not exists radar_started_at timestamptz;
+
+-- Backfill: los pacientes aprobados antes de que Radar existiera no tienen
+-- forma de recuperar su fecha real de aprobación. Se usa created_at como
+-- mejor aproximación disponible — limitación conocida y aceptada: para
+-- estos pacientes históricos, R8 (paciente nuevo) podría subestimar su
+-- antigüedad real en el programa si tardaron en ser aprobados tras
+-- registrarse. Hacia adelante, todo paciente nuevo obtiene la fecha real
+-- vía el trigger de abajo.
+update perfiles
+set radar_started_at = created_at
+where estatus = 'aprobado' and radar_started_at is null;
+
+-- Trigger dedicado y separado de proteger_columnas_sensibles_perfiles
+-- (Sección 45/70): ese trigger es un GUARDIÁN de permisos (bloquea
+-- escrituras no autorizadas); este es un AUTOCOMPLETADO de un valor
+-- derivado (nunca bloquea nada, solo rellena una columna la primera vez
+-- que aplica). Mezclarlos en una sola función confundiría dos
+-- responsabilidades distintas.
+create or replace function public.marcar_radar_started_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  if new.estatus = 'aprobado'
+     and old.estatus is distinct from 'aprobado'
+     and new.radar_started_at is null
+  then
+    new.radar_started_at := now();
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_marcar_radar_started_at on perfiles;
+create trigger trg_marcar_radar_started_at
+  before update on perfiles
+  for each row
+  execute function public.marcar_radar_started_at();
+
+-- ============================================================
+-- ROLLBACK Sección 72 (referencia — NO ejecutar salvo que se decida
+-- revertir esta sección):
+--
+-- drop trigger if exists trg_marcar_radar_started_at on perfiles;
+-- drop function if exists public.marcar_radar_started_at();
+-- alter table perfiles drop column if exists radar_started_at;
+-- ============================================================
+
+-- ============================================================
+-- 73. MIGRACIÓN — MyFitTrack Radar (R4B): score_snapshots y radar_alertas
+-- ============================================================
+-- Ambas tablas son 100% derivadas/calculadas — nunca reciben INSERT/UPDATE
+-- directo de un cliente (paciente, nutriólogo o superadmin). Solo las
+-- escribe calcular_radar_paciente() (Sección 74), SECURITY DEFINER
+-- propiedad de postgres, que como dueño de la tabla evade RLS igual que
+-- registrar_actividad() evade la protección de perfiles (Sección 70). Por
+-- eso solo existen políticas de SELECT — nunca INSERT/UPDATE/DELETE para
+-- authenticated.
+--
+-- Visibilidad: nutriólogo dueño y superadmin únicamente. El propio
+-- paciente NO ve estas tablas todavía — el Blueprint v1.1 (§ "paciente
+-- visible vs. interno") reserva para él una vista simplificada y sin
+-- terminología de riesgo, que se construye junto con el dashboard (fuera
+-- de alcance de R4B). Exponer aquí "estado: rojo" o "riesgo_confirmado"
+-- directo al paciente, antes de que exista esa capa de traducción,
+-- generaría más daño que valor.
+
+create table score_snapshots (
+  id                       uuid        default uuid_generate_v4() primary key,
+  paciente_id              uuid        references auth.users(id) on delete cascade not null,
+  nutriologo_id            uuid        references auth.users(id) on delete set null,
+  snapshot_date            date        not null,
+  rules_version            text        not null,
+
+  nutrition_adherence      numeric(5,2),
+  nutrition_confidence     numeric(5,2) not null,
+  training_adherence       numeric(5,2),
+  training_confidence      numeric(5,2),
+  adherence_global         numeric(5,2),
+  adherence_global_calidad text        check (adherence_global_calidad in ('completo', 'parcial', 'incompleto')),
+  data_confidence_global   numeric(5,2) not null,
+
+  riesgo_confirmado_puntos int         not null default 0,
+  senal_insuficiente       boolean     not null default false,
+  estado                   text        not null check (estado in ('rojo', 'naranja', 'amarillo', 'verde', 'blanco')),
+
+  reglas_disparadas        jsonb       not null default '[]'::jsonb,
+  breakdown                jsonb       not null default '{}'::jsonb,
+  explicaciones            jsonb       not null default '[]'::jsonb,
+  accion_sugerida          text,
+
+  created_at               timestamptz not null default now(),
+  unique (paciente_id, snapshot_date)
+);
+
+create index on score_snapshots (paciente_id, snapshot_date desc);
+
+alter table score_snapshots enable row level security;
+
+create policy "score_snapshots_select" on score_snapshots
+for select to authenticated using (
+  exists (select 1 from perfiles where id = score_snapshots.paciente_id and nutricionista_id = auth.uid())
+  or public.get_user_rol() = 'superadmin'
+);
+
+create table radar_alertas (
+  id                      uuid        default uuid_generate_v4() primary key,
+  paciente_id             uuid        references auth.users(id) on delete cascade not null,
+  nutriologo_id           uuid        references auth.users(id) on delete set null,
+  regla_principal         text        not null,
+  tier                    text        not null check (tier in ('alta', 'media', 'baja')),
+  reglas_activas          jsonb       not null default '[]'::jsonb,
+  estado_alerta           text        not null default 'abierta' check (estado_alerta in ('abierta', 'resuelta')),
+  fecha_apertura          date        not null,
+  fecha_resolucion        date,
+  motivo_resolucion       text        check (motivo_resolucion in ('intervencion', 'auto_resuelta')),
+  dias_condicion_ausente  int         not null default 0,
+  ultima_fecha_evaluada   date        not null,
+  cooldown_until          date,
+  recurrence_of           uuid        references radar_alertas(id) on delete set null,
+  rules_version           text        not null,
+  created_at              timestamptz not null default now(),
+  updated_at              timestamptz not null default now()
+);
+
+-- Como máximo una alerta ABIERTA por paciente+regla ("una sola alerta por
+-- problema") — un índice único parcial lo hace imposible incluso si
+-- calcular_radar_paciente tuviera un bug de concurrencia.
+create unique index radar_alertas_una_abierta_por_regla
+  on radar_alertas (paciente_id, regla_principal)
+  where estado_alerta = 'abierta';
+
+create index on radar_alertas (paciente_id, estado_alerta);
+
+alter table radar_alertas enable row level security;
+
+create policy "radar_alertas_select" on radar_alertas
+for select to authenticated using (
+  exists (select 1 from perfiles where id = radar_alertas.paciente_id and nutricionista_id = auth.uid())
+  or public.get_user_rol() = 'superadmin'
+);
+
+-- ============================================================
+-- ROLLBACK Sección 73 (referencia — NO ejecutar salvo que se decida
+-- revertir esta sección):
+--
+-- drop table if exists radar_alertas;
+-- drop table if exists score_snapshots;
+-- ============================================================
+
+-- ============================================================
+-- 74. MIGRACIÓN — MyFitTrack Radar (R4B): motor de métricas y alertas
+-- ============================================================
+-- Implementa R4A (especificación aprobada) con 4 cierres de consistencia
+-- decididos antes de esta implementación:
+--
+-- 1. Estado 🟡 ya no depende únicamente de que dispare la regla R7 (que
+--    exige confianza <30% sostenida 7 días). Cualquier
+--    data_confidence_global < 50% produce 🟡 por sí solo ("hoy sé poco"),
+--    mientras que R7 sigue existiendo como regla de ALERTA persistente
+--    únicamente para el caso sostenido ("llevas una semana desapareciendo
+--    la señal") — son dos preguntas distintas y ahora nunca se contradicen.
+--
+-- 2. adherence_global se calcula ponderado por la confianza de cada
+--    dominio (Σ adherencia×confianza / Σ confianza), nunca como promedio
+--    simple — así un dominio casi sin datos no arrastra el global hacia
+--    arriba o abajo como si fuera un valor confirmado. Además se guarda
+--    adherence_global_calidad ('completo' si el dominio aplicable con
+--    menor confianza ≥50%, 'parcial' si está entre 20-49%, 'incompleto'
+--    si algún dominio aplicable tiene <20% de confianza) — el número crudo
+--    se conserva siempre (reproducibilidad), pero la calidad le dice a
+--    cualquier consumidor futuro si debe mostrarse con advertencia.
+--
+-- 3. R2 (cita sin confirmar) ya no produce 🔴 — produce un estado propio
+--    🟠 "naranja" (acción pendiente, urgencia operativa) distinto de 🔴
+--    (deterioro confirmado: R3/R4). Si ambos aplican simultáneamente, 🔴
+--    gana (severidad clínica por encima de urgencia operativa), pero R2
+--    se sigue registrando como alerta propia y aparece en la explicación.
+--
+-- 4. R8 (paciente nuevo) usa perfiles.radar_started_at (Sección 72) en vez
+--    de created_at, más la verificación en vivo de que exista al menos un
+--    dominio aplicable (rutina activa o plan nutricional activo) — un
+--    paciente aprobado sin nada todavía asignado se queda en ⚪
+--    indefinidamente, no solo durante 14 días.
+--
+-- Hallazgo de schema real que corrige al Blueprint v1.1 (documentado aquí
+-- porque cambia la fórmula de "entrenamiento omitido"): rutina_dias.
+-- numero_dia es solo un orden de despliegue (1..7), NO un día de la
+-- semana fijo — verificado contra rutinas.tsx/rutinas.ts antes de asumirlo.
+-- No existe el "día programado" puntual que el Blueprint v1.1 imaginaba
+-- para el período de gracia. En su lugar, training_adherence usa la
+-- semana calendario (lunes-domingo, America/Mexico_City — el mismo
+-- criterio que ya usa la app móvil para resetear la lista semanal) como
+-- ventana: sesiones_programadas = días no-descanso de la rutina activa
+-- (la meta semanal), sesiones_completadas = días distintos marcados en
+-- dias_completados dentro de esa semana. training_confidence deja de ser
+-- "período de gracia vencido" y pasa a ser "fracción de la semana ya
+-- transcurrida" (día 1 de 7 = 14% de confianza, domingo = 100%) — mismo
+-- propósito (no juzgar con datos parciales), base real distinta.
+
+create or replace function public._radar_gestionar_alerta(
+  p_paciente_id       uuid,
+  p_nutriologo_id     uuid,
+  p_regla             text,
+  p_tier              text,
+  p_activo            boolean,
+  p_requiere_2_dias   boolean,
+  p_fecha             date,
+  p_rules_version     text,
+  p_detalle           jsonb
+) returns boolean
+language plpgsql
+as $$
+declare
+  v_alerta            radar_alertas;
+  v_en_cooldown       radar_alertas;
+  v_recurrencia       radar_alertas;
+begin
+  select * into v_alerta from radar_alertas
+    where paciente_id = p_paciente_id and regla_principal = p_regla and estado_alerta = 'abierta'
+    limit 1;
+
+  if v_alerta.id is not null then
+    -- Idempotencia: si esta alerta ya fue evaluada hoy (una segunda
+    -- corrida del mismo día), no reprocesar el contador de días ausentes.
+    if v_alerta.ultima_fecha_evaluada = p_fecha then
+      return true;
+    end if;
+
+    if p_activo then
+      update radar_alertas
+        set reglas_activas = p_detalle,
+            dias_condicion_ausente = 0,
+            ultima_fecha_evaluada = p_fecha,
+            updated_at = now()
+        where id = v_alerta.id;
+      return true;
+    else
+      if p_requiere_2_dias and v_alerta.dias_condicion_ausente < 1 then
+        -- Primer día sin la condición: no se resuelve todavía (evita
+        -- parpadeo por un solo día bueno — Blueprint v1.1 y la prueba de
+        -- sensibilidad de R4A).
+        update radar_alertas
+          set dias_condicion_ausente = v_alerta.dias_condicion_ausente + 1,
+              ultima_fecha_evaluada = p_fecha,
+              updated_at = now()
+          where id = v_alerta.id;
+        return true;
+      else
+        update radar_alertas
+          set estado_alerta = 'resuelta',
+              fecha_resolucion = p_fecha,
+              motivo_resolucion = 'auto_resuelta',
+              ultima_fecha_evaluada = p_fecha,
+              updated_at = now()
+          where id = v_alerta.id;
+        return false;
+      end if;
+    end if;
+  else
+    if not p_activo then
+      return false;
+    end if;
+
+    -- Cooldown: solo se activa tras una resolución por intervención
+    -- (resolver_alerta_radar). Una resolución automática no protege
+    -- ninguna medición, así que no genera cooldown.
+    select * into v_en_cooldown from radar_alertas
+      where paciente_id = p_paciente_id and regla_principal = p_regla
+        and estado_alerta = 'resuelta' and cooldown_until is not null and cooldown_until >= p_fecha
+      order by fecha_resolucion desc limit 1;
+
+    if v_en_cooldown.id is not null then
+      return false;
+    end if;
+
+    select * into v_recurrencia from radar_alertas
+      where paciente_id = p_paciente_id and regla_principal = p_regla
+        and estado_alerta = 'resuelta' and fecha_resolucion >= p_fecha - 30
+      order by fecha_resolucion desc limit 1;
+
+    insert into radar_alertas (
+      paciente_id, nutriologo_id, regla_principal, tier, reglas_activas,
+      fecha_apertura, ultima_fecha_evaluada, recurrence_of, rules_version
+    ) values (
+      p_paciente_id, p_nutriologo_id, p_regla, p_tier, p_detalle,
+      p_fecha, p_fecha, v_recurrencia.id, p_rules_version
+    );
+    return true;
+  end if;
+end;
+$$;
+
+create or replace function public.calcular_radar_paciente(
+  p_paciente_id uuid,
+  p_fecha       date default (now() at time zone 'America/Mexico_City')::date
+) returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_rules_version constant text := 'v1.0';
+  v_perfil perfiles;
+
+  -- Dominios aplicables
+  v_tiene_rutina boolean;
+  v_tiene_plan boolean;
+  v_rutina_id uuid;
+
+  -- Nutrición (ventana móvil de 7 días)
+  v_nutri_dias_con_check int;
+  v_nutrition_adherence numeric;
+  v_nutrition_confidence numeric;
+
+  -- Entrenamiento (semana calendario lunes-domingo)
+  v_semana_inicio date;
+  v_semana_fin date;
+  v_dias_transcurridos_semana int;
+  v_sesiones_programadas int;
+  v_sesiones_completadas int;
+  v_training_adherence numeric;
+  v_training_confidence numeric;
+
+  -- Adherence Global / Data Confidence Global
+  v_peso_total numeric;
+  v_suma numeric;
+  v_adherence_global numeric;
+  v_min_domain_confidence numeric;
+  v_adherence_global_calidad text;
+  v_conf_sum numeric;
+  v_conf_count int;
+  v_data_confidence_global numeric;
+
+  -- R8
+  v_dias_desde_radar_started int;
+  v_r8_activo boolean;
+
+  -- R1
+  v_dias_desde_activo int;
+  v_senales_historicas int;
+  v_historial_regular boolean;
+  v_r1_activo boolean;
+
+  -- R2
+  v_r2_activo boolean;
+  v_cita_id uuid;
+  v_cita_fecha date;
+
+  -- R3 (baseline)
+  v_baseline_candidatos numeric[];
+  v_baseline_n int;
+  v_baseline numeric;
+  v_r3_activo boolean;
+
+  -- R4
+  v_r4_activo boolean;
+
+  -- R5
+  v_ultima_medida date;
+  v_medidas_ultimos_90 int;
+  v_habito_medidas_regular boolean;
+  v_dias_desde_medida int;
+  v_r5_activo boolean;
+
+  -- R6
+  v_r6_dia_patron int;
+  v_r6_activo boolean;
+
+  -- R7
+  v_dias_confianza_baja_previos int;
+  v_r7_activo boolean;
+
+  -- R9
+  v_r9_historicos numeric[];
+  v_r9_n int;
+  v_r9_stddev numeric;
+  v_citas_confirmadas int;
+  v_citas_totales int;
+  v_citas_ok boolean;
+  v_r9_activo boolean;
+
+  -- Salida
+  v_riesgo_confirmado_puntos int;
+  v_senal_insuficiente boolean;
+  v_estado text;
+  v_reglas_disparadas jsonb;
+  v_breakdown jsonb;
+  v_explicaciones jsonb;
+  v_accion_sugerida text;
+
+  v_r1_abierta boolean;
+  v_r2_abierta boolean;
+  v_r3_abierta boolean;
+  v_r4_abierta boolean;
+  v_r7_abierta boolean;
+begin
+  select * into v_perfil from perfiles where id = p_paciente_id;
+  if v_perfil.id is null or v_perfil.estatus <> 'aprobado' then
+    return;
+  end if;
+
+  v_tiene_rutina := exists (select 1 from rutinas where user_id = p_paciente_id and activa);
+  v_tiene_plan := exists (select 1 from planes_nutricionales where user_id = p_paciente_id and activo);
+
+  -- ── R8: paciente nuevo / sin dominio aplicable aún ──────────────────
+  v_dias_desde_radar_started := case when v_perfil.radar_started_at is null then null
+    else p_fecha - (v_perfil.radar_started_at at time zone 'America/Mexico_City')::date end;
+  v_r8_activo := (v_perfil.radar_started_at is null)
+    or (v_dias_desde_radar_started < 14)
+    or (not (v_tiene_rutina or v_tiene_plan));
+
+  -- ── Nutrición ────────────────────────────────────────────────────────
+  select count(*), avg(case estado when 'seguido' then 1.0 when 'parcial' then 0.5 else 0.0 end) * 100
+    into v_nutri_dias_con_check, v_nutrition_adherence
+    from nutricion_checks
+    where user_id = p_paciente_id and fecha between p_fecha - 6 and p_fecha;
+  if v_nutri_dias_con_check = 0 then
+    v_nutrition_adherence := null;
+  end if;
+  v_nutrition_confidence := (v_nutri_dias_con_check / 7.0) * 100;
+
+  -- ── Entrenamiento (semana calendario, no día programado fijo) ───────
+  if v_tiene_rutina then
+    select id into v_rutina_id from rutinas
+      where user_id = p_paciente_id and activa order by created_at desc limit 1;
+    select count(*) into v_sesiones_programadas
+      from rutina_dias where rutina_id = v_rutina_id and es_descanso = false;
+
+    v_semana_inicio := p_fecha - (extract(isodow from p_fecha)::int - 1);
+    v_semana_fin := v_semana_inicio + 6;
+    v_dias_transcurridos_semana := (least(p_fecha, v_semana_fin) - v_semana_inicio) + 1;
+
+    select count(distinct dc.dia_id) into v_sesiones_completadas
+      from dias_completados dc
+      join rutina_dias rd on rd.id = dc.dia_id and rd.rutina_id = v_rutina_id
+      where dc.user_id = p_paciente_id
+        and dc.fecha between v_semana_inicio and least(v_semana_fin, p_fecha);
+
+    if v_sesiones_programadas > 0 then
+      v_training_adherence := least(100, (v_sesiones_completadas::numeric / v_sesiones_programadas) * 100);
+    else
+      v_training_adherence := null;
+    end if;
+    v_training_confidence := least(100, (v_dias_transcurridos_semana / 7.0) * 100);
+  else
+    v_training_adherence := null;
+    v_training_confidence := null;
+  end if;
+
+  -- ── Adherence Global (ponderado por confianza de cada dominio) ──────
+  v_peso_total := 0; v_suma := 0;
+  if v_nutrition_adherence is not null then
+    v_suma := v_suma + v_nutrition_adherence * v_nutrition_confidence;
+    v_peso_total := v_peso_total + v_nutrition_confidence;
+  end if;
+  if v_training_adherence is not null then
+    v_suma := v_suma + v_training_adherence * v_training_confidence;
+    v_peso_total := v_peso_total + v_training_confidence;
+  end if;
+  if v_peso_total > 0 then
+    v_adherence_global := v_suma / v_peso_total;
+  else
+    v_adherence_global := null;
+  end if;
+
+  -- ── Data Confidence Global (promedio simple de dominios aplicables) ─
+  v_conf_sum := v_nutrition_confidence;
+  v_conf_count := 1;
+  if v_tiene_rutina then
+    v_conf_sum := v_conf_sum + v_training_confidence;
+    v_conf_count := v_conf_count + 1;
+  end if;
+  v_data_confidence_global := v_conf_sum / v_conf_count;
+
+  -- ── Calidad de Adherence Global (cierre de consistencia #2) ─────────
+  v_min_domain_confidence := v_nutrition_confidence;
+  if v_tiene_rutina then
+    v_min_domain_confidence := least(v_min_domain_confidence, v_training_confidence);
+  end if;
+  v_adherence_global_calidad := case
+    when v_min_domain_confidence < 20 then 'incompleto'
+    when v_min_domain_confidence < 50 then 'parcial'
+    else 'completo'
+  end;
+
+  -- ── R9: estable (evaluado antes que R3/R4 porque los suprime) ───────
+  -- Deliberadamente NO incluye el valor de HOY en la muestra: R9 mide
+  -- estabilidad HISTÓRICA para poder suprimir una caída real del día
+  -- actual con más evidencia acumulada (si hoy se incluyera, una caída
+  -- real de hoy invalidaría por sí misma la "estabilidad" y R9 nunca
+  -- podría suprimir nada — dejaría de tener el propósito anti-alarma-falsa
+  -- para el que existe).
+  select array_agg(adherence_global) into v_r9_historicos
+    from score_snapshots
+    where paciente_id = p_paciente_id
+      and snapshot_date in (p_fecha - 7, p_fecha - 14, p_fecha - 21, p_fecha - 28,
+                             p_fecha - 35, p_fecha - 42, p_fecha - 49)
+      and adherence_global is not null;
+  v_r9_n := coalesce(array_length(v_r9_historicos, 1), 0);
+  if v_r9_n >= 4 then
+    select stddev_pop(x) into v_r9_stddev from unnest(v_r9_historicos) x;
+  else
+    v_r9_stddev := null;
+  end if;
+
+  select count(*) filter (where estado = 'confirmada'), count(*) filter (where estado <> 'cancelada')
+    into v_citas_confirmadas, v_citas_totales
+    from citas where user_id = p_paciente_id and fecha between p_fecha - 90 and p_fecha;
+  v_citas_ok := (v_citas_totales = 0) or (v_citas_confirmadas::numeric / v_citas_totales >= 0.80);
+
+  v_r9_activo := (not v_r8_activo) and v_r9_stddev is not null and v_r9_stddev < 10 and v_citas_ok;
+
+  -- ── R1: silencio tras historial de actividad regular ────────────────
+  v_dias_desde_activo := case when v_perfil.last_active_at is null then null
+    else p_fecha - (v_perfil.last_active_at at time zone 'America/Mexico_City')::date end;
+  select count(*) into v_senales_historicas
+    from (
+      select fecha from nutricion_checks where user_id = p_paciente_id and fecha between p_fecha - 35 and p_fecha - 8
+      union all
+      select fecha from dias_completados where user_id = p_paciente_id and fecha between p_fecha - 35 and p_fecha - 8
+    ) s;
+  v_historial_regular := v_senales_historicas >= 16;
+  v_r1_activo := (not v_r8_activo) and v_dias_desde_activo is not null
+    and v_dias_desde_activo >= 5 and v_historial_regular;
+
+  -- ── R2: cita sin confirmar dentro de 72h ────────────────────────────
+  select id, fecha into v_cita_id, v_cita_fecha from citas
+    where user_id = p_paciente_id and estado = 'pendiente' and fecha between p_fecha and p_fecha + 3
+    order by fecha limit 1;
+  v_r2_activo := (not v_r8_activo) and v_cita_id is not null;
+
+  -- ── R3: caída de adherencia vs. baseline de 4 semanas ───────────────
+  select array_agg(adherence_global) into v_baseline_candidatos
+    from score_snapshots
+    where paciente_id = p_paciente_id
+      and snapshot_date in (p_fecha - 7, p_fecha - 14, p_fecha - 21, p_fecha - 28)
+      and data_confidence_global >= 50
+      and adherence_global is not null;
+  v_baseline_n := coalesce(array_length(v_baseline_candidatos, 1), 0);
+  if v_baseline_n >= 2 then
+    select avg(x) into v_baseline from unnest(v_baseline_candidatos) x;
+  else
+    v_baseline := null;
+  end if;
+
+  v_r3_activo := (not v_r8_activo) and (not v_r9_activo)
+    and v_baseline is not null and v_adherence_global is not null
+    and v_data_confidence_global >= 50
+    and v_adherence_global <= v_baseline - 20;
+
+  -- ── R4: entrenamientos omitidos esta semana ─────────────────────────
+  v_r4_activo := (not v_r8_activo) and (not v_r9_activo)
+    and v_tiene_rutina and v_training_adherence is not null
+    and v_training_adherence < 60 and v_training_confidence >= 60;
+
+  -- ── R5: medidas desactualizadas (contexto, sin alerta propia) ───────
+  select max(fecha) into v_ultima_medida from medidas where user_id = p_paciente_id;
+  select count(*) into v_medidas_ultimos_90 from medidas where user_id = p_paciente_id and fecha >= p_fecha - 90;
+  v_habito_medidas_regular := v_medidas_ultimos_90 >= 6;
+  v_dias_desde_medida := case when v_ultima_medida is null then null else p_fecha - v_ultima_medida end;
+  v_r5_activo := (not v_r8_activo) and v_dias_desde_medida is not null
+    and v_dias_desde_medida >= 21 and v_habito_medidas_regular;
+
+  -- ── R6: patrón de día de semana en nutrición, ≥3 semanas distintas ──
+  select dow into v_r6_dia_patron
+    from (
+      select extract(dow from fecha)::int as dow, date_trunc('week', fecha) as semana
+      from nutricion_checks
+      where user_id = p_paciente_id and fecha between p_fecha - 27 and p_fecha
+        and estado in ('parcial', 'no_seguido')
+      group by dow, semana
+    ) sub
+    group by dow
+    having count(*) >= 3
+    order by count(*) desc
+    limit 1;
+  v_r6_activo := (not v_r8_activo) and v_r6_dia_patron is not null;
+
+  -- ── R7: confianza global baja sostenida ≥7 días (incluyendo hoy) ────
+  select count(*) into v_dias_confianza_baja_previos
+    from score_snapshots
+    where paciente_id = p_paciente_id
+      and snapshot_date between p_fecha - 6 and p_fecha - 1
+      and data_confidence_global < 30;
+  v_r7_activo := (not v_r8_activo) and v_data_confidence_global < 30 and v_dias_confianza_baja_previos = 6;
+
+  -- ── Puntos de riesgo confirmado (R3 + R4 + R6) ──────────────────────
+  v_riesgo_confirmado_puntos := (case when v_r3_activo then 25 else 0 end)
+    + (case when v_r4_activo then 15 else 0 end)
+    + (case when v_r6_activo then 10 else 0 end);
+  v_senal_insuficiente := v_r1_activo or v_r7_activo;
+
+  -- ── Lifecycle de alertas (R1, R2, R3, R4, R7 — R5/R6 son contexto) ──
+  v_r1_abierta := public._radar_gestionar_alerta(p_paciente_id, v_perfil.nutricionista_id,
+    'RADAR_R1_SILENCIO_TRAS_HISTORIAL', 'media', v_r1_activo, false, p_fecha, v_rules_version,
+    jsonb_build_object('dias_desde_activo', v_dias_desde_activo));
+
+  v_r2_abierta := public._radar_gestionar_alerta(p_paciente_id, v_perfil.nutricionista_id,
+    'RADAR_R2_CITA_SIN_CONFIRMAR', 'alta', v_r2_activo, false, p_fecha, v_rules_version,
+    jsonb_build_object('cita_id', v_cita_id, 'cita_fecha', v_cita_fecha));
+
+  v_r3_abierta := public._radar_gestionar_alerta(p_paciente_id, v_perfil.nutricionista_id,
+    'RADAR_R3_CAIDA_ADHERENCIA', 'alta', v_r3_activo, true, p_fecha, v_rules_version,
+    jsonb_build_object('baseline', v_baseline, 'actual', v_adherence_global));
+
+  v_r4_abierta := public._radar_gestionar_alerta(p_paciente_id, v_perfil.nutricionista_id,
+    'RADAR_R4_ENTRENAMIENTOS_OMITIDOS', 'media', v_r4_activo, true, p_fecha, v_rules_version,
+    jsonb_build_object('sesiones_completadas', v_sesiones_completadas, 'sesiones_programadas', v_sesiones_programadas));
+
+  v_r7_abierta := public._radar_gestionar_alerta(p_paciente_id, v_perfil.nutricionista_id,
+    'RADAR_R7_CONFIANZA_GLOBAL_BAJA', 'media', v_r7_activo, false, p_fecha, v_rules_version,
+    jsonb_build_object('data_confidence_global', v_data_confidence_global));
+
+  -- ── Estado final (cierres de consistencia #1 y #3) ──────────────────
+  -- El color se deriva de la EXISTENCIA de alerta abierta (no del booleano
+  -- crudo del día), así la histéresis de R3/R4 (2 días de gracia dentro de
+  -- _radar_gestionar_alerta) se hereda automáticamente por el estado sin
+  -- necesitar una segunda banda de umbrales.
+  v_estado := case
+    when v_r8_activo then 'blanco'
+    when v_r3_abierta or v_r4_abierta then 'rojo'
+    when v_r2_abierta then 'naranja'
+    when v_r1_abierta or v_r7_abierta or v_data_confidence_global < 50 then 'amarillo'
+    else 'verde'
+  end;
+
+  v_reglas_disparadas := jsonb_build_array(
+    jsonb_build_object('id', 'RADAR_R1_SILENCIO_TRAS_HISTORIAL', 'activa', v_r1_activo),
+    jsonb_build_object('id', 'RADAR_R2_CITA_SIN_CONFIRMAR', 'activa', v_r2_activo),
+    jsonb_build_object('id', 'RADAR_R3_CAIDA_ADHERENCIA', 'activa', v_r3_activo, 'puntos', case when v_r3_activo then 25 else 0 end),
+    jsonb_build_object('id', 'RADAR_R4_ENTRENAMIENTOS_OMITIDOS', 'activa', v_r4_activo, 'puntos', case when v_r4_activo then 15 else 0 end),
+    jsonb_build_object('id', 'RADAR_R5_MEDIDAS_DESACTUALIZADAS', 'activa', v_r5_activo),
+    jsonb_build_object('id', 'RADAR_R6_PATRON_DIA_SEMANA', 'activa', v_r6_activo, 'dia', v_r6_dia_patron, 'puntos', case when v_r6_activo then 10 else 0 end),
+    jsonb_build_object('id', 'RADAR_R7_CONFIANZA_GLOBAL_BAJA', 'activa', v_r7_activo),
+    jsonb_build_object('id', 'RADAR_R8_PACIENTE_NUEVO', 'activa', v_r8_activo),
+    jsonb_build_object('id', 'RADAR_R9_ESTABLE', 'activa', v_r9_activo)
+  );
+
+  v_breakdown := jsonb_build_object(
+    'nutri_dias_con_check', v_nutri_dias_con_check,
+    'tiene_rutina', v_tiene_rutina,
+    'tiene_plan', v_tiene_plan,
+    'sesiones_completadas', v_sesiones_completadas,
+    'sesiones_programadas', v_sesiones_programadas,
+    'dias_transcurridos_semana', v_dias_transcurridos_semana,
+    'baseline_valor', v_baseline,
+    'baseline_semanas_usadas', v_baseline_n,
+    'dias_desde_activo', v_dias_desde_activo,
+    'dias_desde_medida', v_dias_desde_medida,
+    'r9_stddev', v_r9_stddev,
+    'r9_muestras', v_r9_n
+  );
+
+  v_explicaciones := '[]'::jsonb;
+  if v_r3_activo then
+    v_explicaciones := v_explicaciones || jsonb_build_array(
+      format('Tu adherencia bajó de %s%% a %s%% en las últimas semanas.', round(v_baseline), round(v_adherence_global)));
+  end if;
+  if v_r4_activo then
+    v_explicaciones := v_explicaciones || jsonb_build_array(
+      format('%s de %s entrenamientos programados no se han registrado esta semana.', v_sesiones_programadas - v_sesiones_completadas, v_sesiones_programadas));
+  end if;
+  if v_r2_activo then
+    v_explicaciones := v_explicaciones || jsonb_build_array(
+      format('Tiene una cita el %s sin confirmar.', v_cita_fecha));
+  end if;
+  if v_r1_activo then
+    v_explicaciones := v_explicaciones || jsonb_build_array(
+      format('No hemos tenido noticias en %s días, tras un patrón de actividad regular.', v_dias_desde_activo));
+  end if;
+  if v_r7_activo then
+    v_explicaciones := v_explicaciones || jsonb_build_array('Muy poca información esta semana — no podemos evaluar bien cómo le está yendo.');
+  end if;
+
+  -- Regla principal = mayor puntaje entre las reglas confirmadas activas;
+  -- si ninguna, R2; si ninguna, R1/R7. Define LA acción mostrada.
+  v_accion_sugerida := case
+    when v_r3_activo then 'Revisar qué dificultó seguir el plan esta semana.' || (case when v_r6_activo then ' El patrón se concentra los mismos días de la semana.' else '' end)
+    when v_r4_activo then 'Preguntar si el horario o la rutina actual siguen siendo viables.'
+    when v_r2_activo then 'Confirmar asistencia a la próxima consulta.'
+    when v_r1_activo then 'Contactar para confirmar cómo va — no asumir incumplimiento.'
+    when v_r7_activo then 'Contacto ligero para reactivar el registro.'
+    else null
+  end;
+
+  insert into score_snapshots (
+    paciente_id, nutriologo_id, snapshot_date, rules_version,
+    nutrition_adherence, nutrition_confidence, training_adherence, training_confidence,
+    adherence_global, adherence_global_calidad, data_confidence_global,
+    riesgo_confirmado_puntos, senal_insuficiente, estado,
+    reglas_disparadas, breakdown, explicaciones, accion_sugerida
+  ) values (
+    p_paciente_id, v_perfil.nutricionista_id, p_fecha, v_rules_version,
+    v_nutrition_adherence, v_nutrition_confidence, v_training_adherence, v_training_confidence,
+    v_adherence_global, v_adherence_global_calidad, v_data_confidence_global,
+    v_riesgo_confirmado_puntos, v_senal_insuficiente, v_estado,
+    v_reglas_disparadas, v_breakdown, v_explicaciones, v_accion_sugerida
+  )
+  on conflict (paciente_id, snapshot_date) do update set
+    nutriologo_id = excluded.nutriologo_id,
+    rules_version = excluded.rules_version,
+    nutrition_adherence = excluded.nutrition_adherence,
+    nutrition_confidence = excluded.nutrition_confidence,
+    training_adherence = excluded.training_adherence,
+    training_confidence = excluded.training_confidence,
+    adherence_global = excluded.adherence_global,
+    adherence_global_calidad = excluded.adherence_global_calidad,
+    data_confidence_global = excluded.data_confidence_global,
+    riesgo_confirmado_puntos = excluded.riesgo_confirmado_puntos,
+    senal_insuficiente = excluded.senal_insuficiente,
+    estado = excluded.estado,
+    reglas_disparadas = excluded.reglas_disparadas,
+    breakdown = excluded.breakdown,
+    explicaciones = excluded.explicaciones,
+    accion_sugerida = excluded.accion_sugerida;
+end;
+$$;
+
+-- Resuelve una alerta manualmente (uso futuro: modal de intervención, aún
+-- no implementado en R4B). Solo el nutriólogo dueño del paciente o
+-- superadmin pueden resolver — verificado dentro de la función porque
+-- radar_alertas no tiene policy de UPDATE (nadie puede tocarla vía RLS).
+create or replace function public.resolver_alerta_radar(
+  p_alerta_id uuid,
+  p_motivo text
+) returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_alerta radar_alertas;
+  v_rol text;
+begin
+  if p_motivo not in ('intervencion', 'auto_resuelta') then
+    raise exception 'motivo_resolucion inválido: %', p_motivo;
+  end if;
+
+  select * into v_alerta from radar_alertas where id = p_alerta_id and estado_alerta = 'abierta';
+  if v_alerta.id is null then
+    raise exception 'Alerta no encontrada o ya resuelta.';
+  end if;
+
+  v_rol := public.get_user_rol();
+  if v_rol <> 'superadmin' and auth.uid() <> v_alerta.nutriologo_id then
+    raise exception 'No tienes permiso para resolver esta alerta.';
+  end if;
+
+  update radar_alertas
+    set estado_alerta = 'resuelta',
+        fecha_resolucion = (now() at time zone 'America/Mexico_City')::date,
+        motivo_resolucion = p_motivo,
+        cooldown_until = case when p_motivo = 'intervencion'
+          then (now() at time zone 'America/Mexico_City')::date + 14
+          else null end,
+        updated_at = now()
+    where id = p_alerta_id;
+end;
+$$;
+
+revoke execute on function public.resolver_alerta_radar(uuid, text) from public, anon;
+grant execute on function public.resolver_alerta_radar(uuid, text) to authenticated;
+
+-- Driver por lote — pensado para invocarse una vez al día (pg_cron o un
+-- Edge Function programado; la conexión de esa programación queda fuera
+-- de alcance de R4B, que solo entrega el "cerebro" calculable). Idempotente:
+-- correrlo varias veces el mismo día para el mismo paciente hace upsert
+-- sobre la misma fila de score_snapshots, nunca duplica.
+create or replace function public.ejecutar_radar_diario(
+  p_fecha date default (now() at time zone 'America/Mexico_City')::date
+) returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_paciente_id uuid;
+begin
+  for v_paciente_id in select id from perfiles where estatus = 'aprobado' and rol = 'usuario' loop
+    perform public.calcular_radar_paciente(v_paciente_id, p_fecha);
+  end loop;
+end;
+$$;
+
+revoke execute on function public.calcular_radar_paciente(uuid, date) from public, anon, authenticated;
+revoke execute on function public.ejecutar_radar_diario(date) from public, anon, authenticated;
+grant execute on function public.calcular_radar_paciente(uuid, date) to service_role;
+grant execute on function public.ejecutar_radar_diario(date) to service_role;
+
+-- ============================================================
+-- ROLLBACK Sección 74 (referencia — NO ejecutar salvo que se decida
+-- revertir esta sección):
+--
+-- drop function if exists public.ejecutar_radar_diario(date);
+-- drop function if exists public.resolver_alerta_radar(uuid, text);
+-- drop function if exists public.calcular_radar_paciente(uuid, date);
+-- drop function if exists public._radar_gestionar_alerta(uuid, uuid, text, text, boolean, boolean, date, text, jsonb);
+-- ============================================================
+
+-- ============================================================
+-- 75. MIGRACIÓN — MyFitTrack Radar (R4B): correcciones de auditoría de
+-- seguridad y robustez sobre las Secciones 72-74
+-- ============================================================
+-- Hallazgos cerrados aquí (auditoría previa a R5, código real de 72-74):
+--
+-- CRÍTICO — bypass de autorización en resolver_alerta_radar: cuando
+-- radar_alertas.nutriologo_id es NULL (perfiles.nutricionista_id se pone
+-- en NULL si esa cuenta se elimina, Sección 27), la comparación original
+-- "auth.uid() <> v_alerta.nutriologo_id" evaluaba a NULL (lógica de 3
+-- valores de SQL), y un IF con condición NULL en PL/pgSQL se trata como
+-- falso — la excepción nunca se lanzaba. Cualquier usuario autenticado
+-- podía resolver la alerta de un paciente sin nutriólogo asignado. Fix:
+-- "is distinct from" (NULL-safe) + nutriologo_id NULL exige superadmin.
+--
+-- ALTO — condición de carrera en resolver_alerta_radar: el UPDATE original
+-- solo filtraba por id, no por estado_alerta = 'abierta', y no verificaba
+-- FOUND — dos resoluciones concurrentes de la misma alerta ambas
+-- "tenían éxito", la segunda pisando en silencio fecha_resolucion /
+-- motivo_resolucion / cooldown_until de la primera. Fix: el UPDATE exige
+-- estado_alerta = 'abierta' y se verifica FOUND.
+--
+-- MEDIO — resolver_alerta_radar aceptaba motivo = 'auto_resuelta' de un
+-- caller humano, dejando resolver una alerta sin cooldown y sin
+-- distinguirse de una resolución automática real (contamina la futura
+-- medición de resultado de intervención, R4A). Fix: un caller humano solo
+-- puede pasar 'intervencion' — 'auto_resuelta' queda reservado al motor
+-- (_radar_gestionar_alerta).
+--
+-- ALTO — carrera de inserción no capturada en _radar_gestionar_alerta: dos
+-- ejecuciones solapadas de calcular_radar_paciente para el mismo
+-- paciente+fecha (dos crons superpuestos, o dos llamadas manuales) podían
+-- ver ambas "sin alerta abierta" antes de que ninguna hiciera commit;
+-- la segunda INSERT chocaba contra el índice único parcial y lanzaba
+-- unique_violation sin capturar. Fix: ON CONFLICT ... DO NOTHING contra
+-- ese mismo índice — la ejecución que pierde la carrera simplemente no
+-- inserta (la otra ya abrió la alerta real).
+--
+-- ALTO — ejecutar_radar_diario sin aislamiento de errores por paciente:
+-- una sola falla (incluida la carrera de arriba, antes del fix) abortaba
+-- la transacción completa, revirtiendo el trabajo de TODOS los pacientes
+-- ya procesados en esa corrida. Fix: cada iteración corre dentro de su
+-- propio BEGIN/EXCEPTION (subtransacción vía savepoint implícito de
+-- PL/pgSQL) — una falla aislada solo pierde ese paciente, no el lote.
+--
+-- MEDIO — ni calcular_radar_paciente ni ejecutar_radar_diario excluían a
+-- pacientes con is_active = false (estatus podía seguir siendo
+-- 'aprobado' tras una desactivación) — un paciente desactivado seguía
+-- acumulando snapshots y alertas. Fix: se exige coalesce(is_active, true)
+-- en ambos, igual que ya hace get_current_user_is_active() para el mismo
+-- default seguro cuando la columna es NULL.
+--
+-- MEDIO — _radar_gestionar_alerta (prefijo "_" = privada por convención)
+-- no tenía EXECUTE revocado de public. Hoy no era explotable (radar_alertas
+-- no tiene policy de INSERT/UPDATE para authenticated, así que una llamada
+-- directa fallaba con 42501), pero un futuro cambio de RLS la volvería
+-- explotable sin que nadie lo notara. Fix: revoke explícito — no necesita
+-- grant de reemplazo porque solo se invoca desde funciones SECURITY
+-- DEFINER propiedad de postgres, que como superusuario nunca requiere uno.
+--
+-- MEDIO — v_tiene_plan (planes_nutricionales) no tenía índice de apoyo,
+-- a diferencia de rutinas(user_id) y medidas(user_id, fecha desc) que sí
+-- lo tienen — full scan por paciente evaluado. Fix: mismo patrón de índice.
+
+create or replace function public._radar_gestionar_alerta(
+  p_paciente_id       uuid,
+  p_nutriologo_id     uuid,
+  p_regla             text,
+  p_tier              text,
+  p_activo            boolean,
+  p_requiere_2_dias   boolean,
+  p_fecha             date,
+  p_rules_version     text,
+  p_detalle           jsonb
+) returns boolean
+language plpgsql
+as $$
+declare
+  v_alerta            radar_alertas;
+  v_en_cooldown       radar_alertas;
+  v_recurrencia       radar_alertas;
+begin
+  select * into v_alerta from radar_alertas
+    where paciente_id = p_paciente_id and regla_principal = p_regla and estado_alerta = 'abierta'
+    limit 1;
+
+  if v_alerta.id is not null then
+    -- Idempotencia: si esta alerta ya fue evaluada hoy (una segunda
+    -- corrida del mismo día), no reprocesar el contador de días ausentes.
+    if v_alerta.ultima_fecha_evaluada = p_fecha then
+      return true;
+    end if;
+
+    if p_activo then
+      update radar_alertas
+        set reglas_activas = p_detalle,
+            dias_condicion_ausente = 0,
+            ultima_fecha_evaluada = p_fecha,
+            updated_at = now()
+        where id = v_alerta.id;
+      return true;
+    else
+      if p_requiere_2_dias and v_alerta.dias_condicion_ausente < 1 then
+        -- Primer día sin la condición: no se resuelve todavía (evita
+        -- parpadeo por un solo día bueno — Blueprint v1.1 y la prueba de
+        -- sensibilidad de R4A).
+        update radar_alertas
+          set dias_condicion_ausente = v_alerta.dias_condicion_ausente + 1,
+              ultima_fecha_evaluada = p_fecha,
+              updated_at = now()
+          where id = v_alerta.id;
+        return true;
+      else
+        update radar_alertas
+          set estado_alerta = 'resuelta',
+              fecha_resolucion = p_fecha,
+              motivo_resolucion = 'auto_resuelta',
+              ultima_fecha_evaluada = p_fecha,
+              updated_at = now()
+          where id = v_alerta.id;
+        return false;
+      end if;
+    end if;
+  else
+    if not p_activo then
+      return false;
+    end if;
+
+    -- Cooldown: solo se activa tras una resolución por intervención
+    -- (resolver_alerta_radar). Una resolución automática no protege
+    -- ninguna medición, así que no genera cooldown.
+    select * into v_en_cooldown from radar_alertas
+      where paciente_id = p_paciente_id and regla_principal = p_regla
+        and estado_alerta = 'resuelta' and cooldown_until is not null and cooldown_until >= p_fecha
+      order by fecha_resolucion desc limit 1;
+
+    if v_en_cooldown.id is not null then
+      return false;
+    end if;
+
+    select * into v_recurrencia from radar_alertas
+      where paciente_id = p_paciente_id and regla_principal = p_regla
+        and estado_alerta = 'resuelta' and fecha_resolucion >= p_fecha - 30
+      order by fecha_resolucion desc limit 1;
+
+    -- Auditoría (Sección 75): ON CONFLICT contra el índice único parcial
+    -- en vez de dejar que un INSERT concurrente lance unique_violation sin
+    -- capturar (ver nota de la Sección 75 arriba). La ejecución que pierde
+    -- la carrera simplemente no inserta su fila — la otra ya abrió la
+    -- alerta real, así que el resultado observable (existe una alerta
+    -- abierta) es idéntico para ambas.
+    insert into radar_alertas (
+      paciente_id, nutriologo_id, regla_principal, tier, reglas_activas,
+      fecha_apertura, ultima_fecha_evaluada, recurrence_of, rules_version
+    ) values (
+      p_paciente_id, p_nutriologo_id, p_regla, p_tier, p_detalle,
+      p_fecha, p_fecha, v_recurrencia.id, p_rules_version
+    )
+    on conflict (paciente_id, regla_principal) where estado_alerta = 'abierta' do nothing;
+    return true;
+  end if;
+end;
+$$;
+
+revoke execute on function public._radar_gestionar_alerta(uuid, uuid, text, text, boolean, boolean, date, text, jsonb) from public;
+
+-- Re-declaración completa de calcular_radar_paciente: único cambio real es
+-- la línea del guard inicial, que ahora también exige is_active — el resto
+-- queda carácter por carácter idéntico a la Sección 74.
+create or replace function public.calcular_radar_paciente(
+  p_paciente_id uuid,
+  p_fecha       date default (now() at time zone 'America/Mexico_City')::date
+) returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_rules_version constant text := 'v1.0';
+  v_perfil perfiles;
+
+  -- Dominios aplicables
+  v_tiene_rutina boolean;
+  v_tiene_plan boolean;
+  v_rutina_id uuid;
+
+  -- Nutrición (ventana móvil de 7 días)
+  v_nutri_dias_con_check int;
+  v_nutrition_adherence numeric;
+  v_nutrition_confidence numeric;
+
+  -- Entrenamiento (semana calendario lunes-domingo)
+  v_semana_inicio date;
+  v_semana_fin date;
+  v_dias_transcurridos_semana int;
+  v_sesiones_programadas int;
+  v_sesiones_completadas int;
+  v_training_adherence numeric;
+  v_training_confidence numeric;
+
+  -- Adherence Global / Data Confidence Global
+  v_peso_total numeric;
+  v_suma numeric;
+  v_adherence_global numeric;
+  v_min_domain_confidence numeric;
+  v_adherence_global_calidad text;
+  v_conf_sum numeric;
+  v_conf_count int;
+  v_data_confidence_global numeric;
+
+  -- R8
+  v_dias_desde_radar_started int;
+  v_r8_activo boolean;
+
+  -- R1
+  v_dias_desde_activo int;
+  v_senales_historicas int;
+  v_historial_regular boolean;
+  v_r1_activo boolean;
+
+  -- R2
+  v_r2_activo boolean;
+  v_cita_id uuid;
+  v_cita_fecha date;
+
+  -- R3 (baseline)
+  v_baseline_candidatos numeric[];
+  v_baseline_n int;
+  v_baseline numeric;
+  v_r3_activo boolean;
+
+  -- R4
+  v_r4_activo boolean;
+
+  -- R5
+  v_ultima_medida date;
+  v_medidas_ultimos_90 int;
+  v_habito_medidas_regular boolean;
+  v_dias_desde_medida int;
+  v_r5_activo boolean;
+
+  -- R6
+  v_r6_dia_patron int;
+  v_r6_activo boolean;
+
+  -- R7
+  v_dias_confianza_baja_previos int;
+  v_r7_activo boolean;
+
+  -- R9
+  v_r9_historicos numeric[];
+  v_r9_n int;
+  v_r9_stddev numeric;
+  v_citas_confirmadas int;
+  v_citas_totales int;
+  v_citas_ok boolean;
+  v_r9_activo boolean;
+
+  -- Salida
+  v_riesgo_confirmado_puntos int;
+  v_senal_insuficiente boolean;
+  v_estado text;
+  v_reglas_disparadas jsonb;
+  v_breakdown jsonb;
+  v_explicaciones jsonb;
+  v_accion_sugerida text;
+
+  v_r1_abierta boolean;
+  v_r2_abierta boolean;
+  v_r3_abierta boolean;
+  v_r4_abierta boolean;
+  v_r7_abierta boolean;
+begin
+  select * into v_perfil from perfiles where id = p_paciente_id;
+  -- Auditoría (Sección 75): se agrega "not coalesce(v_perfil.is_active, true)"
+  -- — un paciente aprobado pero desactivado ya no acumula snapshots/alertas.
+  if v_perfil.id is null or v_perfil.estatus <> 'aprobado' or not coalesce(v_perfil.is_active, true) then
+    return;
+  end if;
+
+  v_tiene_rutina := exists (select 1 from rutinas where user_id = p_paciente_id and activa);
+  v_tiene_plan := exists (select 1 from planes_nutricionales where user_id = p_paciente_id and activo);
+
+  -- ── R8: paciente nuevo / sin dominio aplicable aún ──────────────────
+  v_dias_desde_radar_started := case when v_perfil.radar_started_at is null then null
+    else p_fecha - (v_perfil.radar_started_at at time zone 'America/Mexico_City')::date end;
+  v_r8_activo := (v_perfil.radar_started_at is null)
+    or (v_dias_desde_radar_started < 14)
+    or (not (v_tiene_rutina or v_tiene_plan));
+
+  -- ── Nutrición ────────────────────────────────────────────────────────
+  select count(*), avg(case estado when 'seguido' then 1.0 when 'parcial' then 0.5 else 0.0 end) * 100
+    into v_nutri_dias_con_check, v_nutrition_adherence
+    from nutricion_checks
+    where user_id = p_paciente_id and fecha between p_fecha - 6 and p_fecha;
+  if v_nutri_dias_con_check = 0 then
+    v_nutrition_adherence := null;
+  end if;
+  v_nutrition_confidence := (v_nutri_dias_con_check / 7.0) * 100;
+
+  -- ── Entrenamiento (semana calendario, no día programado fijo) ───────
+  if v_tiene_rutina then
+    select id into v_rutina_id from rutinas
+      where user_id = p_paciente_id and activa order by created_at desc limit 1;
+    select count(*) into v_sesiones_programadas
+      from rutina_dias where rutina_id = v_rutina_id and es_descanso = false;
+
+    v_semana_inicio := p_fecha - (extract(isodow from p_fecha)::int - 1);
+    v_semana_fin := v_semana_inicio + 6;
+    v_dias_transcurridos_semana := (least(p_fecha, v_semana_fin) - v_semana_inicio) + 1;
+
+    select count(distinct dc.dia_id) into v_sesiones_completadas
+      from dias_completados dc
+      join rutina_dias rd on rd.id = dc.dia_id and rd.rutina_id = v_rutina_id
+      where dc.user_id = p_paciente_id
+        and dc.fecha between v_semana_inicio and least(v_semana_fin, p_fecha);
+
+    if v_sesiones_programadas > 0 then
+      v_training_adherence := least(100, (v_sesiones_completadas::numeric / v_sesiones_programadas) * 100);
+    else
+      v_training_adherence := null;
+    end if;
+    v_training_confidence := least(100, (v_dias_transcurridos_semana / 7.0) * 100);
+  else
+    v_training_adherence := null;
+    v_training_confidence := null;
+  end if;
+
+  -- ── Adherence Global (ponderado por confianza de cada dominio) ──────
+  v_peso_total := 0; v_suma := 0;
+  if v_nutrition_adherence is not null then
+    v_suma := v_suma + v_nutrition_adherence * v_nutrition_confidence;
+    v_peso_total := v_peso_total + v_nutrition_confidence;
+  end if;
+  if v_training_adherence is not null then
+    v_suma := v_suma + v_training_adherence * v_training_confidence;
+    v_peso_total := v_peso_total + v_training_confidence;
+  end if;
+  if v_peso_total > 0 then
+    v_adherence_global := v_suma / v_peso_total;
+  else
+    v_adherence_global := null;
+  end if;
+
+  -- ── Data Confidence Global (promedio simple de dominios aplicables) ─
+  v_conf_sum := v_nutrition_confidence;
+  v_conf_count := 1;
+  if v_tiene_rutina then
+    v_conf_sum := v_conf_sum + v_training_confidence;
+    v_conf_count := v_conf_count + 1;
+  end if;
+  v_data_confidence_global := v_conf_sum / v_conf_count;
+
+  -- ── Calidad de Adherence Global (cierre de consistencia #2) ─────────
+  v_min_domain_confidence := v_nutrition_confidence;
+  if v_tiene_rutina then
+    v_min_domain_confidence := least(v_min_domain_confidence, v_training_confidence);
+  end if;
+  v_adherence_global_calidad := case
+    when v_min_domain_confidence < 20 then 'incompleto'
+    when v_min_domain_confidence < 50 then 'parcial'
+    else 'completo'
+  end;
+
+  -- ── R9: estable (evaluado antes que R3/R4 porque los suprime) ───────
+  -- Deliberadamente NO incluye el valor de HOY en la muestra: R9 mide
+  -- estabilidad HISTÓRICA para poder suprimir una caída real del día
+  -- actual con más evidencia acumulada (si hoy se incluyera, una caída
+  -- real de hoy invalidaría por sí misma la "estabilidad" y R9 nunca
+  -- podría suprimir nada — dejaría de tener el propósito anti-alarma-falsa
+  -- para el que existe).
+  select array_agg(adherence_global) into v_r9_historicos
+    from score_snapshots
+    where paciente_id = p_paciente_id
+      and snapshot_date in (p_fecha - 7, p_fecha - 14, p_fecha - 21, p_fecha - 28,
+                             p_fecha - 35, p_fecha - 42, p_fecha - 49)
+      and adherence_global is not null;
+  v_r9_n := coalesce(array_length(v_r9_historicos, 1), 0);
+  if v_r9_n >= 4 then
+    select stddev_pop(x) into v_r9_stddev from unnest(v_r9_historicos) x;
+  else
+    v_r9_stddev := null;
+  end if;
+
+  select count(*) filter (where estado = 'confirmada'), count(*) filter (where estado <> 'cancelada')
+    into v_citas_confirmadas, v_citas_totales
+    from citas where user_id = p_paciente_id and fecha between p_fecha - 90 and p_fecha;
+  v_citas_ok := (v_citas_totales = 0) or (v_citas_confirmadas::numeric / v_citas_totales >= 0.80);
+
+  v_r9_activo := (not v_r8_activo) and v_r9_stddev is not null and v_r9_stddev < 10 and v_citas_ok;
+
+  -- ── R1: silencio tras historial de actividad regular ────────────────
+  v_dias_desde_activo := case when v_perfil.last_active_at is null then null
+    else p_fecha - (v_perfil.last_active_at at time zone 'America/Mexico_City')::date end;
+  select count(*) into v_senales_historicas
+    from (
+      select fecha from nutricion_checks where user_id = p_paciente_id and fecha between p_fecha - 35 and p_fecha - 8
+      union all
+      select fecha from dias_completados where user_id = p_paciente_id and fecha between p_fecha - 35 and p_fecha - 8
+    ) s;
+  v_historial_regular := v_senales_historicas >= 16;
+  v_r1_activo := (not v_r8_activo) and v_dias_desde_activo is not null
+    and v_dias_desde_activo >= 5 and v_historial_regular;
+
+  -- ── R2: cita sin confirmar dentro de 72h ────────────────────────────
+  select id, fecha into v_cita_id, v_cita_fecha from citas
+    where user_id = p_paciente_id and estado = 'pendiente' and fecha between p_fecha and p_fecha + 3
+    order by fecha limit 1;
+  v_r2_activo := (not v_r8_activo) and v_cita_id is not null;
+
+  -- ── R3: caída de adherencia vs. baseline de 4 semanas ───────────────
+  select array_agg(adherence_global) into v_baseline_candidatos
+    from score_snapshots
+    where paciente_id = p_paciente_id
+      and snapshot_date in (p_fecha - 7, p_fecha - 14, p_fecha - 21, p_fecha - 28)
+      and data_confidence_global >= 50
+      and adherence_global is not null;
+  v_baseline_n := coalesce(array_length(v_baseline_candidatos, 1), 0);
+  if v_baseline_n >= 2 then
+    select avg(x) into v_baseline from unnest(v_baseline_candidatos) x;
+  else
+    v_baseline := null;
+  end if;
+
+  v_r3_activo := (not v_r8_activo) and (not v_r9_activo)
+    and v_baseline is not null and v_adherence_global is not null
+    and v_data_confidence_global >= 50
+    and v_adherence_global <= v_baseline - 20;
+
+  -- ── R4: entrenamientos omitidos esta semana ─────────────────────────
+  v_r4_activo := (not v_r8_activo) and (not v_r9_activo)
+    and v_tiene_rutina and v_training_adherence is not null
+    and v_training_adherence < 60 and v_training_confidence >= 60;
+
+  -- ── R5: medidas desactualizadas (contexto, sin alerta propia) ───────
+  select max(fecha) into v_ultima_medida from medidas where user_id = p_paciente_id;
+  select count(*) into v_medidas_ultimos_90 from medidas where user_id = p_paciente_id and fecha >= p_fecha - 90;
+  v_habito_medidas_regular := v_medidas_ultimos_90 >= 6;
+  v_dias_desde_medida := case when v_ultima_medida is null then null else p_fecha - v_ultima_medida end;
+  v_r5_activo := (not v_r8_activo) and v_dias_desde_medida is not null
+    and v_dias_desde_medida >= 21 and v_habito_medidas_regular;
+
+  -- ── R6: patrón de día de semana en nutrición, ≥3 semanas distintas ──
+  select dow into v_r6_dia_patron
+    from (
+      select extract(dow from fecha)::int as dow, date_trunc('week', fecha) as semana
+      from nutricion_checks
+      where user_id = p_paciente_id and fecha between p_fecha - 27 and p_fecha
+        and estado in ('parcial', 'no_seguido')
+      group by dow, semana
+    ) sub
+    group by dow
+    having count(*) >= 3
+    order by count(*) desc
+    limit 1;
+  v_r6_activo := (not v_r8_activo) and v_r6_dia_patron is not null;
+
+  -- ── R7: confianza global baja sostenida ≥7 días (incluyendo hoy) ────
+  select count(*) into v_dias_confianza_baja_previos
+    from score_snapshots
+    where paciente_id = p_paciente_id
+      and snapshot_date between p_fecha - 6 and p_fecha - 1
+      and data_confidence_global < 30;
+  v_r7_activo := (not v_r8_activo) and v_data_confidence_global < 30 and v_dias_confianza_baja_previos = 6;
+
+  -- ── Puntos de riesgo confirmado (R3 + R4 + R6) ──────────────────────
+  v_riesgo_confirmado_puntos := (case when v_r3_activo then 25 else 0 end)
+    + (case when v_r4_activo then 15 else 0 end)
+    + (case when v_r6_activo then 10 else 0 end);
+  v_senal_insuficiente := v_r1_activo or v_r7_activo;
+
+  -- ── Lifecycle de alertas (R1, R2, R3, R4, R7 — R5/R6 son contexto) ──
+  v_r1_abierta := public._radar_gestionar_alerta(p_paciente_id, v_perfil.nutricionista_id,
+    'RADAR_R1_SILENCIO_TRAS_HISTORIAL', 'media', v_r1_activo, false, p_fecha, v_rules_version,
+    jsonb_build_object('dias_desde_activo', v_dias_desde_activo));
+
+  v_r2_abierta := public._radar_gestionar_alerta(p_paciente_id, v_perfil.nutricionista_id,
+    'RADAR_R2_CITA_SIN_CONFIRMAR', 'alta', v_r2_activo, false, p_fecha, v_rules_version,
+    jsonb_build_object('cita_id', v_cita_id, 'cita_fecha', v_cita_fecha));
+
+  v_r3_abierta := public._radar_gestionar_alerta(p_paciente_id, v_perfil.nutricionista_id,
+    'RADAR_R3_CAIDA_ADHERENCIA', 'alta', v_r3_activo, true, p_fecha, v_rules_version,
+    jsonb_build_object('baseline', v_baseline, 'actual', v_adherence_global));
+
+  v_r4_abierta := public._radar_gestionar_alerta(p_paciente_id, v_perfil.nutricionista_id,
+    'RADAR_R4_ENTRENAMIENTOS_OMITIDOS', 'media', v_r4_activo, true, p_fecha, v_rules_version,
+    jsonb_build_object('sesiones_completadas', v_sesiones_completadas, 'sesiones_programadas', v_sesiones_programadas));
+
+  v_r7_abierta := public._radar_gestionar_alerta(p_paciente_id, v_perfil.nutricionista_id,
+    'RADAR_R7_CONFIANZA_GLOBAL_BAJA', 'media', v_r7_activo, false, p_fecha, v_rules_version,
+    jsonb_build_object('data_confidence_global', v_data_confidence_global));
+
+  -- ── Estado final (cierres de consistencia #1 y #3) ──────────────────
+  -- El color se deriva de la EXISTENCIA de alerta abierta (no del booleano
+  -- crudo del día), así la histéresis de R3/R4 (2 días de gracia dentro de
+  -- _radar_gestionar_alerta) se hereda automáticamente por el estado sin
+  -- necesitar una segunda banda de umbrales.
+  v_estado := case
+    when v_r8_activo then 'blanco'
+    when v_r3_abierta or v_r4_abierta then 'rojo'
+    when v_r2_abierta then 'naranja'
+    when v_r1_abierta or v_r7_abierta or v_data_confidence_global < 50 then 'amarillo'
+    else 'verde'
+  end;
+
+  v_reglas_disparadas := jsonb_build_array(
+    jsonb_build_object('id', 'RADAR_R1_SILENCIO_TRAS_HISTORIAL', 'activa', v_r1_activo),
+    jsonb_build_object('id', 'RADAR_R2_CITA_SIN_CONFIRMAR', 'activa', v_r2_activo),
+    jsonb_build_object('id', 'RADAR_R3_CAIDA_ADHERENCIA', 'activa', v_r3_activo, 'puntos', case when v_r3_activo then 25 else 0 end),
+    jsonb_build_object('id', 'RADAR_R4_ENTRENAMIENTOS_OMITIDOS', 'activa', v_r4_activo, 'puntos', case when v_r4_activo then 15 else 0 end),
+    jsonb_build_object('id', 'RADAR_R5_MEDIDAS_DESACTUALIZADAS', 'activa', v_r5_activo),
+    jsonb_build_object('id', 'RADAR_R6_PATRON_DIA_SEMANA', 'activa', v_r6_activo, 'dia', v_r6_dia_patron, 'puntos', case when v_r6_activo then 10 else 0 end),
+    jsonb_build_object('id', 'RADAR_R7_CONFIANZA_GLOBAL_BAJA', 'activa', v_r7_activo),
+    jsonb_build_object('id', 'RADAR_R8_PACIENTE_NUEVO', 'activa', v_r8_activo),
+    jsonb_build_object('id', 'RADAR_R9_ESTABLE', 'activa', v_r9_activo)
+  );
+
+  v_breakdown := jsonb_build_object(
+    'nutri_dias_con_check', v_nutri_dias_con_check,
+    'tiene_rutina', v_tiene_rutina,
+    'tiene_plan', v_tiene_plan,
+    'sesiones_completadas', v_sesiones_completadas,
+    'sesiones_programadas', v_sesiones_programadas,
+    'dias_transcurridos_semana', v_dias_transcurridos_semana,
+    'baseline_valor', v_baseline,
+    'baseline_semanas_usadas', v_baseline_n,
+    'dias_desde_activo', v_dias_desde_activo,
+    'dias_desde_medida', v_dias_desde_medida,
+    'r9_stddev', v_r9_stddev,
+    'r9_muestras', v_r9_n
+  );
+
+  v_explicaciones := '[]'::jsonb;
+  if v_r3_activo then
+    v_explicaciones := v_explicaciones || jsonb_build_array(
+      format('Tu adherencia bajó de %s%% a %s%% en las últimas semanas.', round(v_baseline), round(v_adherence_global)));
+  end if;
+  if v_r4_activo then
+    v_explicaciones := v_explicaciones || jsonb_build_array(
+      format('%s de %s entrenamientos programados no se han registrado esta semana.', v_sesiones_programadas - v_sesiones_completadas, v_sesiones_programadas));
+  end if;
+  if v_r2_activo then
+    v_explicaciones := v_explicaciones || jsonb_build_array(
+      format('Tiene una cita el %s sin confirmar.', v_cita_fecha));
+  end if;
+  if v_r1_activo then
+    v_explicaciones := v_explicaciones || jsonb_build_array(
+      format('No hemos tenido noticias en %s días, tras un patrón de actividad regular.', v_dias_desde_activo));
+  end if;
+  if v_r7_activo then
+    v_explicaciones := v_explicaciones || jsonb_build_array('Muy poca información esta semana — no podemos evaluar bien cómo le está yendo.');
+  end if;
+
+  -- Regla principal = mayor puntaje entre las reglas confirmadas activas;
+  -- si ninguna, R2; si ninguna, R1/R7. Define LA acción mostrada.
+  v_accion_sugerida := case
+    when v_r3_activo then 'Revisar qué dificultó seguir el plan esta semana.' || (case when v_r6_activo then ' El patrón se concentra los mismos días de la semana.' else '' end)
+    when v_r4_activo then 'Preguntar si el horario o la rutina actual siguen siendo viables.'
+    when v_r2_activo then 'Confirmar asistencia a la próxima consulta.'
+    when v_r1_activo then 'Contactar para confirmar cómo va — no asumir incumplimiento.'
+    when v_r7_activo then 'Contacto ligero para reactivar el registro.'
+    else null
+  end;
+
+  insert into score_snapshots (
+    paciente_id, nutriologo_id, snapshot_date, rules_version,
+    nutrition_adherence, nutrition_confidence, training_adherence, training_confidence,
+    adherence_global, adherence_global_calidad, data_confidence_global,
+    riesgo_confirmado_puntos, senal_insuficiente, estado,
+    reglas_disparadas, breakdown, explicaciones, accion_sugerida
+  ) values (
+    p_paciente_id, v_perfil.nutricionista_id, p_fecha, v_rules_version,
+    v_nutrition_adherence, v_nutrition_confidence, v_training_adherence, v_training_confidence,
+    v_adherence_global, v_adherence_global_calidad, v_data_confidence_global,
+    v_riesgo_confirmado_puntos, v_senal_insuficiente, v_estado,
+    v_reglas_disparadas, v_breakdown, v_explicaciones, v_accion_sugerida
+  )
+  on conflict (paciente_id, snapshot_date) do update set
+    nutriologo_id = excluded.nutriologo_id,
+    rules_version = excluded.rules_version,
+    nutrition_adherence = excluded.nutrition_adherence,
+    nutrition_confidence = excluded.nutrition_confidence,
+    training_adherence = excluded.training_adherence,
+    training_confidence = excluded.training_confidence,
+    adherence_global = excluded.adherence_global,
+    adherence_global_calidad = excluded.adherence_global_calidad,
+    data_confidence_global = excluded.data_confidence_global,
+    riesgo_confirmado_puntos = excluded.riesgo_confirmado_puntos,
+    senal_insuficiente = excluded.senal_insuficiente,
+    estado = excluded.estado,
+    reglas_disparadas = excluded.reglas_disparadas,
+    breakdown = excluded.breakdown,
+    explicaciones = excluded.explicaciones,
+    accion_sugerida = excluded.accion_sugerida;
+end;
+$$;
+
+-- Re-declaración completa de resolver_alerta_radar con las 3 correcciones
+-- (bypass NULL-safe, carrera en el UPDATE, motivo restringido a
+-- 'intervencion' para un caller humano).
+create or replace function public.resolver_alerta_radar(
+  p_alerta_id uuid,
+  p_motivo text
+) returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_alerta radar_alertas;
+  v_rol text;
+begin
+  -- Auditoría (Sección 75): 'auto_resuelta' queda reservado al motor
+  -- (_radar_gestionar_alerta) — un caller humano solo puede registrar una
+  -- resolución por intervención. Permitir 'auto_resuelta' aquí dejaba a
+  -- un nutriólogo descartar una alerta sin cooldown y sin distinguirse de
+  -- una resolución automática real, contaminando la futura medición de
+  -- resultado de intervención (R4A).
+  if p_motivo <> 'intervencion' then
+    raise exception 'motivo_resolucion inválido para resolución manual: %. Solo se acepta ''intervencion''.', p_motivo;
+  end if;
+
+  select * into v_alerta from radar_alertas where id = p_alerta_id and estado_alerta = 'abierta';
+  if v_alerta.id is null then
+    raise exception 'Alerta no encontrada o ya resuelta.';
+  end if;
+
+  v_rol := public.get_user_rol();
+  -- Auditoría (Sección 75): comparación NULL-segura. nutriologo_id puede
+  -- ser NULL (perfiles.nutricionista_id se pone en NULL si esa cuenta se
+  -- elimina, Sección 27) — con "<>" contra NULL, la condición completa
+  -- evaluaba a NULL, y PL/pgSQL trata un IF con condición NULL como falso:
+  -- CUALQUIER usuario autenticado podía resolver la alerta de un paciente
+  -- sin nutriólogo asignado. "is distinct from" es NULL-safe, y además,
+  -- sin nutriólogo asignado, ahora se exige superadmin explícitamente.
+  if v_rol <> 'superadmin'
+     and (v_alerta.nutriologo_id is null or auth.uid() is distinct from v_alerta.nutriologo_id)
+  then
+    raise exception 'No tienes permiso para resolver esta alerta.';
+  end if;
+
+  -- Auditoría (Sección 75): se agrega "and estado_alerta = 'abierta'" a la
+  -- condición del UPDATE (no solo al SELECT de arriba) y se verifica
+  -- FOUND — cierra la ventana de carrera entre el SELECT y el UPDATE: dos
+  -- resoluciones concurrentes de la misma alerta ya no pueden ambas
+  -- "tener éxito" pisando en silencio fecha_resolucion/motivo/cooldown.
+  update radar_alertas
+    set estado_alerta = 'resuelta',
+        fecha_resolucion = (now() at time zone 'America/Mexico_City')::date,
+        motivo_resolucion = p_motivo,
+        cooldown_until = (now() at time zone 'America/Mexico_City')::date + 14,
+        updated_at = now()
+    where id = p_alerta_id and estado_alerta = 'abierta';
+
+  if not found then
+    raise exception 'La alerta ya fue resuelta por otra operación concurrente.';
+  end if;
+end;
+$$;
+
+revoke execute on function public.resolver_alerta_radar(uuid, text) from public, anon;
+grant execute on function public.resolver_alerta_radar(uuid, text) to authenticated;
+
+-- Re-declaración completa de ejecutar_radar_diario: se agrega aislamiento
+-- de errores por paciente (subtransacción vía BEGIN/EXCEPTION) y el
+-- filtro de is_active.
+create or replace function public.ejecutar_radar_diario(
+  p_fecha date default (now() at time zone 'America/Mexico_City')::date
+) returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_paciente_id uuid;
+begin
+  for v_paciente_id in
+    select id from perfiles
+    where estatus = 'aprobado' and rol = 'usuario' and coalesce(is_active, true)
+  loop
+    -- Auditoría (Sección 75): BEGIN/EXCEPTION anidado crea una
+    -- subtransacción (savepoint implícito de PL/pgSQL) — una falla en un
+    -- paciente (ej. una carrera que igual se colara pese al ON CONFLICT,
+    -- o cualquier otro error inesperado) ya no revierte el trabajo de
+    -- todos los pacientes ya procesados en esta misma corrida.
+    begin
+      perform public.calcular_radar_paciente(v_paciente_id, p_fecha);
+    exception when others then
+      raise warning 'calcular_radar_paciente falló para paciente %: % (%)', v_paciente_id, sqlerrm, sqlstate;
+    end;
+  end loop;
+end;
+$$;
+
+revoke execute on function public.ejecutar_radar_diario(date) from public, anon, authenticated;
+grant execute on function public.ejecutar_radar_diario(date) to service_role;
+
+create index on planes_nutricionales(user_id);
+
+-- ============================================================
+-- ROLLBACK Sección 75 (referencia — NO ejecutar salvo que se decida
+-- revertir esta sección): revierte las funciones a su forma de la Sección
+-- 74 (ver el bloque de esa sección para el texto completo) y elimina el
+-- índice agregado aquí:
+--
+-- drop index if exists planes_nutricionales_user_id_idx;
+-- [recrear _radar_gestionar_alerta, calcular_radar_paciente,
+--  resolver_alerta_radar, ejecutar_radar_diario tal como quedaron en la
+--  Sección 74, si se decide revertir esta corrección]
+-- ============================================================
+
+-- ============================================================
+-- 76. MIGRACIÓN — MyFitTrack Radar (R4B): segunda ronda de correcciones
+-- de auditoría (brechas explícitas no cerradas por la Sección 75)
+-- ============================================================
+--
+-- 1. MOTIVOS HUMANOS — resolver_alerta_radar aceptaba únicamente
+--    'intervencion' desde la Sección 75. El Blueprint v1.1 (revisión de
+--    7 puntos, punto 6) exige que "sin acción" tenga un motivo explícito
+--    y distinguible — no puede quedar indistinguible de "nadie la vio
+--    nunca". Se amplía el conjunto humano válido a 'intervencion' y
+--    'sin_accion'. 'auto_resuelta' sigue reservado EXCLUSIVAMENTE al
+--    motor (_radar_gestionar_alerta) y se sigue rechazando desde esta RPC.
+--    Se corrige además un bug NULL-unsafe: "p_motivo <> 'intervencion'"
+--    evaluaba a NULL (no a verdadero) cuando p_motivo era NULL — el mismo
+--    patrón de bug ya identificado y corregido para nutriologo_id en la
+--    Sección 75 — dejando pasar un NULL sin rechazarlo. El chequeo nuevo
+--    es explícito: "p_motivo is null or p_motivo = '' or p_motivo not in
+--    (...)".
+--
+--    Cooldown para 'sin_accion': se revisó el Blueprint v1.1 y la
+--    especificación R4A completa buscando una razón funcional YA
+--    DOCUMENTADA para que 'sin_accion' tuviera un cooldown distinto de
+--    'intervencion' — no se encontró ninguna. Ambos son resoluciones
+--    HUMANAS deliberadas de la misma alerta; dejar 'sin_accion' SIN
+--    cooldown abriría exactamente la vía de abuso que motivó restringir
+--    los motivos en primer lugar (descartar una alerta repetidamente sin
+--    ningún costo). Se aplica el MISMO cooldown de 14 días a ambos
+--    motivos. Si en el futuro se decide que 'sin_accion' necesita una
+--    ventana distinta, debe ser una decisión de producto explícita nueva,
+--    no una inferencia de esta corrección.
+--
+-- 2. REGISTRO DE ERRORES DEL BATCH — ejecutar_radar_diario silenciaba el
+--    detalle del error tras capturarlo (solo un RAISE WARNING, efímero,
+--    que nadie revisa después). Se agrega radar_ejecucion_errores como
+--    registro durable, visible solo para superadmin, y se conserva el
+--    RAISE WARNING como canal adicional (no reemplaza al registro
+--    durable, lo complementa para quien esté mirando la sesión en vivo).
+--
+-- 3. ADVISORY LOCK — ejecutar_radar_diario no impedía dos corridas
+--    solapadas del lote completo (dos crons superpuestos). Se agrega
+--    pg_try_advisory_xact_lock (NO pg_advisory_lock/pg_try_advisory_lock
+--    de sesión: esos permanecerían retenidos si la conexión se reutiliza
+--    desde un pool como el de Supabase/PgBouncer, incluso después de que
+--    la función termine) — se libera automáticamente al terminar la
+--    transacción actual, sin importar cómo termine. Si no se obtiene el
+--    lock, se decidió LANZAR UNA EXCEPCIÓN descriptiva en vez de retornar
+--    silenciosamente: la firma actual es "returns void", que no tiene
+--    ningún otro canal para distinguir "corrí y procesé 0 pacientes" de
+--    "no corrí porque otra ejecución ya estaba en curso" — un caller
+--    (cron, monitor) que solo mira "¿la llamada tuvo éxito?" necesita que
+--    esta situación se vea como una falla, no como un éxito silencioso.
+--
+-- 4. TRIGGER — marcar_radar_started_at (Sección 72) no tenía
+--    "set search_path" explícito, a diferencia de toda función SECURITY
+--    DEFINER de este archivo. Se agrega por consistencia — el cuerpo no
+--    tiene referencias a objetos de esquema sin calificar que dependieran
+--    de esto (solo usa NEW/OLD, que no son objetos de esquema, y now(),
+--    built-in de pg_catalog siempre resuelto sin ambigüedad).
+--
+-- 5. ÍNDICE — se revisaron TODAS las consultas reales contra
+--    planes_nutricionales por user_id en el repositorio antes de decidir:
+--      · mobile-app/src/lib/api/nutricion.ts:24 — .eq('user_id',...).eq('activo', true)
+--      · mobile-app/src/store/news.ts:39         — .eq('user_id',...).eq('activo', true)
+--      · admin-web/app/_data/nutricion.ts:60      — .eq('user_id',...).eq('activo', true)
+--      · calcular_radar_paciente (Sección 74/75)  — where user_id=... and activo
+--    Las CUATRO consultas reales que filtran por user_id filtran también
+--    por activo = true — ninguna consulta real necesita el historial
+--    completo de planes por usuario. (Las policies de planes_nutricionales
+--    y plan_equivalentes en Sección 47 sí consultan sin ese filtro, pero
+--    lo hacen por auth.uid()/id de plan, no por user_id de un tercero, así
+--    que no son parte de este patrón de acceso). Con esa evidencia, el
+--    índice completo de la Sección 75 se reemplaza por uno parcial —
+--    misma utilidad para todo lo que existe hoy, menor tamaño y menor
+--    costo de mantenimiento en cada INSERT/UPDATE de la tabla. Se le da
+--    nombre explícito para que quede claro que es intencional, no un
+--    autogenerado más.
+
+alter table radar_alertas drop constraint if exists radar_alertas_motivo_resolucion_check;
+alter table radar_alertas add constraint radar_alertas_motivo_resolucion_check
+  check (motivo_resolucion in ('intervencion', 'auto_resuelta', 'sin_accion'));
+
+create or replace function public.resolver_alerta_radar(
+  p_alerta_id uuid,
+  p_motivo text
+) returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_alerta radar_alertas;
+  v_rol text;
+begin
+  if p_motivo is null or p_motivo = '' or p_motivo not in ('intervencion', 'sin_accion') then
+    raise exception 'motivo_resolucion inválido para resolución manual: %. Solo se acepta ''intervencion'' o ''sin_accion''.', coalesce(p_motivo, '(NULL)');
+  end if;
+
+  select * into v_alerta from radar_alertas where id = p_alerta_id and estado_alerta = 'abierta';
+  if v_alerta.id is null then
+    raise exception 'Alerta no encontrada o ya resuelta.';
+  end if;
+
+  v_rol := public.get_user_rol();
+  if v_rol <> 'superadmin'
+     and (v_alerta.nutriologo_id is null or auth.uid() is distinct from v_alerta.nutriologo_id)
+  then
+    raise exception 'No tienes permiso para resolver esta alerta.';
+  end if;
+
+  -- 'intervencion' y 'sin_accion' comparten el mismo cooldown de 14 días
+  -- — ver justificación en el encabezado de esta sección.
+  update radar_alertas
+    set estado_alerta = 'resuelta',
+        fecha_resolucion = (now() at time zone 'America/Mexico_City')::date,
+        motivo_resolucion = p_motivo,
+        cooldown_until = (now() at time zone 'America/Mexico_City')::date + 14,
+        updated_at = now()
+    where id = p_alerta_id and estado_alerta = 'abierta';
+
+  if not found then
+    raise exception 'La alerta ya fue resuelta por otra operación concurrente.';
+  end if;
+end;
+$$;
+
+revoke execute on function public.resolver_alerta_radar(uuid, text) from public, anon;
+grant execute on function public.resolver_alerta_radar(uuid, text) to authenticated;
+
+create table public.radar_ejecucion_errores (
+  id              uuid        default uuid_generate_v4() primary key,
+  paciente_id     uuid        references auth.users(id) on delete set null,
+  fecha_ejecucion date        not null,
+  sqlstate        text,
+  mensaje_error   text,
+  created_at      timestamptz not null default now()
+);
+
+create index on radar_ejecucion_errores(fecha_ejecucion desc);
+create index on radar_ejecucion_errores(paciente_id) where paciente_id is not null;
+
+alter table radar_ejecucion_errores enable row level security;
+
+-- Solo superadmin lee — ni siquiera el nutriólogo dueño del paciente. El
+-- mensaje de error es un detalle operativo interno del motor, no
+-- información clínica que le corresponda ver a un nutriólogo, y mantener
+-- la superficie de lectura mínima reduce el riesgo de filtrar cualquier
+-- detalle inesperado que un mensaje de error de Postgres pudiera incluir.
+create policy "radar_ejecucion_errores_select" on radar_ejecucion_errores
+for select to authenticated using (public.get_user_rol() = 'superadmin');
+
+-- Sin políticas de INSERT/UPDATE/DELETE para authenticated/anon — solo
+-- ejecutar_radar_diario (SECURITY DEFINER, propiedad de postgres) escribe,
+-- igual patrón que score_snapshots/radar_alertas (Sección 73).
+
+create or replace function public.ejecutar_radar_diario(
+  p_fecha date default (now() at time zone 'America/Mexico_City')::date
+) returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_paciente_id uuid;
+  -- Clave arbitraria pero constante y documentada para el advisory lock de
+  -- esta función. c_lock_key1 = 72501 es un "namespace" fijo elegido para
+  -- este archivo de corrección (sin significado fuera de este comentario,
+  -- simplemente un valor que no colisiona con ningún otro pg_advisory_*
+  -- usado en este proyecto — no existe otro en todo supabase_schema.sql).
+  -- c_lock_key2 = 1 identifica ESTA función específica, por si en el
+  -- futuro se necesitan más locks de radar bajo el mismo namespace sin
+  -- colisionar entre ellos.
+  c_lock_key1 constant int := 72501;
+  c_lock_key2 constant int := 1;
+begin
+  -- xact (no de sesión): se libera solo al terminar ESTA transacción,
+  -- pase lo que pase — nunca queda retenido por una conexión reutilizada
+  -- de un pool (PgBouncer/Supabase), a diferencia de pg_advisory_lock o
+  -- pg_try_advisory_lock (ambos de sesión).
+  if not pg_try_advisory_xact_lock(c_lock_key1, c_lock_key2) then
+    raise exception 'ejecutar_radar_diario ya está corriendo en otra transacción — esta corrida se cancela sin procesar ningún paciente (advisory lock %,% no disponible).', c_lock_key1, c_lock_key2;
+  end if;
+
+  for v_paciente_id in
+    select id from perfiles
+    where estatus = 'aprobado' and rol = 'usuario' and coalesce(is_active, true)
+  loop
+    -- BEGIN/EXCEPTION anidado = subtransacción (savepoint implícito de
+    -- PL/pgSQL): una falla en un paciente no revierte el trabajo ya
+    -- confirmado de los demás pacientes de esta misma corrida.
+    begin
+      perform public.calcular_radar_paciente(v_paciente_id, p_fecha);
+    exception when others then
+      -- El registro del error también corre dentro de su propia
+      -- subtransacción: si ESCRIBIR el log fallara por cualquier razón,
+      -- eso tampoco debe cancelar el resto del lote.
+      begin
+        insert into public.radar_ejecucion_errores (paciente_id, fecha_ejecucion, sqlstate, mensaje_error)
+        values (v_paciente_id, p_fecha, sqlstate, left(sqlerrm, 500));
+      exception when others then
+        raise warning 'No se pudo registrar en radar_ejecucion_errores el error de radar para paciente %: %', v_paciente_id, sqlerrm;
+      end;
+      raise warning 'calcular_radar_paciente falló para paciente %: % (%)', v_paciente_id, sqlerrm, sqlstate;
+    end;
+  end loop;
+end;
+$$;
+
+revoke execute on function public.ejecutar_radar_diario(date) from public, anon, authenticated;
+grant execute on function public.ejecutar_radar_diario(date) to service_role;
+
+create or replace function public.marcar_radar_started_at()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if new.estatus = 'aprobado'
+     and old.estatus is distinct from 'aprobado'
+     and new.radar_started_at is null
+  then
+    new.radar_started_at := now();
+  end if;
+  return new;
+end;
+$$;
+
+drop index if exists planes_nutricionales_user_id_idx;
+create index planes_nutricionales_user_id_activo_idx on planes_nutricionales(user_id) where activo;
+
+-- ============================================================
+-- ROLLBACK Sección 76 (referencia — NO ejecutar salvo que se decida
+-- revertir esta sección):
+--
+-- drop index if exists planes_nutricionales_user_id_activo_idx;
+-- create index on planes_nutricionales(user_id);
+-- [recrear marcar_radar_started_at, ejecutar_radar_diario,
+--  resolver_alerta_radar tal como quedaron en la Sección 75]
+-- drop table if exists public.radar_ejecucion_errores;
+-- alter table radar_alertas drop constraint if exists radar_alertas_motivo_resolucion_check;
+-- alter table radar_alertas add constraint radar_alertas_motivo_resolucion_check
+--   check (motivo_resolucion in ('intervencion', 'auto_resuelta'));
+-- ============================================================
