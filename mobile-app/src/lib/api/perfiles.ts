@@ -29,3 +29,14 @@ export async function updateMiPerfil(
   const { error } = await supabase.from('perfiles').update(input).eq('id', userId)
   if (error) throw error
 }
+
+/**
+ * Radar (Blueprint v1.1, R3) — marca "estuve activo hoy". El RPC usa
+ * auth.uid() del lado del servidor (no recibe ningún id) y solo puede
+ * tocar la fila del propio caller; ver registrar_actividad() en
+ * supabase_schema.sql (Sección 70) para la protección a nivel de columna.
+ */
+export async function registrarActividad(): Promise<void> {
+  const { error } = await supabase.rpc('registrar_actividad')
+  if (error) throw error
+}

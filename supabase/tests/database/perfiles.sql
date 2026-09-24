@@ -4,7 +4,7 @@
 -- transacción (BEGIN ... ROLLBACK) — nunca se commitea nada.
 
 begin;
-select plan(42);
+select plan(60);
 
 -- ── Fixtures sintéticos ──────────────────────────────────────────────
 -- Ninguno de estos UUIDs/emails corresponde a datos reales.
@@ -459,6 +459,164 @@ select lives_ok(
   $$ update suscripciones set status = 'canceled' where id = '10000000-0000-4000-8000-0000000000f1' $$,
   'Sección 62: service_role UPDATE en suscripciones = permitido (backend)'
 );
+reset role;
+
+-- ══════════════════ last_active_at / registrar_actividad() (Sección 70, Radar R3) ══════════════════
+
+-- 36. Usuario autenticado puede ejecutar registrar_actividad()
+select tests.authenticate_as('10000000-0000-4000-8000-000000000001'::uuid);
+set local role authenticated;
+select lives_ok(
+  $$ select public.registrar_actividad() $$,
+  'registrar_actividad: usuario autenticado puede ejecutarla');
+reset role;
+
+-- 37. Solo modificó su propio last_active_at (quedó no-null)
+select is(
+  (select (last_active_at is not null) from perfiles where id = '10000000-0000-4000-8000-000000000001'),
+  true, 'registrar_actividad: last_active_at del propio caller quedó establecido');
+
+-- 38. No modificó otras columnas (nombre_completo intacto — el test 2 ya
+--     lo había cambiado a 'Nuevo Nombre' antes de llegar aquí; el punto es
+--     que registrar_actividad() no lo tocó, no cuál sea el valor original).
+select is(
+  (select nombre_completo from perfiles where id = '10000000-0000-4000-8000-000000000001'),
+  'Nuevo Nombre', 'registrar_actividad: no modifica ninguna otra columna del perfil');
+
+-- 39. Paciente A no pudo actualizar la actividad de Paciente B (el RPC no
+--     recibe user_id — solo puede tocar auth.uid()).
+select is(
+  (select last_active_at from perfiles where id = '10000000-0000-4000-8000-000000000002'),
+  null, 'registrar_actividad: no afecta el last_active_at de otro usuario');
+
+-- 40. Llamada repetida no rompe nada (idempotente en el sentido de "no lanza error")
+select tests.authenticate_as('10000000-0000-4000-8000-000000000001'::uuid);
+set local role authenticated;
+select lives_ok(
+  $$ select public.registrar_actividad() $$,
+  'registrar_actividad: una segunda llamada el mismo día no falla');
+reset role;
+
+-- Nota: se usa un literal fijo ('2099-01-01', nunca 'now()') como el
+-- valor a intentar escribir. now() es constante durante TODA la
+-- transacción en Postgres, y esta fila ya quedó con last_active_at =
+-- now() por el test 36 — comparar contra ese mismo now() haría que "IS
+-- DISTINCT FROM" viera un no-op (mismo valor) y el bloque de protección
+-- del trigger ni siquiera se evaluaría, dando un falso "no lanzó
+-- excepción" que no tiene nada que ver con la protección real.
+
+-- 41. Paciente NO puede hacer UPDATE directo de su propio last_active_at
+--     (el único requisito "MUY IMPORTANTE" de esta sección).
+select tests.authenticate_as('10000000-0000-4000-8000-000000000001'::uuid);
+set local role authenticated;
+select throws_ok(
+  $$ update perfiles set last_active_at = '2099-01-01T00:00:00Z'::timestamptz where id = '10000000-0000-4000-8000-000000000001' $$,
+  null, null, 'perfiles: paciente UPDATE directo de last_active_at = bloqueado (fuera de registrar_actividad)');
+reset role;
+
+-- 42. Nutriólogo dueño tampoco puede falsear el last_active_at de su
+--     paciente con un UPDATE directo (RLS de fila se lo permitiría, el
+--     trigger de columna lo bloquea igual).
+select tests.authenticate_as('10000000-0000-4000-8000-000000000003'::uuid);
+set local role authenticated;
+select throws_ok(
+  $$ update perfiles set last_active_at = '2099-01-01T00:00:00Z'::timestamptz where id = '10000000-0000-4000-8000-000000000001' $$,
+  null, null, 'perfiles: nutriólogo dueño UPDATE directo de last_active_at de su paciente = bloqueado');
+reset role;
+
+-- 43. Ni siquiera superadmin puede falsearlo con UPDATE directo — la
+--     columna es exclusiva de registrar_actividad(), sin excepción de rol.
+select tests.authenticate_as('10000000-0000-4000-8000-000000000005'::uuid);
+set local role authenticated;
+select throws_ok(
+  $$ update perfiles set last_active_at = '2099-01-01T00:00:00Z'::timestamptz where id = '10000000-0000-4000-8000-000000000002' $$,
+  null, null, 'perfiles: superadmin UPDATE directo de last_active_at = bloqueado');
+reset role;
+
+-- 44. authenticated tiene EXECUTE sobre registrar_actividad().
+select ok(
+  has_function_privilege('authenticated', 'public.registrar_actividad()', 'EXECUTE'),
+  'registrar_actividad: authenticated tiene EXECUTE');
+
+-- 45. anon NO tiene EXECUTE.
+select ok(
+  not has_function_privilege('anon', 'public.registrar_actividad()', 'EXECUTE'),
+  'registrar_actividad: anon NO tiene EXECUTE');
+
+-- ══════════════════════════════════════════════════════════════════════
+-- Sección 82 — proteger al último superadmin (corrección de incidente
+-- real: un superadmin se auto-degradó vía curl directo a PostgREST y
+-- dejó el sistema sin ningún superadmin restante).
+-- ══════════════════════════════════════════════════════════════════════
+
+-- 46. Con 2+ superadmins, un superadmin SÍ puede degradar a OTRO
+--     superadmin — no bloquea nada mientras quede al menos uno más.
+select tests.authenticate_as('10000000-0000-4000-8000-000000000005'::uuid);
+set local role authenticated;
+select lives_ok(
+  $$ update perfiles set rol = 'admin' where id = '10000000-0000-4000-8000-000000000006' $$,
+  'Con 2 superadmins, degradar a uno de ellos SÍ se permite (queda uno restante)');
+reset role;
+
+-- Deshacer para no afectar los siguientes casos (mismo actor, mismo
+-- chequeo — con 2 superadmins de nuevo, promover de vuelta también vive).
+select tests.authenticate_as('10000000-0000-4000-8000-000000000005'::uuid);
+set local role authenticated;
+select lives_ok(
+  $$ update perfiles set rol = 'superadmin' where id = '10000000-0000-4000-8000-000000000006' $$,
+  'Restaurar a superadmin-b para los siguientes casos');
+reset role;
+
+-- 47. El ÚLTIMO superadmin NO puede degradar a otro superadmin si eso
+--     dejaría CERO superadmins — se prueba degradando primero a uno de
+--     los dos, dejando exactamente uno, y luego intentando degradar al
+--     que queda.
+select tests.authenticate_as('10000000-0000-4000-8000-000000000005'::uuid);
+set local role authenticated;
+update perfiles set rol = 'admin' where id = '10000000-0000-4000-8000-000000000006';
+reset role;
+
+select is(
+  (select count(*)::int from perfiles where rol = 'superadmin'),
+  1, 'Precondición: solo queda un superadmin en el sistema');
+
+select tests.authenticate_as('10000000-0000-4000-8000-000000000005'::uuid);
+set local role authenticated;
+select throws_ok(
+  $$ update perfiles set rol = 'usuario' where id = '10000000-0000-4000-8000-000000000005' $$,
+  'P0001', null,
+  'El último superadmin NO puede auto-degradarse — bloqueado por el trigger, igual vía UI que vía curl');
+reset role;
+
+select is(
+  (select rol from perfiles where id = '10000000-0000-4000-8000-000000000005'),
+  'superadmin', 'El intento bloqueado no dejó ningún cambio parcial — sigue siendo superadmin');
+
+-- 48. Tampoco puede degradarse a 'admin' (no solo a 'usuario') — el
+--     chequeo es "deja de ser superadmin", no un valor específico.
+select tests.authenticate_as('10000000-0000-4000-8000-000000000005'::uuid);
+set local role authenticated;
+select throws_ok(
+  $$ update perfiles set rol = 'admin' where id = '10000000-0000-4000-8000-000000000005' $$,
+  'P0001', null,
+  'El último superadmin tampoco puede degradarse a admin');
+reset role;
+
+-- 49. Restaurar al segundo superadmin no está bloqueado por este chequeo
+--     (no es un cambio de superadmin hacia otra cosa, es al revés).
+select tests.authenticate_as('10000000-0000-4000-8000-000000000005'::uuid);
+set local role authenticated;
+select lives_ok(
+  $$ update perfiles set rol = 'superadmin' where id = '10000000-0000-4000-8000-000000000006' $$,
+  'Promover de vuelta a superadmin-b no está restringido por este chequeo');
+reset role;
+
+-- 50. Con 2 superadmins de nuevo, AHORA sí se puede degradar al primero.
+select tests.authenticate_as('10000000-0000-4000-8000-000000000006'::uuid);
+set local role authenticated;
+select lives_ok(
+  $$ update perfiles set rol = 'usuario' where id = '10000000-0000-4000-8000-000000000005' $$,
+  'Con 2 superadmins restaurados, degradar a uno de ellos vuelve a estar permitido');
 reset role;
 
 select * from finish();

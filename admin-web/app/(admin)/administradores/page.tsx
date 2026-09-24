@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { fetchAdmins, updatePerfil, type AdminListItem } from "@/app/_data/perfiles";
 import ConfirmModal from "@/app/_components/ConfirmModal";
-import { X, ShieldCheck, Check, Pencil, Trash2, Camera } from "lucide-react";
+import PerfilProfesionalModal from "@/app/_components/usuarios/perfil-profesional/PerfilProfesionalModal";
+import { X, ShieldCheck, Check, Pencil, Trash2, Camera, IdCard } from "lucide-react";
 
 export default function AdministradoresPage() {
   const router = useRouter();
@@ -193,6 +194,7 @@ export default function AdministradoresPage() {
   };
 
   const [confirmRemove, setConfirmRemove] = useState<AdminListItem | null>(null);
+  const [perfilProfesionalId, setPerfilProfesionalId] = useState<string | null>(null);
 
   const handleRemoveAdmin = async (admin: AdminListItem) => {
     setConfirmRemove(null);
@@ -333,6 +335,10 @@ export default function AdministradoresPage() {
                     </td>
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-2">
+                        <button onClick={() => setPerfilProfesionalId(a.id)}
+                          className="w-9 h-9 rounded-xl border border-border hover:border-primary hover:bg-primary/5 flex items-center justify-center transition-colors text-secondary hover:text-primary" title="Perfil profesional">
+                          <IdCard size={15} />
+                        </button>
                         <button onClick={() => openEdit(a)}
                           className="w-9 h-9 rounded-xl border border-border hover:border-primary hover:bg-primary/5 flex items-center justify-center transition-colors text-secondary hover:text-primary" title="Editar">
                           <Pencil size={15} />
@@ -434,6 +440,14 @@ export default function AdministradoresPage() {
           variant="warning"
           onConfirm={() => handleRemoveAdmin(confirmRemove)}
           onCancel={() => setConfirmRemove(null)}
+        />
+      )}
+      {perfilProfesionalId && (
+        <PerfilProfesionalModal
+          adminId={perfilProfesionalId}
+          currentUserId={currentUserId}
+          currentUserRol="superadmin"
+          onClose={() => setPerfilProfesionalId(null)}
         />
       )}
     </div>

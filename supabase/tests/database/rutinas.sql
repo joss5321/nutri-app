@@ -1,13 +1,13 @@
--- Pruebas RLS de public.rutinas, public.rutina_dias y public.rutina_ejercicios
--- (Sección 48 de supabase_schema.sql). Cobertura completa de la matriz de
--- permisos: paciente propio/ajeno, admin dueño/ajeno, superadmin — para
--- cada comando realmente otorgado por Sección 48.
+-- Pruebas RLS de public.rutinas, public.rutina_dias, public.rutina_ejercicios
+-- y public.dias_completados (Secciones 48 y 68 de supabase_schema.sql).
+-- Cobertura completa de la matriz de permisos: paciente propio/ajeno, admin
+-- dueño/ajeno, superadmin — para cada comando realmente otorgado.
 --
 -- Fixtures 100% sintéticos, creados y descartados dentro de esta misma
 -- transacción (BEGIN ... ROLLBACK) — nunca se commitea nada.
 
 begin;
-select plan(58);
+select plan(70);
 
 -- ── Fixtures sintéticos ──────────────────────────────────────────────
 select tests.create_user('30000000-0000-4000-8000-000000000003'::uuid, 'admin-a@test.local',    'admin');
@@ -553,6 +553,110 @@ select ok(
 select is(
   (select prosecdef from pg_proc where oid = 'public.guardar_rutina_completa(uuid, uuid, text, text, jsonb)'::regprocedure),
   false, 'guardar_rutina_completa: SECURITY INVOKER (prosecdef = false)');
+
+-- ══════════════════ dias_completados (Sección 68, Radar R1) ══════════════════
+-- Permitido: paciente propio (SELECT, INSERT), admin dueño (SELECT), admin
+-- ajeno (bloqueado), superadmin (SELECT). Sin UPDATE/DELETE para nadie — el
+-- flujo real (marcarDiaCompletado) solo hace upsert con ignoreDuplicates.
+
+-- 55. Paciente A INSERT su propio día completado = permitido
+select tests.authenticate_as('30000000-0000-4000-8000-000000000001'::uuid);
+set local role authenticated;
+select lives_ok(
+  $$ insert into dias_completados (id, user_id, dia_id, fecha)
+     values ('30000000-0000-4000-8000-0000000000b1', '30000000-0000-4000-8000-000000000001', '30000000-0000-4000-8000-0000000000f2', current_date) $$,
+  'dias_completados: paciente propio INSERT = permitido');
+reset role;
+
+-- 56. El registro persiste (visible para el propio paciente)
+select tests.authenticate_as('30000000-0000-4000-8000-000000000001'::uuid);
+set local role authenticated;
+select is((select count(*) from dias_completados where id = '30000000-0000-4000-8000-0000000000b1')::int, 1,
+  'dias_completados: el registro persiste');
+reset role;
+
+-- 57. Doble envío el mismo día = idempotente (no duplica, mismo patrón que
+--     usa marcarDiaCompletado: upsert con onConflict + ignoreDuplicates).
+select tests.authenticate_as('30000000-0000-4000-8000-000000000001'::uuid);
+set local role authenticated;
+select lives_ok(
+  $$ insert into dias_completados (user_id, dia_id, fecha)
+     values ('30000000-0000-4000-8000-000000000001', '30000000-0000-4000-8000-0000000000f2', current_date)
+     on conflict (user_id, dia_id, fecha) do nothing $$,
+  'dias_completados: doble envío mismo día no falla (upsert idempotente)');
+select is(
+  (select count(*)::int from dias_completados
+   where user_id = '30000000-0000-4000-8000-000000000001' and dia_id = '30000000-0000-4000-8000-0000000000f2' and fecha = current_date),
+  1, 'dias_completados: doble envío mismo día no duplica la fila');
+reset role;
+
+-- 58. Paciente A INSERT suplantando a Paciente B (user_id ajeno) = bloqueado
+select tests.authenticate_as('30000000-0000-4000-8000-000000000001'::uuid);
+set local role authenticated;
+select throws_ok(
+  $$ insert into dias_completados (user_id, dia_id, fecha)
+     values ('30000000-0000-4000-8000-000000000002', '30000000-0000-4000-8000-0000000000f5', current_date) $$,
+  '42501', null, 'dias_completados: paciente INSERT para user_id ajeno = bloqueado');
+reset role;
+
+-- 59. Paciente A SELECT del día de Paciente B = bloqueado (aislamiento)
+insert into dias_completados (id, user_id, dia_id, fecha)
+values ('30000000-0000-4000-8000-0000000000b2', '30000000-0000-4000-8000-000000000002', '30000000-0000-4000-8000-0000000000f5', current_date);
+
+select tests.authenticate_as('30000000-0000-4000-8000-000000000001'::uuid);
+set local role authenticated;
+select is((select count(*) from dias_completados where id = '30000000-0000-4000-8000-0000000000b2')::int, 0,
+  'dias_completados: paciente ajeno SELECT = bloqueado');
+reset role;
+
+-- 60. Admin A (nutricionista_id real) SELECT del día de su Paciente A = permitido
+select tests.authenticate_as('30000000-0000-4000-8000-000000000003'::uuid);
+set local role authenticated;
+select is((select count(*) from dias_completados where id = '30000000-0000-4000-8000-0000000000b1')::int, 1,
+  'dias_completados: nutriólogo dueño SELECT = permitido');
+reset role;
+
+-- 61. Admin A SELECT del día de Paciente B (no es su paciente) = bloqueado
+select tests.authenticate_as('30000000-0000-4000-8000-000000000003'::uuid);
+set local role authenticated;
+select is((select count(*) from dias_completados where id = '30000000-0000-4000-8000-0000000000b2')::int, 0,
+  'dias_completados: nutriólogo ajeno SELECT = bloqueado');
+reset role;
+
+-- 62. Superadmin SELECT de cualquier paciente = permitido
+select tests.authenticate_as('30000000-0000-4000-8000-000000000005'::uuid);
+set local role authenticated;
+select is((select count(*) from dias_completados where id = '30000000-0000-4000-8000-0000000000b2')::int, 1,
+  'dias_completados: superadmin SELECT = permitido');
+reset role;
+
+-- 63. Sin policy de UPDATE — paciente propio UPDATE = bloqueado
+select tests.authenticate_as('30000000-0000-4000-8000-000000000001'::uuid);
+set local role authenticated;
+with actualizado as (
+  update dias_completados set fecha = current_date - 1 where id = '30000000-0000-4000-8000-0000000000b1' returning 1
+)
+select is((select count(*) from actualizado)::int, 0, 'dias_completados: paciente propio UPDATE = bloqueado (sin policy)');
+reset role;
+
+-- 64. Sin policy de DELETE — paciente propio DELETE = bloqueado
+select tests.authenticate_as('30000000-0000-4000-8000-000000000001'::uuid);
+set local role authenticated;
+with borrado as (
+  delete from dias_completados where id = '30000000-0000-4000-8000-0000000000b1' returning 1
+)
+select is((select count(*) from borrado)::int, 0, 'dias_completados: paciente propio DELETE = bloqueado (sin policy)');
+reset role;
+
+-- 65. UNIQUE(user_id, dia_id, fecha) sigue vigente (identifica un día
+--     completado como paciente + rutina_dia + fecha, tal como define Radar).
+select tests.authenticate_as('30000000-0000-4000-8000-000000000005'::uuid);
+set local role authenticated;
+select throws_ok(
+  $$ insert into dias_completados (user_id, dia_id, fecha)
+     values ('30000000-0000-4000-8000-000000000001', '30000000-0000-4000-8000-0000000000f2', current_date) $$,
+  '23505', null, 'dias_completados: UNIQUE(user_id, dia_id, fecha) sigue vigente');
+reset role;
 
 select * from finish();
 rollback;

@@ -4062,6 +4062,354 @@ create policy "exercise-gifs: gestion admin superadmin" on storage.objects
 -- ============================================================
 
 -- ============================================================
+-- 68. MIGRACIÓN — MyFitTrack Radar (R1): dias_completados real
+-- ============================================================
+-- Blueprint v1.1, Fase A, R1. La tabla dias_completados ya existía desde
+-- la Sección 3 (unique(user_id, dia_id, fecha) ya cubre la idempotencia
+-- que Radar necesita), pero nunca tuvo un consumidor real — mobile-app
+-- (rutinas.tsx) guardaba "día completado" únicamente en AsyncStorage.
+-- Radar necesita que esta tabla sea la fuente de verdad real para poder
+-- calcular adherencia de entrenamiento.
+--
+-- RLS verificada antes de tocarla (Sección 8, sin cambios desde entonces):
+-- una sola policy "for all using (auth.uid() = user_id)" — el paciente
+-- gestiona lo suyo, pero a diferencia de medidas/ejercicio_logs (Sección
+-- 47, que sí se endureció con visibilidad multi-tenant), el nutriólogo no
+-- tenía NINGUNA visibilidad sobre esta tabla. Se cierra ese hueco aquí con
+-- el mismo patrón ya establecido en la Sección 47 — no se inventa uno
+-- nuevo.
+--
+-- Sin policy de UPDATE/DELETE: el flujo real (marcarDiaCompletado en
+-- mobile-app/src/lib/api/rutinas.ts) hace un upsert con
+-- ignoreDuplicates=true contra el UNIQUE ya existente — cubre la
+-- idempotencia sin necesitar UPDATE. Nada en el código llama nunca a
+-- "desmarcar" un día (verificado en rutinas.tsx: markComplete es de una
+-- sola dirección), así que tampoco se agrega DELETE.
+drop policy if exists "dias_completados: usuario gestiona los suyos" on dias_completados;
+
+create policy "dias_completados_select" on dias_completados
+for select to authenticated using (
+  auth.uid() = user_id
+  or exists (select 1 from perfiles where id = dias_completados.user_id and nutricionista_id = auth.uid())
+  or public.get_user_rol() = 'superadmin'
+);
+
+create policy "dias_completados_insert" on dias_completados
+for insert to authenticated with check (
+  auth.uid() = user_id
+  or public.get_user_rol() = 'superadmin'
+);
+
+-- ============================================================
+-- ROLLBACK Sección 68 (referencia — NO ejecutar salvo que se decida
+-- revertir esta sección):
+--
+-- drop policy if exists "dias_completados_select" on dias_completados;
+-- drop policy if exists "dias_completados_insert" on dias_completados;
+-- create policy "dias_completados: usuario gestiona los suyos"
+--   on dias_completados for all using (auth.uid() = user_id);
+-- ============================================================
+
+-- ============================================================
+-- 69. MIGRACIÓN — MyFitTrack Radar (R2): nutricion_checks
+-- ============================================================
+-- Blueprint v1.1, Fase A, R2. Check diario de mínima fricción: el
+-- paciente reporta una vez al día si siguió su plan de nutrición.
+-- Verificado que no existe ningún concepto equivalente en el schema
+-- antes de crear la tabla (búsqueda de "seguimiento"/"cumplimiento"/
+-- "adherencia"/"check" — cero resultados relacionados con esto).
+--
+-- 3 estados en vez de boolean ('seguido'/'parcial'/'no_seguido'): un
+-- sí/no binario perdería la información intermedia y reforzaría
+-- exactamente el patrón "todo o nada" que el propio Radar busca dejar de
+-- reforzar (hallazgo del estudio de mercado que originó Radar).
+--
+-- Zona horaria: MyFitTrack Radar usa America/Mexico_City como referencia
+-- oficial para todo cálculo de "día calendario" (checks, y más adelante
+-- ventanas de alertas/intervenciones) — decisión explícita del Blueprint
+-- v1.1. El cliente (mobile-app/src/lib/radar-date.ts) escribe `fecha` con
+-- esa misma zona horaria; la policy de UPDATE de abajo deriva "hoy" con
+-- la misma referencia, para que ambos lados nunca diverjan. Encapsulado
+-- en una sola expresión reutilizable para poder migrar a timezone por
+-- paciente/profesional más adelante sin tocar cada policy.
+create table nutricion_checks (
+  id         uuid        default uuid_generate_v4() primary key,
+  user_id    uuid        references auth.users(id) on delete cascade not null,
+  fecha      date        not null,
+  estado     text        not null check (estado in ('seguido', 'parcial', 'no_seguido')),
+  nota       text,
+  created_at timestamptz not null default now(),
+  unique (user_id, fecha)
+);
+
+create index on nutricion_checks (user_id, fecha desc);
+
+alter table nutricion_checks enable row level security;
+
+-- Mismo patrón multi-tenant que ejercicio_logs/medidas (Sección 47) — el
+-- nutriólogo ve el autorreporte de sus pacientes, nunca lo modifica.
+create policy "nutricion_checks_select" on nutricion_checks
+for select to authenticated using (
+  auth.uid() = user_id
+  or exists (select 1 from perfiles where id = nutricion_checks.user_id and nutricionista_id = auth.uid())
+  or public.get_user_rol() = 'superadmin'
+);
+
+create policy "nutricion_checks_insert" on nutricion_checks
+for insert to authenticated with check (
+  auth.uid() = user_id
+  or public.get_user_rol() = 'superadmin'
+);
+
+-- El paciente puede corregir el check del día actual (ej. tocó
+-- "Parcialmente" por error) — nunca reescribir un día pasado, para que el
+-- historial que Radar usará para medir adherencia sea confiable.
+create policy "nutricion_checks_update" on nutricion_checks
+for update to authenticated using (
+  auth.uid() = user_id
+  and fecha = (now() at time zone 'America/Mexico_City')::date
+) with check (
+  auth.uid() = user_id
+  and fecha = (now() at time zone 'America/Mexico_City')::date
+);
+
+-- Sin DELETE — ningún flujo real lo necesita, y conservar el historial
+-- completo es justo lo que Radar necesita para calcular adherencia.
+
+-- ============================================================
+-- ROLLBACK Sección 69 (referencia — NO ejecutar salvo que se decida
+-- revertir esta sección):
+--
+-- drop table if exists nutricion_checks;
+-- ============================================================
+
+-- ============================================================
+-- 70. MIGRACIÓN — MyFitTrack Radar (R3): perfiles.last_active_at
+-- ============================================================
+-- Blueprint v1.1, Fase Radar, R3. Señal de actividad real del paciente —
+-- distinta de auth.users.last_sign_in_at, que en una app con sesión
+-- persistente (autoRefreshToken: true) casi nunca se actualiza tras el
+-- primer login (confirmado al diagnosticar el bug de "no hay
+-- nutriólogos disponibles" en iOS: last_sign_in_at solo cambia en un
+-- sign-in real, nunca en un refresh silencioso de token).
+--
+-- Revisado antes de tocar perfiles (regla de este proyecto: inspeccionar
+-- triggers/policies/RPCs existentes antes de modificar una tabla que ya
+-- tiene protección de columnas):
+--   - "perfiles: actualizar multi-tenant" permite UPDATE de CUALQUIER
+--     columna sobre la propia fila (auth.uid()=id) o la de un paciente
+--     asignado (auth.uid()=nutricionista_id) — RLS no distingue
+--     columnas, solo filas.
+--   - trg_proteger_columnas_sensibles_perfiles (Sección 45) es
+--     exactamente el mecanismo ya establecido en este proyecto para
+--     cerrar ese hueco a nivel de columna. Se extiende aquí con un
+--     tercer bloque — los dos existentes (rol/nutricionista_id/
+--     stripe_customer_id y estatus/is_active/plan_membresia) quedan
+--     idénticos, sin tocar su lógica.
+--
+-- Por qué last_active_at necesita una excepción distinta de
+-- "current_user = 'service_role'": a registrar_actividad() la llama el
+-- propio cliente autenticado (paciente O nutriólogo registrando SU
+-- PROPIA actividad), nunca una Edge Function con service_role — esa
+-- excepción existente no aplica aquí.
+--
+-- Dos diseños probados y descartados (documentados aquí para no
+-- repetirlos):
+--   1) Flag de transacción vía set_config()/current_setting(), encendido
+--      antes del UPDATE y apagado después. Falló contra los tests pgTAP
+--      reales: pgTAP envuelve cada archivo completo en una única
+--      transacción, y el flag no se comportó como "apagado" en llamadas
+--      posteriores dentro de esa misma transacción — un mecanismo que
+--      depende de "acordarse de apagar el flag" es justo el tipo de
+--      estado implícito y frágil que este proyecto evita.
+--   2) current_user <> session_user. La hipótesis era que solo una
+--      función SECURITY DEFINER produce esa diferencia. Falsa: tanto en
+--      los tests (pgTAP simula el rol autenticado con "SET LOCAL ROLE"
+--      sobre una conexión que ya inició como "postgres", así que
+--      session_user sigue siendo "postgres" incluso en un UPDATE directo
+--      normal) como en producción real (PostgREST también opera con
+--      "SET ROLE" sobre un pool de conexión con un rol fijo de conexión,
+--      no con una conexión nueva por rol) — current_user <> session_user
+--      es prácticamente siempre cierto, con o sin SECURITY DEFINER de
+--      por medio. No distingue nada.
+--
+-- Diseño final: registrar_actividad() es SECURITY DEFINER, y el trigger
+-- compara current_user contra el nombre literal del rol dueño de la
+-- función ("postgres" en este proyecto — verificado contra la base real:
+-- select pg_get_userbyid(proowner) from pg_proc where proname =
+-- 'registrar_actividad') — exactamente el mismo mecanismo, mismo nivel
+-- de "hardcodeo", que ya usa este trigger para "current_user =
+-- 'service_role'" dos bloques arriba. current_user SÍ cambia al nombre
+-- del dueño mientras se ejecuta una función SECURITY DEFINER,
+-- independientemente de cómo la sesión llegó hasta ahí — es la única de
+-- las tres señales que realmente se evalúa fresca por invocación sin
+-- depender de estado entre sentencias ni de la topología de conexión.
+alter table perfiles add column if not exists last_active_at timestamptz;
+
+create or replace function public.registrar_actividad()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.uid() is null then
+    raise exception 'Requiere autenticación.';
+  end if;
+  update public.perfiles set last_active_at = now() where id = auth.uid();
+end;
+$$;
+
+revoke execute on function public.registrar_actividad() from public, anon;
+grant execute on function public.registrar_actividad() to authenticated;
+
+-- Se re-declara la función completa del trigger de la Sección 45,
+-- agregando el tercer bloque al final — los dos bloques existentes
+-- quedan carácter por carácter idénticos.
+create or replace function public.proteger_columnas_sensibles_perfiles()
+returns trigger
+language plpgsql
+as $$
+declare
+  v_rol      text;
+  v_allowed  boolean;
+begin
+  -- Edge Functions con service role key: sin restricción.
+  if current_user = 'service_role' then
+    return new;
+  end if;
+
+  v_rol := public.get_user_rol();
+
+  -- rol / nutricionista_id / stripe_customer_id: solo superadmin.
+  if new.rol is distinct from old.rol
+     or new.nutricionista_id is distinct from old.nutricionista_id
+     or new.stripe_customer_id is distinct from old.stripe_customer_id
+  then
+    if v_rol is distinct from 'superadmin' then
+      raise exception 'No tienes permiso para modificar rol, nutricionista_id o stripe_customer_id.';
+    end if;
+  end if;
+
+  -- estatus / is_active / plan_membresia: superadmin, o el nutriólogo
+  -- dueño del paciente — nunca el propio paciente sobre sí mismo.
+  if new.estatus is distinct from old.estatus
+     or new.is_active is distinct from old.is_active
+     or new.plan_membresia is distinct from old.plan_membresia
+  then
+    v_allowed := coalesce(
+      coalesce(v_rol = 'superadmin', false)
+      or (
+        auth.uid() is not null
+        and old.nutricionista_id is not null
+        and auth.uid() = old.nutricionista_id
+        and auth.uid() <> old.id
+      ),
+      false
+    );
+
+    if not v_allowed then
+      raise exception 'No tienes permiso para modificar estatus, is_active o plan_membresia de este perfil.';
+    end if;
+  end if;
+
+  -- last_active_at: exclusivamente vía registrar_actividad() (SECURITY
+  -- DEFINER, dueño "postgres") — ni el dueño de la fila, ni su
+  -- nutriólogo, ni superadmin pueden tocarla con un UPDATE directo, sin
+  -- importar que RLS ya les permita tocar la fila. Mismo mecanismo que la
+  -- excepción de "service_role" de arriba, ver el comentario de diseño
+  -- de la Sección 70 para las dos alternativas que se probaron y
+  -- descartaron antes de esta.
+  if new.last_active_at is distinct from old.last_active_at then
+    if current_user is distinct from 'postgres' then
+      raise exception 'last_active_at solo se puede modificar mediante registrar_actividad().';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+-- ============================================================
+-- ROLLBACK Sección 70 (referencia — NO ejecutar salvo que se decida
+-- revertir esta sección):
+--
+-- drop function if exists public.registrar_actividad();
+-- [recrear proteger_columnas_sensibles_perfiles sin el tercer bloque,
+--  tal como quedó en la Sección 45, si se revierte]
+-- alter table perfiles drop column if exists last_active_at;
+-- ============================================================
+
+-- ============================================================
+-- 71. MIGRACIÓN — MyFitTrack Radar (R3): suplemento_logs real
+-- ============================================================
+-- suplemento_logs ya existía desde la Sección 7 con la identidad correcta
+-- para lo que Radar necesita: unique(user_id, plan_suplemento_id, fecha)
+-- — un log por paciente, por TOMA PROGRAMADA, por día. Verificado contra
+-- el modelo real antes de tocar nada: plan_suplementacion no tiene
+-- columna de "frecuencia" — cada horario/momento prescrito ya es su
+-- propia fila (su propio plan_suplemento_id). Un suplemento tomado 2
+-- veces al día ya genera 2 filas de plan_suplementacion independientes
+-- (una por horario), así que la identidad existente ya maneja ese caso
+-- de forma correcta sin necesitar rediseño: no hay que simplificar a "una
+-- fila por suplemento por día", la tabla ya es "una fila por toma
+-- programada por día".
+--
+-- Corrección a lo verificado: SÍ tenía RLS habilitada desde la Sección 8
+-- ("supp_logs: usuario gestiona los suyos", FOR ALL, auth.uid()=user_id)
+-- — el mismo patrón legacy que medidas/ejercicio_logs/dietocalculo tenían
+-- antes de la Sección 47, pero que se quedó sin endurecer en esa misma
+-- pasada (no se detectó entonces porque, sin consumidor real, no había
+-- ningún flujo que lo hiciera evidente). Sin nutriólogo visibility, sin
+-- restricción de fecha, y cubriendo UPDATE/DELETE que ningún flujo real
+-- necesita — exactamente el hueco que esta sección cierra ahora, con el
+-- mismo patrón ya usado en la Sección 47. Sin consumidor real hasta
+-- ahora: el checkbox de "tomado" en mobile-app era únicamente un
+-- Set<string> en memoria de React (nutricion.tsx, SuplementacionTab), sin
+-- persistencia.
+drop policy if exists "supp_logs: usuario gestiona los suyos" on suplemento_logs;
+alter table suplemento_logs enable row level security;
+
+-- Mismo patrón multi-tenant que ejercicio_logs/medidas/nutricion_checks.
+create policy "suplemento_logs_select" on suplemento_logs
+for select to authenticated using (
+  auth.uid() = user_id
+  or exists (select 1 from perfiles where id = suplemento_logs.user_id and nutricionista_id = auth.uid())
+  or public.get_user_rol() = 'superadmin'
+);
+
+create policy "suplemento_logs_insert" on suplemento_logs
+for insert to authenticated with check (
+  auth.uid() = user_id
+  or public.get_user_rol() = 'superadmin'
+);
+
+-- El checkbox ya era un toggle bidireccional en la UI existente (marcar y
+-- desmarcar) — se preserva esa capacidad. Igual que nutricion_checks:
+-- nunca permite reescribir un día pasado, solo el de hoy.
+create policy "suplemento_logs_update" on suplemento_logs
+for update to authenticated using (
+  auth.uid() = user_id
+  and fecha = (now() at time zone 'America/Mexico_City')::date
+) with check (
+  auth.uid() = user_id
+  and fecha = (now() at time zone 'America/Mexico_City')::date
+);
+
+-- Sin DELETE — el toggle usa UPDATE de "tomado", no borra filas.
+
+-- ============================================================
+-- ROLLBACK Sección 71 (referencia — NO ejecutar salvo que se decida
+-- revertir esta sección):
+--
+-- drop policy if exists "suplemento_logs_select" on suplemento_logs;
+-- drop policy if exists "suplemento_logs_insert" on suplemento_logs;
+-- drop policy if exists "suplemento_logs_update" on suplemento_logs;
+-- create policy "supp_logs: usuario gestiona los suyos"
+--   on suplemento_logs for all using (auth.uid() = user_id);
+-- ============================================================
+
+-- ============================================================
 -- 72. MIGRACIÓN — MyFitTrack Radar (R4B): perfiles.radar_started_at
 -- ============================================================
 -- Verificado contra el schema real (Sección 38) antes de asumir nada:
@@ -5827,4 +6175,2251 @@ create index planes_nutricionales_user_id_activo_idx on planes_nutricionales(use
 -- alter table radar_alertas drop constraint if exists radar_alertas_motivo_resolucion_check;
 -- alter table radar_alertas add constraint radar_alertas_motivo_resolucion_check
 --   check (motivo_resolucion in ('intervencion', 'auto_resuelta'));
+-- ============================================================
+
+-- ============================================================
+-- 77. MIGRACIÓN — MyFitTrack Radar (R4C-1): observabilidad de ejecución
+-- diaria — SIN crear el cron real todavía (eso es R4C-2).
+-- ============================================================
+-- Diseño acordado antes de escribir este SQL (ver respuesta previa a la
+-- autorización de R4C-1) — resumen de las decisiones clave:
+--
+-- 1. ejecutar_radar_diario NO cambia de firma. Su único cambio es que la
+--    excepción de "lock no disponible" ahora lleva un SQLSTATE propio
+--    ('RDLCK') en vez del genérico P0001 que comparte con cualquier otra
+--    excepción de este archivo — así el wrapper puede distinguir esa
+--    condición sin depender del texto del mensaje (frágil ante cambios de
+--    redacción futuros).
+--
+-- 2. Los contadores de radar_ejecuciones se calculan por CORRELACIÓN
+--    EXACTA (no aproximada) usando que now() es constante durante toda
+--    una transacción de Postgres: el wrapper y ejecutar_radar_diario
+--    corren en la MISMA transacción, así que todo lo que esa corrida
+--    escribe (radar_ejecucion_errores.created_at, radar_alertas.updated_at)
+--    comparte el mismo valor exacto de now() que el wrapper capturó al
+--    empezar. Esto es exacto, no una ventana de tiempo aproximada, PORQUE
+--    el advisory lock garantiza que nunca hay dos corridas reales
+--    solapadas — de ahí que NO haga falta pasar ejecucion_id a través del
+--    motor (calcular_radar_paciente/_radar_gestionar_alerta quedan
+--    intactos).
+--
+-- 3. pacientes_procesados = candidatos - con_error (por complemento, sin
+--    volver a consultar score_snapshots — evita mezclar corridas
+--    anteriores, reintentos o ejecuciones concurrentes). snapshots_generados
+--    se define IGUAL a pacientes_procesados: el motor garantiza 1 snapshot
+--    válido por paciente sin error, y distinguir INSERT-fresco de
+--    UPDATE-por-conflicto no aporta nada que esta métrica necesite y
+--    requeriría instrumentar el motor solo para eso.
+--
+-- 4. pacientes_omitidos NO se agrega: es exactamente igual a con_error
+--    dado que is_active/estatus ya filtran ANTES de contar candidatos —
+--    no existe hoy ninguna otra categoría de "candidato saltado sin
+--    error". Esquema mínimo.
+--
+-- 5. trigger_origen nunca es un parámetro que un cliente controle: dos
+--    funciones públicas delgadas (radar_cron_tick, sin acceso de cliente;
+--    radar_ejecutar_manual, solo superadmin) llaman a un helper privado
+--    compartido pasándole un literal fijo ('cron' / 'manual'). Un cliente
+--    no puede falsificar el origen porque nunca lo pasa como argumento.
+--
+-- 6. resultado = 'exitoso' cuando candidatos = 0 — el scheduler funcionó
+--    correctamente y simplemente no había trabajo; "nada que hacer" no es
+--    una falla.
+--
+-- 7. Ventana de ticks (para R4C-2, documentada aquí porque el wrapper ya
+--    la implementa): radar_cron_tick() solo actúa si la hora CDMX está en
+--    [03:10, 04:00) — la fuente de verdad de "es hora" y "qué fecha es"
+--    sigue siendo (now() at time zone 'America/Mexico_City') dentro de
+--    Postgres, nunca un offset UTC fijo. El cron en sí (fuera de este
+--    archivo, R4C-2) disparará cada 15 min entre las 8-9 UTC — una
+--    franja que cubre esa ventana CDMX tanto en UTC-6 (actual) como en un
+--    eventual UTC-5, sin tener que tocar nunca la expresión cron.
+--
+-- 8. Retención: ninguna todavía — se conserva todo durante Radar v1
+--    (volumen diminuto en el piloto), decisión explícitamente diferida.
+
+-- ── 77.1 — SQLSTATE propio para la excepción de lock ────────────────────
+-- Re-declaración completa: único cambio real es agregar "using errcode =
+-- 'RDLCK'" a la excepción de lock — el resto queda idéntico a como quedó
+-- en la Sección 76.
+create or replace function public.ejecutar_radar_diario(
+  p_fecha date default (now() at time zone 'America/Mexico_City')::date
+) returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_paciente_id uuid;
+  c_lock_key1 constant int := 72501;
+  c_lock_key2 constant int := 1;
+begin
+  if not pg_try_advisory_xact_lock(c_lock_key1, c_lock_key2) then
+    raise exception 'ejecutar_radar_diario ya está corriendo en otra transacción — esta corrida se cancela sin procesar ningún paciente (advisory lock %,% no disponible).', c_lock_key1, c_lock_key2
+      using errcode = 'RDLCK';
+  end if;
+
+  for v_paciente_id in
+    select id from perfiles
+    where estatus = 'aprobado' and rol = 'usuario' and coalesce(is_active, true)
+  loop
+    begin
+      perform public.calcular_radar_paciente(v_paciente_id, p_fecha);
+    exception when others then
+      begin
+        insert into public.radar_ejecucion_errores (paciente_id, fecha_ejecucion, sqlstate, mensaje_error)
+        values (v_paciente_id, p_fecha, sqlstate, left(sqlerrm, 500));
+      exception when others then
+        raise warning 'No se pudo registrar en radar_ejecucion_errores el error de radar para paciente %: %', v_paciente_id, sqlerrm;
+      end;
+      raise warning 'calcular_radar_paciente falló para paciente %: % (%)', v_paciente_id, sqlerrm, sqlstate;
+    end;
+  end loop;
+end;
+$$;
+
+revoke execute on function public.ejecutar_radar_diario(date) from public, anon, authenticated;
+grant execute on function public.ejecutar_radar_diario(date) to service_role;
+
+-- ── 77.2 — radar_ejecuciones ─────────────────────────────────────────────
+create table public.radar_ejecuciones (
+  id                                 uuid        default uuid_generate_v4() primary key,
+  fecha_evaluada                     date        not null,
+  iniciado_at                        timestamptz not null,
+  finalizado_at                      timestamptz,
+  resultado                          text        check (resultado in ('exitoso', 'parcial', 'fallo_total', 'omitido_por_lock')),
+  pacientes_candidatos               int         not null default 0,
+  pacientes_procesados               int,
+  pacientes_con_error                int,
+  snapshots_generados                int,
+  alertas_abiertas                   int,
+  alertas_resueltas_automaticamente  int,
+  trigger_origen                     text        not null check (trigger_origen in ('cron', 'manual')),
+  created_at                         timestamptz not null default now()
+);
+
+create index on radar_ejecuciones(fecha_evaluada desc);
+create index on radar_ejecuciones(resultado);
+
+alter table radar_ejecuciones enable row level security;
+
+-- Igual patrón que radar_ejecucion_errores: solo superadmin lee, nadie
+-- inserta/actualiza/borra vía RLS — solo el motor SECURITY DEFINER escribe.
+create policy "radar_ejecuciones_select" on radar_ejecuciones
+for select to authenticated using (public.get_user_rol() = 'superadmin');
+
+-- ── 77.3 — vínculo de radar_ejecucion_errores con su ejecución ──────────
+alter table radar_ejecucion_errores add column if not exists ejecucion_id uuid references radar_ejecuciones(id) on delete set null;
+create index on radar_ejecucion_errores(ejecucion_id);
+
+-- ── 77.4 — helper privado compartido (nunca invocable por un cliente) ──
+create or replace function public._radar_ejecutar_con_observabilidad(p_trigger_origen text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_fecha date := (now() at time zone 'America/Mexico_City')::date;
+  v_now timestamptz := now(); -- congelado durante toda esta transacción: clave de correlación exacta
+  v_inicio timestamptz := clock_timestamp();
+  v_ejecucion_id uuid;
+  v_candidatos int;
+  v_con_error int;
+  v_procesados int;
+  v_alertas_abiertas int;
+  v_alertas_auto_resueltas int;
+  v_resultado text;
+  v_sqlstate text;
+begin
+  -- Defensivo — nunca debería dispararse dado que solo se llama
+  -- internamente con literales fijos ('cron'/'manual'), nunca con un
+  -- valor que un cliente controle.
+  if p_trigger_origen not in ('cron', 'manual') then
+    raise exception 'trigger_origen inválido: %', p_trigger_origen;
+  end if;
+
+  select count(*) into v_candidatos
+    from perfiles where estatus = 'aprobado' and rol = 'usuario' and coalesce(is_active, true);
+
+  insert into radar_ejecuciones (fecha_evaluada, iniciado_at, pacientes_candidatos, trigger_origen)
+    values (v_fecha, v_inicio, v_candidatos, p_trigger_origen)
+    returning id into v_ejecucion_id;
+
+  begin
+    perform public.ejecutar_radar_diario(v_fecha);
+  exception when others then
+    get stacked diagnostics v_sqlstate = returned_sqlstate;
+    if v_sqlstate = 'RDLCK' then
+      update radar_ejecuciones set
+        finalizado_at = clock_timestamp(), resultado = 'omitido_por_lock',
+        pacientes_procesados = 0, pacientes_con_error = 0,
+        snapshots_generados = 0, alertas_abiertas = 0, alertas_resueltas_automaticamente = 0
+      where id = v_ejecucion_id;
+      return;
+    else
+      -- No debería ocurrir (ejecutar_radar_diario ya aísla errores por
+      -- paciente), pero si algo inesperado escapara igual, se cierra la
+      -- fila como fallo_total en vez de dejarla huérfana con resultado=null.
+      update radar_ejecuciones set
+        finalizado_at = clock_timestamp(), resultado = 'fallo_total',
+        pacientes_procesados = 0, pacientes_con_error = v_candidatos,
+        snapshots_generados = 0, alertas_abiertas = 0, alertas_resueltas_automaticamente = 0
+      where id = v_ejecucion_id;
+      return;
+    end if;
+  end;
+
+  -- Correlación exacta (ver punto 2 del encabezado de esta sección).
+  update radar_ejecucion_errores set ejecucion_id = v_ejecucion_id
+    where fecha_ejecucion = v_fecha and created_at = v_now and ejecucion_id is null;
+
+  select count(*) into v_con_error from radar_ejecucion_errores where ejecucion_id = v_ejecucion_id;
+  v_procesados := v_candidatos - v_con_error;
+
+  select count(*) into v_alertas_abiertas
+    from radar_alertas where updated_at = v_now and estado_alerta = 'abierta';
+  select count(*) into v_alertas_auto_resueltas
+    from radar_alertas where updated_at = v_now and estado_alerta = 'resuelta' and motivo_resolucion = 'auto_resuelta';
+
+  v_resultado := case
+    when v_candidatos = 0 then 'exitoso'
+    when v_con_error = 0 then 'exitoso'
+    when v_procesados > 0 then 'parcial'
+    else 'fallo_total'
+  end;
+
+  update radar_ejecuciones set
+    finalizado_at = clock_timestamp(),
+    resultado = v_resultado,
+    pacientes_procesados = v_procesados,
+    pacientes_con_error = v_con_error,
+    snapshots_generados = v_procesados,
+    alertas_abiertas = v_alertas_abiertas,
+    alertas_resueltas_automaticamente = v_alertas_auto_resueltas
+  where id = v_ejecucion_id;
+end;
+$$;
+
+revoke execute on function public._radar_ejecutar_con_observabilidad(text) from public;
+
+-- ── 77.5 — entrypoints públicos (los únicos que pueden fijar trigger_origen) ──
+-- Sin parámetros, sin acceso de cliente — pensada para que R4C-2 la
+-- agende con pg_cron. Decide la ventana horaria y el "ya corrió hoy"
+-- enteramente en America/Mexico_City, nunca con un offset UTC fijo.
+create or replace function public.radar_cron_tick()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_hora_cdmx time := (now() at time zone 'America/Mexico_City')::time;
+  v_fecha_cdmx date := (now() at time zone 'America/Mexico_City')::date;
+begin
+  if v_hora_cdmx < time '03:10' or v_hora_cdmx >= time '04:00' then
+    return; -- fuera de la ventana objetivo — no hace nada, no registra nada
+  end if;
+
+  if exists (
+    select 1 from radar_ejecuciones
+    where fecha_evaluada = v_fecha_cdmx and resultado in ('exitoso', 'parcial', 'fallo_total')
+  ) then
+    return; -- ya hubo una corrida real hoy — evita reintentos redundantes cada 15 min dentro de la ventana
+  end if;
+
+  perform public._radar_ejecutar_con_observabilidad('cron');
+end;
+$$;
+
+revoke execute on function public.radar_cron_tick() from public, anon, authenticated;
+grant execute on function public.radar_cron_tick() to service_role;
+
+-- Ejecución manual controlada (paso 6 del plan de despliegue de R4C, y
+-- útil para depuración) — solo superadmin, sin restricción de ventana
+-- horaria ni de "ya corrió hoy" (es una decisión humana explícita).
+create or replace function public.radar_ejecutar_manual()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if public.get_user_rol() <> 'superadmin' then
+    raise exception 'Solo superadmin puede ejecutar Radar manualmente.';
+  end if;
+  perform public._radar_ejecutar_con_observabilidad('manual');
+end;
+$$;
+
+revoke execute on function public.radar_ejecutar_manual() from public, anon;
+grant execute on function public.radar_ejecutar_manual() to authenticated;
+
+-- ============================================================
+-- ROLLBACK Sección 77 (referencia — NO ejecutar salvo que se decida
+-- revertir esta sección):
+--
+-- drop function if exists public.radar_ejecutar_manual();
+-- drop function if exists public.radar_cron_tick();
+-- drop function if exists public._radar_ejecutar_con_observabilidad(text);
+-- alter table radar_ejecucion_errores drop column if exists ejecucion_id;
+-- drop table if exists public.radar_ejecuciones;
+-- [recrear ejecutar_radar_diario tal como quedó en la Sección 76, sin el
+--  "using errcode = 'RDLCK'", si se decide revertir también ese cambio]
+-- ============================================================
+
+-- ============================================================
+-- 78. MIGRACIÓN — MyFitTrack Radar (R4C-2): cierre de un hueco de grants
+-- real encontrado al desplegar por primera vez a Supabase hosted
+-- ============================================================
+-- Las Secciones 75 y 76 revocaron EXECUTE de _radar_gestionar_alerta y
+-- _radar_ejecutar_con_observabilidad "from public" únicamente — suficiente
+-- en el stack local, pero NO en un proyecto Supabase real: la plataforma
+-- hosted configura ALTER DEFAULT PRIVILEGES a nivel de base de datos que
+-- otorga EXECUTE directamente a anon/authenticated/service_role (como
+-- grants individuales, no vía PUBLIC) sobre toda función nueva del schema
+-- public. Revocar de PUBLIC no retira un grant ya dado a un rol
+-- específico por esa otra vía — por eso en producción ambas funciones
+-- quedaron invocables por anon/authenticated pese al "revoke ... from
+-- public" ya escrito. Confirmado con evidencia real antes de corregir:
+--   * _radar_ejecutar_con_observabilidad SÍ es SECURITY DEFINER (owner
+--     postgres) — antes de este fix, una llamada directa de un
+--     authenticated corría con privilegios elevados; RLS NO era la
+--     barrera real para esta función específica.
+--   * _radar_gestionar_alerta es SECURITY INVOKER (confirmado con
+--     select prosecdef from pg_proc) — para esta sí RLS de radar_alertas
+--     seguía siendo una barrera real adicional (sin policy de
+--     INSERT/UPDATE para authenticated), pero de todas formas no debía
+--     depender de eso como única defensa.
+--
+-- El resto de las funciones de Radar (calcular_radar_paciente,
+-- ejecutar_radar_diario, radar_cron_tick) ya revocaban "from public,
+-- anon, authenticated" explícitamente desde que se escribieron — nunca
+-- tuvieron este problema. Verificado en la misma auditoría puntual que
+-- ningún otro SECURITY DEFINER de public quedó expuesto por el mismo
+-- default privilege (ver reporte de la auditoría, no repetido aquí).
+revoke execute on function public._radar_gestionar_alerta(uuid, uuid, text, text, boolean, boolean, date, text, jsonb)
+  from public, anon, authenticated;
+revoke execute on function public._radar_ejecutar_con_observabilidad(text)
+  from public, anon, authenticated;
+
+-- ============================================================
+-- ROLLBACK Sección 78 (referencia — NO ejecutar salvo que se decida
+-- revertir esta sección; revertirla reabriría el hueco de seguridad ya
+-- corregido, así que no hay un escenario legítimo para hacerlo):
+--
+-- grant execute on function public._radar_gestionar_alerta(uuid, uuid, text, text, boolean, boolean, date, text, jsonb) to anon, authenticated;
+-- grant execute on function public._radar_ejecutar_con_observabilidad(text) to anon, authenticated;
+-- ============================================================
+
+-- ============================================================
+-- 79. MIGRACIÓN — MyFitTrack Radar (R5): vista de lectura para el
+-- dashboard web — sin funciones privilegiadas nuevas
+-- ============================================================
+-- R5 (admin-web) necesita "el snapshot más reciente de cada paciente" para
+-- la lista priorizada, sin caer en N+1 (una consulta por paciente). La
+-- solución mínima es una VISTA de solo lectura con DISTINCT ON — NO una
+-- función SECURITY DEFINER: con "security_invoker = true" (soportado
+-- desde PG15, este proyecto corre PG17), la vista ejecuta con los
+-- privilegios de quien la consulta, así que las políticas RLS de
+-- score_snapshots (Sección 73) se aplican exactamente igual que si el
+-- cliente consultara la tabla directamente — un nutriólogo solo ve el
+-- último snapshot de sus propios pacientes, superadmin ve todos, un
+-- paciente no ve nada. No hay bypass de RLS en ningún punto, y no se
+-- introduce ninguna superficie privilegiada nueva.
+create view public.radar_ultimo_snapshot
+with (security_invoker = true)
+as
+select distinct on (paciente_id) *
+from public.score_snapshots
+order by paciente_id, snapshot_date desc, created_at desc;
+
+-- Igual que con las funciones de Radar (Sección 78): un GRANT explícito a
+-- authenticated y un REVOKE explícito de anon, sin depender de si la
+-- plataforma hosted auto-expone vistas nuevas por default o no — ya
+-- aprendimos en R4C-2 a no asumir eso.
+revoke all on public.radar_ultimo_snapshot from public, anon;
+grant select on public.radar_ultimo_snapshot to authenticated;
+
+-- ============================================================
+-- ROLLBACK Sección 79 (referencia — NO ejecutar salvo que se decida
+-- revertir esta sección):
+--
+-- drop view if exists public.radar_ultimo_snapshot;
+-- ============================================================
+
+-- ============================================================
+-- 80. MIGRACIÓN — MyFitTrack Radar (R6): registro de intervenciones
+-- ============================================================
+-- R6 convierte Radar de observación en acción: el nutriólogo puede
+-- registrar qué hizo frente a una alerta (o frente al estado general de un
+-- paciente sin una alerta puntual) y esa intervención resuelve la alerta
+-- correspondiente de forma atómica. R7 (medición de resultado a 14 días,
+-- scoring de efectividad) queda explícitamente fuera — ver decisión 6.
+--
+-- Decisiones de diseño:
+--
+-- 1. TABLA intervenciones — inmutable en R6 (sin UPDATE ni DELETE
+--    expuestos a authenticated/anon, igual que score_snapshots/
+--    radar_alertas/radar_ejecucion_errores). El Blueprint deja abierta la
+--    posibilidad de permitir editar la nota durante 24h, pero eso exige
+--    una segunda RPC + ventana de tiempo + decidir qué campos son
+--    editables sin comprometer el snapshot "antes" — complejidad real sin
+--    beneficio claro en el MVP. Se prioriza integridad del dataset
+--    (ninguna intervención registrada puede alterarse después) sobre
+--    conveniencia de edición, como se pidió explícitamente.
+--
+-- 2. SNAPSHOT "ANTES" — se congela adherence_antes/risk_antes/
+--    confianza_antes/snapshot_id/rules_version leyendo el score_snapshot
+--    más reciente del paciente EN EL MOMENTO de la intervención, nunca "el
+--    snapshot más cercano" calculado después. Si el paciente no tiene
+--    ningún snapshot todavía (no debería ocurrir en la práctica, porque
+--    ejecutar_radar_diario corre para todo paciente aprobado desde el día
+--    en que se aprueba — ver Sección 74, caso R8/⚪ — pero no se fuerza),
+--    estos campos simplemente quedan NULL: no se inventa un snapshot
+--    ficticio.
+--
+-- 3. RELACIÓN CON ALERTA — alerta_id es NULL-able. Si viene de una
+--    card/alerta concreta, el propio flujo de UI siempre la manda; si
+--    viene de RadarTab sin alerta puntual, se permite NULL en vez de
+--    forzar una alerta ficticia. Esto no complica el dataset: cualquier
+--    métrica futura de "tiempo alerta→intervención" o "efectividad por
+--    alerta" simplemente filtra where alerta_id is not null.
+--
+-- 4. ATOMICIDAD — registrar_intervencion_radar hace INSERT de la
+--    intervención y UPDATE de radar_alertas en el mismo cuerpo PL/pgSQL
+--    (misma transacción implícita de la llamada RPC): si el UPDATE de la
+--    alerta no encuentra una fila 'abierta' (ya se resolvió por otra
+--    llamada concurrente, o el caller reintentó sobre una alerta ya
+--    resuelta), se lanza una excepción y Postgres revierte TODO —
+--    incluyendo el INSERT de la intervención ya ejecutado antes en la
+--    misma función. No quedan intervenciones huérfanas. Esto también es
+--    la defensa contra doble-registro accidental: un segundo intento sobre
+--    la misma alerta falla limpiamente en vez de crear una segunda
+--    intervención.
+--
+--    Se decidió NO reutilizar resolver_alerta_radar (Sección 76) para el
+--    paso de resolución, aunque ambas funciones hacen conceptualmente lo
+--    mismo: resolver_alerta_radar valida ownership contra
+--    radar_alertas.nutriologo_id (una foto fija del dueño al momento en
+--    que se abrió la alerta), mientras que esta RPC valida contra
+--    perfiles.nutricionista_id (la asignación VIGENTE). Si un paciente
+--    fuera reasignado de nutriólogo entre la apertura de la alerta y el
+--    registro de la intervención, encadenar ambas funciones rechazaría a
+--    un nutriólogo actual legítimo. Se duplica deliberadamente la lógica
+--    de resolución (mismo cooldown de 14 días, mismo cálculo de fecha) con
+--    un comentario cruzado explícito para que ambas se mantengan en
+--    sincronía si el cooldown cambia algún día. resolver_alerta_radar NO
+--    se modifica y sigue disponible tal cual para cualquier flujo futuro
+--    de "resolver sin registrar intervención" (hoy no expuesto en UI).
+--
+-- 5. RESOLUTION_TYPE — el Blueprint habla de "resolution_type" y
+--    "resolved_at"; esta migración los mapea a las columnas YA EXISTENTES
+--    radar_alertas.motivo_resolucion y radar_alertas.fecha_resolucion
+--    (Sección 73/76) en vez de crear columnas paralelas con otro nombre.
+--    'sin_accion' (valor ya soportado desde la Sección 76) es exactamente
+--    el "resolution_type = sin_accion_justificada" que pide el Blueprint —
+--    mismo concepto, nombre ya establecido y ya cubierto por tests
+--    existentes; renombrarlo sería una migración cosmética sin valor. El
+--    "resolved_at" preciso (momento exacto, no solo el día) queda
+--    disponible como intervenciones.created_at cuando la intervención
+--    resuelve una alerta, sin necesitar una columna timestamptz redundante
+--    en radar_alertas — todo el resto del motor de Radar ya es
+--    date-granular (snapshot_date, fecha_apertura, fecha_resolucion).
+--
+-- 6. RESULTADO FUTURO (R7) — NO se agregan columnas "preparadas" para
+--    medir efectividad (p.ej. adherence_despues, efectividad_score):
+--    revisado el Blueprint v1.1 y R4A completos, no existe un diseño YA
+--    APROBADO para esas columnas — inventarlas ahora sería adivinar el
+--    diseño de R7. Se agrega únicamente resultado_estado, default
+--    'pendiente', con un check que hoy solo admite ese valor. Cuando R7
+--    defina sus estados reales (p.ej. 'efectiva'/'no_efectiva'), se
+--    ampliará el check con un ALTER — el mismo patrón ya usado para
+--    radar_alertas.motivo_resolucion en la Sección 76.
+--
+-- 7. SUBTIPO — un solo campo de texto (no una tabla de catálogo) con un
+--    CHECK que ata cada subtipo a su tipo exacto. Las opciones "Otra" de
+--    cada categoría se guardan como 'otro_contacto'/'otro_alimentacion'/
+--    'otro_rutina' (no un 'otro' plano compartido): son la única forma de
+--    que la métrica "tipos de intervención" (punto 13 del alcance) pueda
+--    distinguir después un "otro" de contacto de un "otro" de rutina sin
+--    tener que releer la nota libre. No es una categoría nueva — es la
+--    misma opción "Otra" de la especificación, solo con un valor de BD
+--    que preserva a qué paso pertenecía.
+--
+-- 8. IDEMPOTENCIA/RETRY — una intervención ligada a alerta_id es
+--    naturalmente idempotente ante reintentos: un segundo submit sobre la
+--    misma alerta ya resuelta falla (ver punto 4), nunca crea una segunda
+--    fila silenciosamente. Una intervención SIN alerta_id no tiene un
+--    estado previo que deduplicar — dos submits legítimos y dos reintentos
+--    accidentales son indistinguibles a nivel de base de datos. Agregar
+--    una idempotency key explícita (columna + índice único opcional)
+--    resolvería esto, pero no es un requisito claro del alcance de R6 y
+--    añade una superficie nueva; se documenta como deuda técnica menor en
+--    vez de construirse sin pedido explícito. La mitigación práctica queda
+--    del lado de UI: deshabilitar el botón de "Guardar" tras el primer
+--    click.
+
+create table public.intervenciones (
+  id                  uuid        default uuid_generate_v4() primary key,
+  paciente_id         uuid        references auth.users(id) on delete cascade not null,
+  nutriologo_id       uuid        references auth.users(id) on delete set null,
+  alerta_id           uuid        references radar_alertas(id) on delete set null,
+
+  tipo                text        not null check (tipo in (
+                          'contacto', 'ajuste_alimentacion', 'ajuste_rutina',
+                          'reagendar_cita', 'motivacion_seguimiento', 'sin_accion', 'otra'
+                      )),
+  subtipo             text,
+  nota                text,
+  motivo_sin_accion   text        check (motivo_sin_accion in (
+                          'hable_recientemente', 'no_relevante',
+                          'comportamiento_habitual', 'esperare_consulta', 'otro'
+                      )),
+
+  -- Snapshot "antes" — congelado al momento de la intervención, nunca
+  -- recalculado después (decisión 2).
+  adherence_antes     numeric(5,2),
+  risk_antes          int,
+  confianza_antes     numeric(5,2),
+  snapshot_id         uuid        references score_snapshots(id) on delete set null,
+  rules_version       text,
+
+  -- Reservado para R7 (decisión 6) — R6 nunca escribe otro valor.
+  resultado_estado    text        not null default 'pendiente' check (resultado_estado in ('pendiente')),
+
+  created_at          timestamptz not null default now(),
+
+  -- 'sin_accion' exige motivo explícito; cualquier otro tipo lo prohíbe
+  -- (nunca debe quedar ambiguo si "sin acción" fue justificado o no).
+  check (tipo <> 'sin_accion' or motivo_sin_accion is not null),
+  check (tipo = 'sin_accion' or motivo_sin_accion is null),
+
+  -- Subtipo atado a su tipo exacto (decisión 7). Los tipos sin paso 2
+  -- (reagendar_cita, motivacion_seguimiento, sin_accion, otra) no admiten
+  -- subtipo.
+  check (
+    (tipo = 'contacto' and (subtipo is null or subtipo in ('whatsapp', 'llamada', 'consulta', 'otro_contacto')))
+    or (tipo = 'ajuste_alimentacion' and (subtipo is null or subtipo in ('flexibilizacion_finde', 'cambio_equivalentes', 'cambio_alimentos', 'ajuste_horarios', 'otro_alimentacion')))
+    or (tipo = 'ajuste_rutina' and (subtipo is null or subtipo in ('cambio_ejercicios', 'cambio_volumen', 'cambio_frecuencia', 'ajuste_cargas', 'otro_rutina')))
+    or (tipo in ('reagendar_cita', 'motivacion_seguimiento', 'sin_accion', 'otra') and subtipo is null)
+  )
+);
+
+create index on intervenciones (paciente_id, created_at desc);
+create index on intervenciones (alerta_id) where alerta_id is not null;
+
+alter table intervenciones enable row level security;
+
+-- Mismo patrón que score_snapshots/radar_alertas (Sección 73): visibilidad
+-- por asignación VIGENTE del paciente (perfiles.nutricionista_id), no por
+-- quién registró la fila — si un paciente se reasigna, el nuevo
+-- nutriólogo dueño hereda visibilidad del historial clínico, igual que ya
+-- ocurre con medidas/rutinas/planes_nutricionales. El paciente NO tiene
+-- política de SELECT — cero acceso, como pide el alcance.
+create policy "intervenciones_select" on intervenciones
+for select to authenticated using (
+  exists (select 1 from perfiles where id = intervenciones.paciente_id and nutricionista_id = auth.uid())
+  or public.get_user_rol() = 'superadmin'
+);
+
+-- Sin políticas de INSERT/UPDATE/DELETE para authenticated/anon — toda
+-- escritura pasa por registrar_intervencion_radar (SECURITY DEFINER,
+-- propiedad de postgres, evade RLS igual que calcular_radar_paciente).
+-- Inmutable por diseño (decisión 1): ni siquiera existe un UPDATE/DELETE
+-- de emergencia para superadmin — si algún día se necesita corregir un
+-- dato erróneo, es una decisión de producto nueva, no un descuido aquí.
+
+alter table radar_alertas add column if not exists intervention_id uuid references intervenciones(id) on delete set null;
+create index on radar_alertas (intervention_id) where intervention_id is not null;
+
+create or replace function public.registrar_intervencion_radar(
+  p_paciente_id       uuid,
+  p_alerta_id         uuid,
+  p_tipo              text,
+  p_subtipo           text,
+  p_nota              text,
+  p_motivo_sin_accion text
+) returns intervenciones
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid           uuid := auth.uid();
+  v_rol           text;
+  v_alerta        radar_alertas;
+  v_snapshot      score_snapshots;
+  v_motivo_res    text;
+  v_intervencion  intervenciones;
+begin
+  if v_uid is null then
+    raise exception 'No autenticado.';
+  end if;
+
+  v_rol := public.get_user_rol();
+  if v_rol not in ('admin', 'superadmin') then
+    raise exception 'Solo un nutriólogo puede registrar intervenciones.';
+  end if;
+
+  -- Ownership contra la asignación VIGENTE (perfiles.nutricionista_id),
+  -- nunca contra un uuid de nutriólogo mandado por el frontend (decisión
+  -- explícita del alcance: "no acepta nutriologo_id confiando ciegamente
+  -- en frontend") — por eso esta función ni siquiera recibe ese parámetro,
+  -- se deriva de auth.uid().
+  --
+  -- SIN excepción para superadmin (corrección post-R6): una intervención
+  -- representa una acción profesional real de seguimiento, no un
+  -- privilegio administrativo. superadmin conserva lectura global (RLS de
+  -- SELECT, sin cambios) pero solo puede REGISTRAR una intervención sobre
+  -- un paciente si además es su nutricionista_id vigente — exactamente la
+  -- misma condición que cualquier otro nutriólogo. Esto protege la
+  -- integridad futura del dataset profesional→intervención→resultado
+  -- (R7): un rol administrativo no debe poder generar una fila que se lea
+  -- después como "seguimiento clínico realizado".
+  if not exists (
+    select 1 from perfiles where id = p_paciente_id and nutricionista_id = v_uid
+  ) then
+    raise exception 'No tienes permiso para registrar una intervención para este paciente.';
+  end if;
+
+  if p_tipo not in ('contacto', 'ajuste_alimentacion', 'ajuste_rutina', 'reagendar_cita', 'motivacion_seguimiento', 'sin_accion', 'otra') then
+    raise exception 'tipo de intervención inválido: %', coalesce(p_tipo, '(NULL)');
+  end if;
+
+  if p_tipo = 'sin_accion' then
+    if p_motivo_sin_accion is null or p_motivo_sin_accion = '' then
+      raise exception 'motivo_sin_accion es obligatorio cuando tipo = sin_accion.';
+    end if;
+    if p_motivo_sin_accion not in ('hable_recientemente', 'no_relevante', 'comportamiento_habitual', 'esperare_consulta', 'otro') then
+      raise exception 'motivo_sin_accion inválido: %', p_motivo_sin_accion;
+    end if;
+  elsif p_motivo_sin_accion is not null then
+    raise exception 'motivo_sin_accion solo aplica cuando tipo = sin_accion.';
+  end if;
+
+  if p_tipo = 'contacto' then
+    if p_subtipo is not null and p_subtipo not in ('whatsapp', 'llamada', 'consulta', 'otro_contacto') then
+      raise exception 'subtipo inválido para tipo=contacto: %', p_subtipo;
+    end if;
+  elsif p_tipo = 'ajuste_alimentacion' then
+    if p_subtipo is not null and p_subtipo not in ('flexibilizacion_finde', 'cambio_equivalentes', 'cambio_alimentos', 'ajuste_horarios', 'otro_alimentacion') then
+      raise exception 'subtipo inválido para tipo=ajuste_alimentacion: %', p_subtipo;
+    end if;
+  elsif p_tipo = 'ajuste_rutina' then
+    if p_subtipo is not null and p_subtipo not in ('cambio_ejercicios', 'cambio_volumen', 'cambio_frecuencia', 'ajuste_cargas', 'otro_rutina') then
+      raise exception 'subtipo inválido para tipo=ajuste_rutina: %', p_subtipo;
+    end if;
+  elsif p_subtipo is not null then
+    raise exception 'El tipo % no admite subtipo.', p_tipo;
+  end if;
+
+  if p_alerta_id is not null then
+    select * into v_alerta from radar_alertas where id = p_alerta_id;
+    if v_alerta.id is null then
+      raise exception 'Alerta no encontrada.';
+    end if;
+    if v_alerta.paciente_id <> p_paciente_id then
+      raise exception 'La alerta no pertenece a este paciente.';
+    end if;
+    if v_alerta.estado_alerta <> 'abierta' then
+      raise exception 'Esta alerta ya fue resuelta — no se puede registrar una nueva intervención sobre ella.';
+    end if;
+  end if;
+
+  -- Snapshot "antes" (decisión 2) — el más reciente disponible, NULL si no
+  -- existe ninguno todavía. Nunca se recalcula.
+  select * into v_snapshot from score_snapshots
+    where paciente_id = p_paciente_id
+    order by snapshot_date desc, created_at desc
+    limit 1;
+
+  insert into intervenciones (
+    paciente_id, nutriologo_id, alerta_id, tipo, subtipo, nota, motivo_sin_accion,
+    adherence_antes, risk_antes, confianza_antes, snapshot_id, rules_version
+  ) values (
+    p_paciente_id, v_uid, p_alerta_id, p_tipo, p_subtipo, nullif(trim(p_nota), ''), p_motivo_sin_accion,
+    v_snapshot.adherence_global, v_snapshot.riesgo_confirmado_puntos, v_snapshot.data_confidence_global,
+    v_snapshot.id, v_snapshot.rules_version
+  ) returning * into v_intervencion;
+
+  if p_alerta_id is not null then
+    -- Duplica deliberadamente la resolución de resolver_alerta_radar en
+    -- vez de llamarla — ver decisión 4 (divergencia de ownership check en
+    -- el caso de reasignación de paciente). Mismo cooldown de 14 días.
+    v_motivo_res := case when p_tipo = 'sin_accion' then 'sin_accion' else 'intervencion' end;
+    update radar_alertas
+      set estado_alerta = 'resuelta',
+          fecha_resolucion = (now() at time zone 'America/Mexico_City')::date,
+          motivo_resolucion = v_motivo_res,
+          cooldown_until = (now() at time zone 'America/Mexico_City')::date + 14,
+          intervention_id = v_intervencion.id,
+          updated_at = now()
+      where id = p_alerta_id and estado_alerta = 'abierta';
+
+    if not found then
+      raise exception 'La alerta ya fue resuelta por otra operación concurrente.';
+    end if;
+  end if;
+
+  return v_intervencion;
+end;
+$$;
+
+revoke execute on function public.registrar_intervencion_radar(uuid, uuid, text, text, text, text) from public, anon;
+grant execute on function public.registrar_intervencion_radar(uuid, uuid, text, text, text, text) to authenticated;
+
+-- ============================================================
+-- ROLLBACK Sección 80 (referencia — NO ejecutar salvo que se decida
+-- revertir esta sección):
+--
+-- revoke execute on function public.registrar_intervencion_radar(uuid, uuid, text, text, text, text) from authenticated;
+-- drop function if exists public.registrar_intervencion_radar(uuid, uuid, text, text, text, text);
+-- drop index if exists radar_alertas_intervention_id_idx;
+-- alter table radar_alertas drop column if exists intervention_id;
+-- drop table if exists public.intervenciones;
+-- ============================================================
+
+-- ============================================================
+-- 81. MIGRACIÓN — MyFitTrack Radar (R7): medición post-intervención
+-- ============================================================
+-- Cierra el loop señal→alerta→intervención→qué ocurrió después. Mide
+-- ASOCIACIÓN TEMPORAL, nunca causalidad — de ahí que los 6 estados finales
+-- sean deliberadamente descriptivos (mejoro/estable/empeoro/inconcluso/
+-- confundido) y no evaluativos (nunca "efectiva"/"funcionó").
+--
+-- Decisiones de diseño:
+--
+-- 1. VENTANAS, EXACTAS Y DETERMINISTAS (timezone America/Mexico_City en
+--    todos los cálculos, igual que el resto del motor):
+--      fecha_intervencion := (intervenciones.created_at at time zone
+--        'America/Mexico_City')::date
+--      Ventana "antes"    := [fecha_intervencion - 7, fecha_intervencion - 1]  (7 días, ambos límites incluidos)
+--      Ventana "después"  := [fecha_intervencion + 1, fecha_intervencion + 14] (14 días, ambos límites incluidos)
+--    El día de la intervención (día 0) NO pertenece a ninguna ventana —
+--    exactamente lo pedido ("no incluyas el día de la intervención si
+--    puede contaminar ambas ventanas"). La ventana solo se considera
+--    cerrada, y por lo tanto evaluable, cuando p_fecha >= fecha_intervencion + 14.
+--
+-- 2. "ANTES" NO SE RECALCULA — se reutilizan adherence_antes/
+--    risk_points_antes/confianza_antes tal como los congeló R6 (Sección
+--    80) al momento de registrar la intervención: el snapshot más
+--    reciente disponible EN ESE MOMENTO. Evalué recalcular "antes" como
+--    un promedio de los 7 días previos y decidí NO hacerlo, por dos
+--    razones: (a) violaría la garantía explícita de R6 de que estos
+--    campos "se congelan al momento de la intervención, nunca se
+--    reconstruyen después" (Sección 80, decisión 2) — recalcularlos aquí,
+--    14 días más tarde, sería exactamente esa reconstrucción prohibida;
+--    (b) adherence_global YA es una métrica ponderada/con ventana propia
+--    dentro del motor (Sección 74) — promediar varios snapshots ya
+--    suavizados sería un doble suavizado sin beneficio claro. La ventana
+--    "antes" de 7 días SÍ se usa, pero como una COMPUERTA de frescura: si
+--    el snapshot congelado como "antes" tiene una fecha anterior a
+--    fecha_intervencion-7 (hueco de datos), no se considera comparable y
+--    el resultado es 'inconcluso' — ver decisión 5.
+--
+-- 3. "DESPUÉS" = el snapshot MÁS RECIENTE dentro de la ventana de 14 días,
+--    no un promedio — por la misma razón de no doble-suavizar, y porque
+--    el Blueprint pide evaluar "al terminar la ventana", es decir el
+--    estado más cercano al final del período, no un promedio de todo el
+--    período. Si no existe NINGÚN snapshot dentro de la ventana (hueco de
+--    datos, paciente inactivo, etc.) — NUNCA se rellena silenciosamente:
+--    el resultado queda 'inconcluso' con el motivo explícito.
+--
+-- 4. RENOMBRE risk_antes → risk_points_antes (más NUEVA columna
+--    risk_points_despues, nunca "risk_despues") — decisión explícita:
+--    riesgo_confirmado_puntos NUNCA fue una escala 0-100 (lección de R5),
+--    así que "risk" a secas invita a leerlo como porcentaje. Factible sin
+--    romper nada porque R6 nunca se desplegó a producción todavía (sigue
+--    solo en supabase_schema.sql + entornos locales) — se ajusta también
+--    registrar_intervencion_radar (mismo cuerpo, solo el nombre de
+--    columna en el INSERT) y los tests existentes de intervenciones.sql.
+--
+-- 5. CONFIANZA — umbral mínimo 50% en AMBOS lados (confianza_antes Y la
+--    confianza del snapshot "después"), más el chequeo de frescura de la
+--    decisión 2. Además: si el CONJUNTO de dominios evaluables cambió
+--    entre antes y después (ej. training_confidence pasó de NULL a
+--    tener valor, o viceversa — el dominio de nutrición siempre existe,
+--    training es el único opcional per Sección 73), el resultado también
+--    es 'inconcluso' — evita exactamente el caso que preocupa: que una
+--    "mejora" de confianza global sea en realidad la desaparición del
+--    dominio con peor información, no una mejora real de datos. No se
+--    parsea el jsonb de breakdown para esto: nutrition_confidence/
+--    training_confidence ya son columnas de primer nivel en
+--    score_snapshots (Sección 73), suficientes para esta comparación.
+--
+-- 6. UMBRAL DE CLASIFICACIÓN — se mantiene ±10 puntos de adherencia
+--    (delta_adherence > +10 → mejoro; [-10,+10] → estable; < -10 →
+--    empeoro) DESPUÉS de revisarlo contra lo construido: adherence_global
+--    ya es un promedio ponderado por confianza de dominio (Sección 74),
+--    ya representativo de una ventana de datos real (no un valor crudo de
+--    un solo día) — el problema matemático que el Blueprint original
+--    corría (comparar puntos crudos sin exigir confianza mínima en ambos
+--    lados) queda resuelto por la decisión 5, no por cambiar el umbral en
+--    sí. ±10 puntos porcentuales de adherencia sigue siendo una banda
+--    razonable dado que adherence_global ya viene suavizado; no se
+--    encontró evidencia en este dataset (todavía sin volumen real) para
+--    justificar un umbral distinto — queda documentado para revisarse con
+--    datos reales de producción.
+--
+-- 7. CONFOUNDERS (evaluados ANTES de clasificar por umbral — un segundo
+--    evento SIEMPRE gana sobre el número, sea cual sea):
+--    a. Segunda intervención del mismo paciente con fecha (America/
+--       Mexico_City) dentro de la ventana "después" — sin filtrar por
+--       tipo ni por su propio resultado_estado (cualquier otra
+--       intervención cuenta, incluida otra que también siga pendiente).
+--    b. Cita con estado='confirmada' y fecha dentro de la ventana
+--       "después". LIMITACIÓN DOCUMENTADA: la tabla citas (Sección 3,
+--       "estado in ('pendiente','confirmada','cancelada')") NO distingue
+--       "asistida" de "confirmada" — no existe ese dato hoy. Se usa
+--       'confirmada' como aproximación de "hubo una consulta programada
+--       que probablemente ocurrió"; una cita confirmada con no-show real
+--       generaría un falso positivo de confounder. Documentado en vez de
+--       fingir precisión que el schema no tiene, como se pidió.
+--    c. Plan nutricional o rutina NUEVOS (created_at dentro de la ventana
+--       "después") — solo cuenta como confounder si el tipo de la
+--       intervención evaluada NO es, respectivamente, 'ajuste_alimentacion'
+--       o 'ajuste_rutina' (si lo es, el cambio de plan/rutina bien podría
+--       ser la intervención misma, no un evento aparte). Sí es detectable
+--       con datos reales: planes_nutricionales y rutinas tienen created_at
+--       confiable (Secciones 1 y 5) — se implementa de verdad, sin
+--       necesidad de documentarlo como limitación.
+--
+-- 8. INMUTABILIDAD — evaluar_resultado_intervencion es un no-op (return
+--    silencioso, sin excepción) si resultado_estado ya no es 'pendiente'
+--    O si la ventana de 14 días todavía no cerró. Una vez calculado, el
+--    resultado NUNCA se recalcula — ni por una segunda corrida diaria, ni
+--    por un cambio futuro de rules_version. rules_version_resultado
+--    identifica la versión del ALGORITMO DE CLASIFICACIÓN (esta Sección
+--    81), deliberadamente separada de score_snapshots.rules_version (la
+--    versión del MOTOR DE SCORING, Sección 74) — son dos cosas que pueden
+--    evolucionar en momentos distintos.
+--
+-- 9. DELTAS — delta_adherence/delta_risk/delta_confianza NO se
+--    persisten: son triviales (despues - antes) y 100% reproducibles a
+--    partir de columnas ya almacenadas, exactamente el caso que el
+--    alcance permite omitir ("no es obligatorio si son triviales y
+--    reproducibles"). Se calculan en el frontend (admin-web/app/_data/radar.ts)
+--    donde se necesitan para el copy de la UI.
+--
+-- 10. snapshot_id_despues — columna NO listada explícitamente en el
+--    alcance, agregada por simetría directa con snapshot_id ("antes"):
+--    sin ella, el snapshot exacto usado como "después" no sería
+--    reproducible después de que rules_version o el propio snapshot
+--    cambien de forma. Mismo principio de reproducibilidad que ya motivó
+--    guardar snapshot_id en R6.
+--
+-- 11. INTEGRACIÓN CON LA EJECUCIÓN DIARIA — ejecutar_radar_diario, después
+--    de su loop existente de pacientes, agrega un segundo loop sobre
+--    intervenciones pendientes con ventana ya cerrada. Un fallo al
+--    evaluar UNA intervención se aísla igual que un fallo de
+--    calcular_radar_paciente (subtransacción + registro en
+--    radar_ejecucion_errores, con el mensaje prefijado "INTERVENCION
+--    <id>:" para poder contarlos por separado) y NO cancela el resto del
+--    lote. radar_ejecuciones gana dos columnas nuevas
+--    (intervenciones_evaluadas/intervenciones_con_error), pobladas por
+--    _radar_ejecutar_con_observabilidad con la misma técnica de
+--    correlación exacta por timestamp ya usada para alertas_abiertas/
+--    alertas_resueltas_automaticamente (Sección 77) — no se agregó
+--    ninguna métrica decorativa adicional.
+
+alter table intervenciones rename column risk_antes to risk_points_antes;
+
+alter table intervenciones
+  add column adherence_despues       numeric(5,2),
+  add column risk_points_despues     int,
+  add column confianza_despues       numeric(5,2),
+  add column snapshot_id_despues     uuid references score_snapshots(id) on delete set null,
+  add column resultado_calculado_at  timestamptz,
+  add column rules_version_resultado text,
+  add column confound_detalle        text;
+
+alter table intervenciones drop constraint if exists intervenciones_resultado_estado_check;
+alter table intervenciones add constraint intervenciones_resultado_estado_check
+  check (resultado_estado in ('pendiente', 'mejoro', 'estable', 'empeoro', 'inconcluso', 'confundido'));
+
+-- Query de la Sección 81.11 abajo: "pendientes cuya ventana ya cerró" es
+-- monótona en created_at — un índice parcial (solo filas pendiente, la
+-- inmensa minoría una vez que el sistema lleva un tiempo corriendo) basta.
+create index intervenciones_pendientes_created_at_idx on intervenciones (created_at) where resultado_estado = 'pendiente';
+
+-- Re-declaración completa de registrar_intervencion_radar: único cambio
+-- real es el nombre de columna en el INSERT (risk_antes →
+-- risk_points_antes, decisión 4) — el resto del cuerpo es idéntico a la
+-- Sección 80.
+create or replace function public.registrar_intervencion_radar(
+  p_paciente_id       uuid,
+  p_alerta_id         uuid,
+  p_tipo              text,
+  p_subtipo           text,
+  p_nota              text,
+  p_motivo_sin_accion text
+) returns intervenciones
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid           uuid := auth.uid();
+  v_rol           text;
+  v_alerta        radar_alertas;
+  v_snapshot      score_snapshots;
+  v_motivo_res    text;
+  v_intervencion  intervenciones;
+begin
+  if v_uid is null then
+    raise exception 'No autenticado.';
+  end if;
+
+  v_rol := public.get_user_rol();
+  if v_rol not in ('admin', 'superadmin') then
+    raise exception 'Solo un nutriólogo puede registrar intervenciones.';
+  end if;
+
+  -- Ownership contra la asignación VIGENTE (perfiles.nutricionista_id),
+  -- nunca contra un uuid de nutriólogo mandado por el frontend (decisión
+  -- explícita del alcance: "no acepta nutriologo_id confiando ciegamente
+  -- en frontend") — por eso esta función ni siquiera recibe ese parámetro,
+  -- se deriva de auth.uid().
+  --
+  -- SIN excepción para superadmin (corrección post-R6): una intervención
+  -- representa una acción profesional real de seguimiento, no un
+  -- privilegio administrativo. superadmin conserva lectura global (RLS de
+  -- SELECT, sin cambios) pero solo puede REGISTRAR una intervención sobre
+  -- un paciente si además es su nutricionista_id vigente — exactamente la
+  -- misma condición que cualquier otro nutriólogo. Esto protege la
+  -- integridad futura del dataset profesional→intervención→resultado
+  -- (R7): un rol administrativo no debe poder generar una fila que se lea
+  -- después como "seguimiento clínico realizado".
+  if not exists (
+    select 1 from perfiles where id = p_paciente_id and nutricionista_id = v_uid
+  ) then
+    raise exception 'No tienes permiso para registrar una intervención para este paciente.';
+  end if;
+
+  if p_tipo not in ('contacto', 'ajuste_alimentacion', 'ajuste_rutina', 'reagendar_cita', 'motivacion_seguimiento', 'sin_accion', 'otra') then
+    raise exception 'tipo de intervención inválido: %', coalesce(p_tipo, '(NULL)');
+  end if;
+
+  if p_tipo = 'sin_accion' then
+    if p_motivo_sin_accion is null or p_motivo_sin_accion = '' then
+      raise exception 'motivo_sin_accion es obligatorio cuando tipo = sin_accion.';
+    end if;
+    if p_motivo_sin_accion not in ('hable_recientemente', 'no_relevante', 'comportamiento_habitual', 'esperare_consulta', 'otro') then
+      raise exception 'motivo_sin_accion inválido: %', p_motivo_sin_accion;
+    end if;
+  elsif p_motivo_sin_accion is not null then
+    raise exception 'motivo_sin_accion solo aplica cuando tipo = sin_accion.';
+  end if;
+
+  if p_tipo = 'contacto' then
+    if p_subtipo is not null and p_subtipo not in ('whatsapp', 'llamada', 'consulta', 'otro_contacto') then
+      raise exception 'subtipo inválido para tipo=contacto: %', p_subtipo;
+    end if;
+  elsif p_tipo = 'ajuste_alimentacion' then
+    if p_subtipo is not null and p_subtipo not in ('flexibilizacion_finde', 'cambio_equivalentes', 'cambio_alimentos', 'ajuste_horarios', 'otro_alimentacion') then
+      raise exception 'subtipo inválido para tipo=ajuste_alimentacion: %', p_subtipo;
+    end if;
+  elsif p_tipo = 'ajuste_rutina' then
+    if p_subtipo is not null and p_subtipo not in ('cambio_ejercicios', 'cambio_volumen', 'cambio_frecuencia', 'ajuste_cargas', 'otro_rutina') then
+      raise exception 'subtipo inválido para tipo=ajuste_rutina: %', p_subtipo;
+    end if;
+  elsif p_subtipo is not null then
+    raise exception 'El tipo % no admite subtipo.', p_tipo;
+  end if;
+
+  if p_alerta_id is not null then
+    select * into v_alerta from radar_alertas where id = p_alerta_id;
+    if v_alerta.id is null then
+      raise exception 'Alerta no encontrada.';
+    end if;
+    if v_alerta.paciente_id <> p_paciente_id then
+      raise exception 'La alerta no pertenece a este paciente.';
+    end if;
+    if v_alerta.estado_alerta <> 'abierta' then
+      raise exception 'Esta alerta ya fue resuelta — no se puede registrar una nueva intervención sobre ella.';
+    end if;
+  end if;
+
+  -- Snapshot "antes" (decisión 2) — el más reciente disponible, NULL si no
+  -- existe ninguno todavía. Nunca se recalcula.
+  select * into v_snapshot from score_snapshots
+    where paciente_id = p_paciente_id
+    order by snapshot_date desc, created_at desc
+    limit 1;
+
+  insert into intervenciones (
+    paciente_id, nutriologo_id, alerta_id, tipo, subtipo, nota, motivo_sin_accion,
+    adherence_antes, risk_points_antes, confianza_antes, snapshot_id, rules_version
+  ) values (
+    p_paciente_id, v_uid, p_alerta_id, p_tipo, p_subtipo, nullif(trim(p_nota), ''), p_motivo_sin_accion,
+    v_snapshot.adherence_global, v_snapshot.riesgo_confirmado_puntos, v_snapshot.data_confidence_global,
+    v_snapshot.id, v_snapshot.rules_version
+  ) returning * into v_intervencion;
+
+  if p_alerta_id is not null then
+    -- Duplica deliberadamente la resolución de resolver_alerta_radar en
+    -- vez de llamarla — ver decisión 4 de la Sección 80 (divergencia de
+    -- ownership check en el caso de reasignación de paciente). Mismo
+    -- cooldown de 14 días.
+    v_motivo_res := case when p_tipo = 'sin_accion' then 'sin_accion' else 'intervencion' end;
+    update radar_alertas
+      set estado_alerta = 'resuelta',
+          fecha_resolucion = (now() at time zone 'America/Mexico_City')::date,
+          motivo_resolucion = v_motivo_res,
+          cooldown_until = (now() at time zone 'America/Mexico_City')::date + 14,
+          intervention_id = v_intervencion.id,
+          updated_at = now()
+      where id = p_alerta_id and estado_alerta = 'abierta';
+
+    if not found then
+      raise exception 'La alerta ya fue resuelta por otra operación concurrente.';
+    end if;
+  end if;
+
+  return v_intervencion;
+end;
+$$;
+
+-- GRANT/REVOKE sin cambios respecto a la Sección 80 (create or replace no
+-- los toca, pero se re-emiten por claridad y para no depender de que
+-- sobrevivan implícitamente).
+revoke execute on function public.registrar_intervencion_radar(uuid, uuid, text, text, text, text) from public, anon;
+grant execute on function public.registrar_intervencion_radar(uuid, uuid, text, text, text, text) to authenticated;
+
+create or replace function public.evaluar_resultado_intervencion(
+  p_intervencion_id uuid,
+  p_fecha           date
+) returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  -- Versión del ALGORITMO de clasificación (decisión 8) — independiente
+  -- de score_snapshots.rules_version.
+  c_rules_version_resultado constant text := 'radar-resultado-v1';
+
+  v_i                   intervenciones;
+  v_fecha_intervencion  date;
+  v_despues_inicio      date;
+  v_despues_fin         date;
+  v_snap_despues        score_snapshots;
+  v_snap_antes          score_snapshots;
+  v_antes_fresco        boolean;
+  v_resultado           text;
+  v_detalle             text;
+  v_adherence_despues   numeric(5,2);
+  v_risk_despues        int;
+  v_confianza_despues   numeric(5,2);
+  v_snapshot_despues_id uuid;
+  v_delta               numeric(6,2);
+  v_otra_fecha          date;
+  v_cita_fecha          date;
+begin
+  select * into v_i from intervenciones where id = p_intervencion_id;
+  if v_i.id is null then
+    raise exception 'Intervención % no encontrada.', p_intervencion_id;
+  end if;
+
+  -- Inmutabilidad (decisión 8): no-op silencioso si ya se calculó, o si la
+  -- ventana todavía no cierra — ninguno de los dos casos es un error.
+  if v_i.resultado_estado <> 'pendiente' then
+    return;
+  end if;
+
+  v_fecha_intervencion := (v_i.created_at at time zone 'America/Mexico_City')::date;
+  if p_fecha < v_fecha_intervencion + 14 then
+    return;
+  end if;
+
+  v_despues_inicio := v_fecha_intervencion + 1;
+  v_despues_fin    := v_fecha_intervencion + 14;
+
+  select * into v_snap_despues from score_snapshots
+    where paciente_id = v_i.paciente_id
+      and snapshot_date between v_despues_inicio and v_despues_fin
+    order by snapshot_date desc, created_at desc
+    limit 1;
+
+  if v_snap_despues.id is null then
+    v_resultado := 'inconcluso';
+    v_detalle := 'No hay snapshots de Radar en la ventana de 14 días posteriores a la intervención.';
+  else
+    v_adherence_despues := v_snap_despues.adherence_global;
+    v_risk_despues := v_snap_despues.riesgo_confirmado_puntos;
+    v_confianza_despues := v_snap_despues.data_confidence_global;
+    v_snapshot_despues_id := v_snap_despues.id;
+
+    -- ── Confounders (decisión 7) — siempre antes de clasificar ─────────
+    if exists (
+      select 1 from intervenciones
+      where paciente_id = v_i.paciente_id and id <> v_i.id
+        and (created_at at time zone 'America/Mexico_City')::date between v_despues_inicio and v_despues_fin
+    ) then
+      select (created_at at time zone 'America/Mexico_City')::date into v_otra_fecha
+        from intervenciones
+        where paciente_id = v_i.paciente_id and id <> v_i.id
+          and (created_at at time zone 'America/Mexico_City')::date between v_despues_inicio and v_despues_fin
+        order by created_at asc limit 1;
+      v_resultado := 'confundido';
+      v_detalle := format('Se registró otra intervención el %s.', to_char(v_otra_fecha, 'DD/MM/YYYY'));
+    end if;
+
+    if v_resultado is null and exists (
+      select 1 from citas
+      where user_id = v_i.paciente_id and estado = 'confirmada'
+        and fecha between v_despues_inicio and v_despues_fin
+    ) then
+      select fecha into v_cita_fecha from citas
+        where user_id = v_i.paciente_id and estado = 'confirmada'
+          and fecha between v_despues_inicio and v_despues_fin
+        order by fecha asc limit 1;
+      v_resultado := 'confundido';
+      v_detalle := format('Hubo una consulta confirmada el %s durante la ventana de seguimiento.', to_char(v_cita_fecha, 'DD/MM/YYYY'));
+    end if;
+
+    if v_resultado is null and v_i.tipo <> 'ajuste_alimentacion' and exists (
+      select 1 from planes_nutricionales
+      where user_id = v_i.paciente_id
+        and (created_at at time zone 'America/Mexico_City')::date between v_despues_inicio and v_despues_fin
+    ) then
+      v_resultado := 'confundido';
+      v_detalle := 'Se creó un plan nutricional nuevo durante la ventana de seguimiento.';
+    end if;
+
+    if v_resultado is null and v_i.tipo <> 'ajuste_rutina' and exists (
+      select 1 from rutinas
+      where user_id = v_i.paciente_id
+        and (created_at at time zone 'America/Mexico_City')::date between v_despues_inicio and v_despues_fin
+    ) then
+      v_resultado := 'confundido';
+      v_detalle := 'Se creó una rutina nueva durante la ventana de seguimiento.';
+    end if;
+
+    -- ── Clasificación numérica (solo si no hubo confounder) ────────────
+    if v_resultado is null then
+      if v_i.snapshot_id is not null then
+        select * into v_snap_antes from score_snapshots where id = v_i.snapshot_id;
+      end if;
+      v_antes_fresco := v_snap_antes.id is not null and v_snap_antes.snapshot_date >= v_fecha_intervencion - 7;
+
+      if not v_antes_fresco
+         or v_i.confianza_antes is null or v_i.confianza_antes < 50
+         or v_confianza_despues < 50
+      then
+        v_resultado := 'inconcluso';
+        v_detalle := 'Confianza insuficiente antes o después de la intervención para comparar con seguridad.';
+      elsif (v_snap_antes.training_confidence is not null) <> (v_snap_despues.training_confidence is not null) then
+        v_resultado := 'inconcluso';
+        v_detalle := 'El conjunto de dominios con información evaluable cambió entre antes y después — la comparación no es confiable.';
+      elsif v_i.adherence_antes is null or v_adherence_despues is null then
+        v_resultado := 'inconcluso';
+        v_detalle := 'No hay un valor de adherencia comparable antes y después.';
+      else
+        v_delta := v_adherence_despues - v_i.adherence_antes;
+        v_resultado := case
+          when v_delta > 10 then 'mejoro'
+          when v_delta < -10 then 'empeoro'
+          else 'estable'
+        end;
+      end if;
+    end if;
+  end if;
+
+  update intervenciones set
+    resultado_estado = v_resultado,
+    adherence_despues = v_adherence_despues,
+    risk_points_despues = v_risk_despues,
+    confianza_despues = v_confianza_despues,
+    snapshot_id_despues = v_snapshot_despues_id,
+    confound_detalle = v_detalle,
+    resultado_calculado_at = now(),
+    rules_version_resultado = c_rules_version_resultado
+  where id = v_i.id;
+end;
+$$;
+
+revoke execute on function public.evaluar_resultado_intervencion(uuid, date) from public, anon, authenticated;
+grant execute on function public.evaluar_resultado_intervencion(uuid, date) to service_role;
+
+-- Re-declaración completa de ejecutar_radar_diario: agrega el segundo
+-- loop de la decisión 11 después del loop de pacientes existente (Sección
+-- 77.1), sin cambiar su firma ni el comportamiento del primer loop.
+create or replace function public.ejecutar_radar_diario(
+  p_fecha date default (now() at time zone 'America/Mexico_City')::date
+) returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_paciente_id uuid;
+  v_intervencion_id uuid;
+  c_lock_key1 constant int := 72501;
+  c_lock_key2 constant int := 1;
+begin
+  if not pg_try_advisory_xact_lock(c_lock_key1, c_lock_key2) then
+    raise exception 'ejecutar_radar_diario ya está corriendo en otra transacción — esta corrida se cancela sin procesar ningún paciente (advisory lock %,% no disponible).', c_lock_key1, c_lock_key2
+      using errcode = 'RDLCK';
+  end if;
+
+  for v_paciente_id in
+    select id from perfiles
+    where estatus = 'aprobado' and rol = 'usuario' and coalesce(is_active, true)
+  loop
+    begin
+      perform public.calcular_radar_paciente(v_paciente_id, p_fecha);
+    exception when others then
+      begin
+        insert into public.radar_ejecucion_errores (paciente_id, fecha_ejecucion, sqlstate, mensaje_error)
+        values (v_paciente_id, p_fecha, sqlstate, left(sqlerrm, 500));
+      exception when others then
+        raise warning 'No se pudo registrar en radar_ejecucion_errores el error de radar para paciente %: %', v_paciente_id, sqlerrm;
+      end;
+      raise warning 'calcular_radar_paciente falló para paciente %: % (%)', v_paciente_id, sqlerrm, sqlstate;
+    end;
+  end loop;
+
+  -- R7 (Sección 81, decisión 11): tras generar los snapshots del día,
+  -- evaluar cualquier intervención pendiente cuya ventana de 14 días ya
+  -- haya cerrado. Aislado igual que el loop de arriba — un fallo aquí
+  -- nunca cancela el resto del lote (ni el de pacientes, ya terminado, ni
+  -- otras intervenciones).
+  for v_intervencion_id in
+    select id from intervenciones
+    where resultado_estado = 'pendiente'
+      and (created_at at time zone 'America/Mexico_City')::date + 14 <= p_fecha
+  loop
+    begin
+      perform public.evaluar_resultado_intervencion(v_intervencion_id, p_fecha);
+    exception when others then
+      begin
+        insert into public.radar_ejecucion_errores (paciente_id, fecha_ejecucion, sqlstate, mensaje_error)
+        values (
+          (select paciente_id from intervenciones where id = v_intervencion_id),
+          p_fecha, sqlstate,
+          left('INTERVENCION ' || v_intervencion_id || ': ' || sqlerrm, 500)
+        );
+      exception when others then
+        raise warning 'No se pudo registrar en radar_ejecucion_errores el error de evaluación de intervención %: %', v_intervencion_id, sqlerrm;
+      end;
+      raise warning 'evaluar_resultado_intervencion falló para intervención %: % (%)', v_intervencion_id, sqlerrm, sqlstate;
+    end;
+  end loop;
+end;
+$$;
+
+revoke execute on function public.ejecutar_radar_diario(date) from public, anon, authenticated;
+grant execute on function public.ejecutar_radar_diario(date) to service_role;
+
+alter table public.radar_ejecuciones
+  add column intervenciones_evaluadas  int,
+  add column intervenciones_con_error  int;
+
+-- Re-declaración completa de _radar_ejecutar_con_observabilidad: agrega el
+-- cálculo de las 2 columnas nuevas, misma técnica de correlación exacta
+-- por timestamp ya usada para alertas_abiertas/alertas_resueltas_automaticamente
+-- (Sección 77.4) — los errores de intervención se distinguen de los de
+-- paciente por el prefijo "INTERVENCION " que ejecutar_radar_diario ya les
+-- da al mensaje.
+create or replace function public._radar_ejecutar_con_observabilidad(p_trigger_origen text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_fecha date := (now() at time zone 'America/Mexico_City')::date;
+  v_now timestamptz := now();
+  v_inicio timestamptz := clock_timestamp();
+  v_ejecucion_id uuid;
+  v_candidatos int;
+  v_con_error int;
+  v_procesados int;
+  v_alertas_abiertas int;
+  v_alertas_auto_resueltas int;
+  v_intervenciones_evaluadas int;
+  v_intervenciones_con_error int;
+  v_resultado text;
+  v_sqlstate text;
+begin
+  if p_trigger_origen not in ('cron', 'manual') then
+    raise exception 'trigger_origen inválido: %', p_trigger_origen;
+  end if;
+
+  select count(*) into v_candidatos
+    from perfiles where estatus = 'aprobado' and rol = 'usuario' and coalesce(is_active, true);
+
+  insert into radar_ejecuciones (fecha_evaluada, iniciado_at, pacientes_candidatos, trigger_origen)
+    values (v_fecha, v_inicio, v_candidatos, p_trigger_origen)
+    returning id into v_ejecucion_id;
+
+  begin
+    perform public.ejecutar_radar_diario(v_fecha);
+  exception when others then
+    get stacked diagnostics v_sqlstate = returned_sqlstate;
+    if v_sqlstate = 'RDLCK' then
+      update radar_ejecuciones set
+        finalizado_at = clock_timestamp(), resultado = 'omitido_por_lock',
+        pacientes_procesados = 0, pacientes_con_error = 0,
+        snapshots_generados = 0, alertas_abiertas = 0, alertas_resueltas_automaticamente = 0,
+        intervenciones_evaluadas = 0, intervenciones_con_error = 0
+      where id = v_ejecucion_id;
+      return;
+    else
+      update radar_ejecuciones set
+        finalizado_at = clock_timestamp(), resultado = 'fallo_total',
+        pacientes_procesados = 0, pacientes_con_error = v_candidatos,
+        snapshots_generados = 0, alertas_abiertas = 0, alertas_resueltas_automaticamente = 0,
+        intervenciones_evaluadas = 0, intervenciones_con_error = 0
+      where id = v_ejecucion_id;
+      return;
+    end if;
+  end;
+
+  update radar_ejecucion_errores set ejecucion_id = v_ejecucion_id
+    where fecha_ejecucion = v_fecha and created_at = v_now and ejecucion_id is null;
+
+  select count(*) into v_con_error
+    from radar_ejecucion_errores where ejecucion_id = v_ejecucion_id and mensaje_error not like 'INTERVENCION %';
+  v_procesados := v_candidatos - v_con_error;
+
+  select count(*) into v_intervenciones_con_error
+    from radar_ejecucion_errores where ejecucion_id = v_ejecucion_id and mensaje_error like 'INTERVENCION %';
+  select count(*) into v_intervenciones_evaluadas
+    from intervenciones where resultado_calculado_at = v_now;
+
+  select count(*) into v_alertas_abiertas
+    from radar_alertas where updated_at = v_now and estado_alerta = 'abierta';
+  select count(*) into v_alertas_auto_resueltas
+    from radar_alertas where updated_at = v_now and estado_alerta = 'resuelta' and motivo_resolucion = 'auto_resuelta';
+
+  v_resultado := case
+    when v_candidatos = 0 then 'exitoso'
+    when v_con_error = 0 then 'exitoso'
+    when v_procesados > 0 then 'parcial'
+    else 'fallo_total'
+  end;
+
+  update radar_ejecuciones set
+    finalizado_at = clock_timestamp(),
+    resultado = v_resultado,
+    pacientes_procesados = v_procesados,
+    pacientes_con_error = v_con_error,
+    snapshots_generados = v_procesados,
+    alertas_abiertas = v_alertas_abiertas,
+    alertas_resueltas_automaticamente = v_alertas_auto_resueltas,
+    intervenciones_evaluadas = v_intervenciones_evaluadas,
+    intervenciones_con_error = v_intervenciones_con_error
+  where id = v_ejecucion_id;
+end;
+$$;
+
+revoke execute on function public._radar_ejecutar_con_observabilidad(text) from public;
+
+-- ============================================================
+-- ROLLBACK Sección 81 (referencia — NO ejecutar salvo que se decida
+-- revertir esta sección):
+--
+-- [recrear _radar_ejecutar_con_observabilidad, ejecutar_radar_diario,
+--  registrar_intervencion_radar tal como quedaron en las Secciones 77/80]
+-- alter table radar_ejecuciones drop column if exists intervenciones_evaluadas;
+-- alter table radar_ejecuciones drop column if exists intervenciones_con_error;
+-- drop function if exists public.evaluar_resultado_intervencion(uuid, date);
+-- drop index if exists intervenciones_pendientes_created_at_idx;
+-- alter table intervenciones drop constraint if exists intervenciones_resultado_estado_check;
+-- alter table intervenciones add constraint intervenciones_resultado_estado_check
+--   check (resultado_estado in ('pendiente'));
+-- alter table intervenciones drop column if exists confound_detalle;
+-- alter table intervenciones drop column if exists rules_version_resultado;
+-- alter table intervenciones drop column if exists resultado_calculado_at;
+-- alter table intervenciones drop column if exists snapshot_id_despues;
+-- alter table intervenciones drop column if exists confianza_despues;
+-- alter table intervenciones drop column if exists risk_points_despues;
+-- alter table intervenciones drop column if exists adherence_despues;
+-- alter table intervenciones rename column risk_points_antes to risk_antes;
+-- ============================================================
+
+-- ============================================================
+-- 82. MIGRACIÓN — corrección de incidente: proteger al último superadmin
+-- ============================================================
+-- Incidente real en producción (2026-09-21): un superadmin (sesión válida,
+-- propia) invocó vía curl un UPDATE directo a PostgREST
+-- (`patch /rest/v1/perfiles?id=eq.<uuid>` con `{"rol":"usuario"}`),
+-- replicando exactamente lo que hace admin-web/app/(admin)/administradores/
+-- page.tsx (handleRemoveAdmin, Sección "Administradores") pero sin pasar
+-- por la UI — que ni siquiera muestra el botón "Quitar acceso" sobre una
+-- fila con rol='superadmin' (page.tsx: `!isSelf && a.rol !== "superadmin"`).
+-- El resultado: se auto-degradó a 'usuario', se quedó sin ningún
+-- superadmin en el sistema, y quedó sin poder recuperar el acceso desde
+-- la aplicación — el propio trg_proteger_columnas_sensibles_perfiles
+-- (Sección 45/70) exige v_rol='superadmin' para CUALQUIER cambio futuro de
+-- rol, así que sin superadmin restante no hay camino de regreso salvo
+-- acceso directo a la base de datos.
+--
+-- Diagnóstico: esto NO fue una política de RLS rota ni un hueco de
+-- permisos — el actor genuinamente TENÍA rol='superadmin' al momento de
+-- la llamada, así que tanto la policy de UPDATE ("perfiles: actualizar
+-- multi-tenant") como el trigger existente lo permitieron correctamente,
+-- tal como están diseñados. El hueco real es que nada impide dejar el
+-- sistema en un estado sin ningún superadmin — ni la UI (que además es
+-- trivialmente evitable con curl, ya que el cliente hace un
+-- supabase.from("perfiles").update(...) directo, sin RPC ni Edge Function
+-- de por medio) ni la base de datos. Cerrar esto únicamente en el
+-- frontend no serviría de nada — cualquier curl directo a PostgREST lo
+-- seguiría evitando exactamente igual. Tiene que cerrarse en el trigger,
+-- el único punto que ningún cliente (UI, curl, o cualquier otro) puede
+-- rodear.
+--
+-- Se re-declara la función completa del trigger (Sección 45/70), agregando
+-- un cuarto chequeo dentro del bloque de rol/nutricionista_id/
+-- stripe_customer_id ya existente — los tres bloques existentes quedan
+-- carácter por carácter idénticos. Se protege específicamente "el último
+-- superadmin" (no "el último admin"): mientras quede al menos un
+-- superadmin, ese superadmin siempre puede restaurar a cualquier otro vía
+-- la propia UI — el escenario catastrófico es exclusivamente llegar a
+-- CERO superadmins.
+create or replace function public.proteger_columnas_sensibles_perfiles()
+returns trigger
+language plpgsql
+as $$
+declare
+  v_rol      text;
+  v_allowed  boolean;
+begin
+  -- Edge Functions con service role key: sin restricción.
+  if current_user = 'service_role' then
+    return new;
+  end if;
+
+  v_rol := public.get_user_rol();
+
+  -- rol / nutricionista_id / stripe_customer_id: solo superadmin.
+  if new.rol is distinct from old.rol
+     or new.nutricionista_id is distinct from old.nutricionista_id
+     or new.stripe_customer_id is distinct from old.stripe_customer_id
+  then
+    if v_rol is distinct from 'superadmin' then
+      raise exception 'No tienes permiso para modificar rol, nutricionista_id o stripe_customer_id.';
+    end if;
+
+    -- Sección 82: nunca dejar el sistema sin ningún superadmin — ni
+    -- siquiera un superadmin puede quitarse (o quitarle a otro) el rol si
+    -- es el último que queda. Con 2+ superadmins, esto no bloquea nada.
+    if old.rol = 'superadmin' and new.rol is distinct from 'superadmin' then
+      if not exists (
+        select 1 from perfiles where rol = 'superadmin' and id <> old.id
+      ) then
+        raise exception 'No puedes quitar el rol de superadmin al último superadmin del sistema — dejaría el panel de administración sin nadie que pueda recuperarlo.';
+      end if;
+    end if;
+  end if;
+
+  -- estatus / is_active / plan_membresia: superadmin, o el nutriólogo
+  -- dueño del paciente — nunca el propio paciente sobre sí mismo.
+  if new.estatus is distinct from old.estatus
+     or new.is_active is distinct from old.is_active
+     or new.plan_membresia is distinct from old.plan_membresia
+  then
+    v_allowed := coalesce(
+      coalesce(v_rol = 'superadmin', false)
+      or (
+        auth.uid() is not null
+        and old.nutricionista_id is not null
+        and auth.uid() = old.nutricionista_id
+        and auth.uid() <> old.id
+      ),
+      false
+    );
+
+    if not v_allowed then
+      raise exception 'No tienes permiso para modificar estatus, is_active o plan_membresia de este perfil.';
+    end if;
+  end if;
+
+  -- last_active_at: exclusivamente vía registrar_actividad() (SECURITY
+  -- DEFINER, dueño "postgres") — ver Sección 70 para el diseño y las dos
+  -- alternativas descartadas.
+  if new.last_active_at is distinct from old.last_active_at then
+    if current_user is distinct from 'postgres' then
+      raise exception 'last_active_at solo se puede modificar mediante registrar_actividad().';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+-- ============================================================
+-- ROLLBACK Sección 82 (referencia — NO ejecutar salvo que se decida
+-- revertir esta sección; revertirla reabre el incidente que la motivó, así
+-- que no hay un escenario legítimo para hacerlo):
+--
+-- [recrear proteger_columnas_sensibles_perfiles sin el chequeo de "último
+--  superadmin", tal como quedó en la Sección 70]
+-- ============================================================
+
+-- ============================================================
+-- 83. MIGRACIÓN — Perfil profesional de nutriólogos (Fase A: schema, RLS,
+-- vistas públicas, storage — SIN admin-web ni mobile-app todavía)
+-- ============================================================
+-- Objetivo: un directorio tipo "perfil profesional de salud" para que un
+-- paciente pueda conocer/elegir nutriólogo (especialidades, servicios y
+-- precios, experiencia, formación, consultorios, disponibilidad general),
+-- editable por el propio nutriólogo o por superadmin desde admin-web (esa
+-- UI es Fase B, fuera de esta migración).
+--
+-- Decisiones de diseño (revisadas contra el schema real antes de escribir
+-- esto — ver Secciones 1-2, 6-8, 13, 23, 45/56/70/82):
+--
+-- 1. NO SE DUPLICA INFORMACIÓN DE `perfiles`. nombre_completo, avatar_url,
+--    telefono, fecha_nacimiento y sexo siguen siendo la única fuente de
+--    verdad para esos datos — nutriologo_perfiles solo agrega lo que
+--    perfiles nunca tuvo. No se crea un "nombre/apellidos" separado (todo
+--    el resto del proyecto ya asume nombre_completo como campo único) ni
+--    una "foto profesional" distinta de avatar_url.
+--
+-- 2. PATRONES REUTILIZADOS, no reinventados:
+--    - especialidades / nutriologo_especialidades: mismo molde que
+--      suplementos (catálogo compartido, sin created_by) + recetas_guardadas
+--      (junction M2M de PK compuesta), Secciones 7 y 6.
+--    - Todas las tablas hijas (servicios/certificaciones/experiencia/
+--      consultorios/disponibilidad): mismo molde de RLS que
+--      plan_suplementacion/citas — "dueño (nutriologo_id = auth.uid()) OR
+--      superadmin", Sección 51.
+--    - Vistas públicas: mismo molde que nutricionistas_publicos (Sección
+--      56) — `security_invoker = false, security_barrier = true`, sin
+--      policy RLS directa a anon en ninguna tabla base, revoke all + grant
+--      select a anon/authenticated únicamente sobre la vista. `
+--      nutricionistas_publicos` NO se toca — sigue usándose tal cual en
+--      mobile-app/src/app/(auth)/register.tsx.
+--    - Columnas protegidas (verificado/destacado/orden_directorio): mismo
+--      idioma exacto que proteger_columnas_sensibles_perfiles (Sección 82)
+--      — "if v_rol is distinct from 'superadmin' then raise exception".
+--
+-- 3. SUPERFICIE PÚBLICA MÍNIMA (decisión explícita, revisada campo por
+--    campo): las vistas públicas NUNCA exponen correo_profesional ni
+--    telefono_profesional (quedan solo en la tabla base, editables desde
+--    admin-web, sin bandera de "publicar" todavía), ni el documento
+--    original de una certificación (solo nombre/institución/año/
+--    descripción), ni ninguna columna de perfiles fuera de
+--    nombre_completo/avatar_url. Cero datos de rol/estatus/permisos.
+--
+-- 4. CERTIFICACIONES — BUCKET PRIVADO (a diferencia de los 4 buckets
+--    existentes, todos public=true): el documento original de una
+--    certificación es un dato sensible/verificable, no un asset de
+--    marketing — solo el nutriólogo dueño o superadmin pueden leerlo
+--    (política de storage acotada por prefijo de carpeta, nunca pública).
+--    admin-web (Fase B) deberá usar createSignedUrl en vez de
+--    getPublicUrl — primer bucket privado de este proyecto, documentado
+--    aquí explícitamente porque es un patrón nuevo.
+--
+-- 5. idiomas (nutriologo_perfiles) e incluye (nutriologo_servicios) son
+--    text[] simples, no tablas catálogo — son listas sin metadata propia
+--    por ítem ni necesidad de filtrado/agregación cruzada como sí la
+--    tiene especialidades (que el producto pidió explícitamente poder
+--    filtrar) — desproporcionado normalizar esto en una tabla relacional.
+--
+-- 6. NUNCA DATOS FICTICIOS DE REVIEWS — no se agrega ninguna columna de
+--    calificación/conteo de opiniones en esta migración porque no existe
+--    todavía ningún módulo de reviews real. La UI (Fase C) deberá ocultar
+--    por completo esa sección cuando no haya datos, nunca mostrar "0.0" ni
+--    "(0 opiniones)" — no hay nada que preparar a nivel de schema para
+--    esto todavía; se documenta aquí solo para que quede explícito que la
+--    ausencia de esas columnas es deliberada, no un olvido.
+--
+-- 7. `patient_nutritionists` — SOLO PREPARACIÓN, con estrategia de
+--    transición documentada (no ejecutada en esta migración):
+--    perfiles.nutricionista_id sigue siendo HOY la única fuente funcional
+--    real — ningún flujo existente (registro, invitar-usuario) se toca.
+--    Esta tabla nace con un backfill de una sola vez (una fila 'activo'
+--    por cada paciente con nutricionista_id actual) para no nacer vacía y
+--    servir de historial desde ya. Cuando en el futuro se implemente
+--    selección/cambio de nutriólogo, esa función deberá escribir en AMBAS
+--    estructuras en la misma transacción (cerrar la fila activo anterior,
+--    insertar la nueva, y solo entonces actualizar
+--    perfiles.nutricionista_id) — nunca deben quedar desincronizadas. La
+--    migración que retire la dependencia funcional de la columna es
+--    trabajo futuro explícitamente fuera de este alcance.
+--
+-- 8. VALIDACIONES REALES EN POSTGRES, no solo en frontend: año de egreso
+--    no futuro, años de experiencia >= 0, precio >= 0, duración > 0, URLs
+--    de redes con esquema http(s)://, latitud/longitud dentro de rango,
+--    fecha_fin >= fecha_inicio en experiencia, hora_inicio < hora_fin en
+--    disponibilidad — constraints reales, no confiadas al cliente.
+
+-- ── 83.1 — Catálogo de especialidades (molde: suplementos, Sección 7) ──
+create table especialidades (
+  id         uuid        default uuid_generate_v4() primary key,
+  nombre     text        not null unique,
+  created_at timestamptz not null default now()
+);
+
+insert into especialidades (nombre) values
+  ('Nutrición clínica'),
+  ('Nutrición deportiva'),
+  ('Pérdida de peso'),
+  ('Ganancia de masa muscular'),
+  ('Recomposición corporal'),
+  ('Diabetes'),
+  ('Hipertensión'),
+  ('Nutrición vegetariana / vegana'),
+  ('Nutrición infantil'),
+  ('Nutrición durante embarazo'),
+  ('Trastornos metabólicos'),
+  ('Educación nutricional')
+on conflict (nombre) do nothing;
+
+alter table especialidades enable row level security;
+
+create policy "especialidades_select" on especialidades
+for select to authenticated using (true);
+
+create policy "especialidades_insert" on especialidades
+for insert to authenticated with check (public.get_user_rol() in ('admin', 'superadmin'));
+
+create policy "especialidades_update" on especialidades
+for update to authenticated using (public.get_user_rol() in ('admin', 'superadmin'))
+with check (public.get_user_rol() in ('admin', 'superadmin'));
+
+create policy "especialidades_delete" on especialidades
+for delete to authenticated using (public.get_user_rol() in ('admin', 'superadmin'));
+
+-- ── 83.2 — nutriologo_perfiles (1:1 con perfiles) — decisiones 1, 5, 8 ──
+create table nutriologo_perfiles (
+  perfil_id                  uuid        primary key references perfiles(id) on delete cascade,
+
+  -- Información profesional (perfiles ya cubre nombre/avatar/telefono/
+  -- fecha_nacimiento/sexo — decisión 1, no se repiten aquí).
+  titulo_profesional         text,
+  foto_portada_url           text,
+  foto_portada_storage_path  text,
+  telefono_profesional       text,
+  correo_profesional         text,
+  cedula_profesional         text,
+  universidad                text,
+  anio_egreso                int,
+  anos_experiencia           int,
+  descripcion_corta          text,
+  biografia                  text,
+  idiomas                    text[]      not null default '{}',
+
+  -- Redes y contacto
+  instagram_url              text,
+  facebook_url               text,
+  tiktok_url                 text,
+  sitio_web_url              text,
+
+  -- Modalidad y estado del profesional
+  modalidad                  text        check (modalidad in ('presencial', 'online', 'ambas')),
+  perfil_visible             boolean     not null default false,
+  aceptando_pacientes        boolean     not null default true,
+  -- Columnas protegidas — solo superadmin puede modificarlas (ver 83.9).
+  verificado                 boolean     not null default false,
+  destacado                  boolean     not null default false,
+  orden_directorio           int,
+
+  created_at                 timestamptz not null default now(),
+  updated_at                 timestamptz not null default now(),
+
+  check (anio_egreso is null or anio_egreso <= extract(year from now())::int),
+  check (anos_experiencia is null or anos_experiencia >= 0),
+  check (instagram_url is null or instagram_url ~* '^https?://'),
+  check (facebook_url is null or facebook_url ~* '^https?://'),
+  check (tiktok_url is null or tiktok_url ~* '^https?://'),
+  check (sitio_web_url is null or sitio_web_url ~* '^https?://')
+);
+
+create or replace function public.set_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at := now();
+  return new;
+end;
+$$;
+
+create trigger trg_nutriologo_perfiles_updated_at
+  before update on nutriologo_perfiles
+  for each row
+  execute function public.set_updated_at();
+
+alter table nutriologo_perfiles enable row level security;
+
+create policy "nutriologo_perfiles_select" on nutriologo_perfiles
+for select to authenticated using (
+  perfil_id = auth.uid() or public.get_user_rol() = 'superadmin'
+);
+
+create policy "nutriologo_perfiles_insert" on nutriologo_perfiles
+for insert to authenticated with check (
+  perfil_id = auth.uid() or public.get_user_rol() = 'superadmin'
+);
+
+create policy "nutriologo_perfiles_update" on nutriologo_perfiles
+for update to authenticated using (
+  perfil_id = auth.uid() or public.get_user_rol() = 'superadmin'
+)
+with check (
+  perfil_id = auth.uid() or public.get_user_rol() = 'superadmin'
+);
+
+create policy "nutriologo_perfiles_delete" on nutriologo_perfiles
+for delete to authenticated using (public.get_user_rol() = 'superadmin');
+
+-- Columnas protegidas — mismo idioma exacto que
+-- proteger_columnas_sensibles_perfiles (Sección 82, decisión 2/3 de arriba).
+create or replace function public.proteger_columnas_nutriologo_perfiles()
+returns trigger
+language plpgsql
+as $$
+declare
+  v_rol text;
+begin
+  if current_user = 'service_role' then
+    return new;
+  end if;
+
+  if new.verificado is distinct from old.verificado
+     or new.destacado is distinct from old.destacado
+     or new.orden_directorio is distinct from old.orden_directorio
+  then
+    v_rol := public.get_user_rol();
+    if v_rol is distinct from 'superadmin' then
+      raise exception 'No tienes permiso para modificar verificado, destacado u orden_directorio.';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+create trigger trg_proteger_columnas_nutriologo_perfiles
+  before update on nutriologo_perfiles
+  for each row
+  execute function public.proteger_columnas_nutriologo_perfiles();
+
+-- ── 83.3 — nutriologo_especialidades (junction, molde: recetas_guardadas) ──
+create table nutriologo_especialidades (
+  nutriologo_id   uuid references perfiles(id) on delete cascade not null,
+  especialidad_id uuid references especialidades(id) on delete cascade not null,
+  created_at      timestamptz not null default now(),
+  primary key (nutriologo_id, especialidad_id)
+);
+
+alter table nutriologo_especialidades enable row level security;
+
+create policy "nutriologo_especialidades_select" on nutriologo_especialidades
+for select to authenticated using (
+  nutriologo_id = auth.uid() or public.get_user_rol() = 'superadmin'
+);
+
+create policy "nutriologo_especialidades_insert" on nutriologo_especialidades
+for insert to authenticated with check (
+  nutriologo_id = auth.uid() or public.get_user_rol() = 'superadmin'
+);
+
+create policy "nutriologo_especialidades_delete" on nutriologo_especialidades
+for delete to authenticated using (
+  nutriologo_id = auth.uid() or public.get_user_rol() = 'superadmin'
+);
+
+-- ── 83.4 — nutriologo_servicios — decisión 5 (incluye text[]), 8 (checks) ──
+create table nutriologo_servicios (
+  id           uuid        default uuid_generate_v4() primary key,
+  nutriologo_id uuid       references perfiles(id) on delete cascade not null,
+  nombre       text        not null,
+  descripcion  text,
+  precio       numeric(10,2) not null check (precio >= 0),
+  moneda       text        not null default 'MXN',
+  duracion_min int         check (duracion_min is null or duracion_min > 0),
+  modalidad    text        not null check (modalidad in ('online', 'presencial', 'ambas')),
+  incluye      text[]      not null default '{}',
+  activo       boolean     not null default true,
+  orden        int         not null default 0,
+  created_at   timestamptz not null default now()
+);
+
+create index on nutriologo_servicios (nutriologo_id);
+
+alter table nutriologo_servicios enable row level security;
+
+create policy "nutriologo_servicios_select" on nutriologo_servicios
+for select to authenticated using (
+  nutriologo_id = auth.uid() or public.get_user_rol() = 'superadmin'
+);
+
+create policy "nutriologo_servicios_insert" on nutriologo_servicios
+for insert to authenticated with check (
+  nutriologo_id = auth.uid() or public.get_user_rol() = 'superadmin'
+);
+
+create policy "nutriologo_servicios_update" on nutriologo_servicios
+for update to authenticated using (
+  nutriologo_id = auth.uid() or public.get_user_rol() = 'superadmin'
+)
+with check (
+  nutriologo_id = auth.uid() or public.get_user_rol() = 'superadmin'
+);
+
+create policy "nutriologo_servicios_delete" on nutriologo_servicios
+for delete to authenticated using (
+  nutriologo_id = auth.uid() or public.get_user_rol() = 'superadmin'
+);
+
+-- ── 83.5 — nutriologo_certificaciones — decisión 4 (documento privado) ──
+create table nutriologo_certificaciones (
+  id                      uuid        default uuid_generate_v4() primary key,
+  nutriologo_id           uuid        references perfiles(id) on delete cascade not null,
+  nombre                  text        not null,
+  institucion             text        not null,
+  anio                    int,
+  descripcion             text,
+  documento_url           text,
+  documento_storage_path  text,
+  orden                   int         not null default 0,
+  created_at              timestamptz not null default now(),
+
+  check (anio is null or anio <= extract(year from now())::int)
+);
+
+create index on nutriologo_certificaciones (nutriologo_id);
+
+alter table nutriologo_certificaciones enable row level security;
+
+create policy "nutriologo_certificaciones_select" on nutriologo_certificaciones
+for select to authenticated using (
+  nutriologo_id = auth.uid() or public.get_user_rol() = 'superadmin'
+);
+
+create policy "nutriologo_certificaciones_insert" on nutriologo_certificaciones
+for insert to authenticated with check (
+  nutriologo_id = auth.uid() or public.get_user_rol() = 'superadmin'
+);
+
+create policy "nutriologo_certificaciones_update" on nutriologo_certificaciones
+for update to authenticated using (
+  nutriologo_id = auth.uid() or public.get_user_rol() = 'superadmin'
+)
+with check (
+  nutriologo_id = auth.uid() or public.get_user_rol() = 'superadmin'
+);
+
+create policy "nutriologo_certificaciones_delete" on nutriologo_certificaciones
+for delete to authenticated using (
+  nutriologo_id = auth.uid() or public.get_user_rol() = 'superadmin'
+);
+
+-- ── 83.6 — nutriologo_experiencia — decisión 8 (fechas coherentes) ──
+create table nutriologo_experiencia (
+  id            uuid        default uuid_generate_v4() primary key,
+  nutriologo_id uuid        references perfiles(id) on delete cascade not null,
+  puesto        text        not null,
+  institucion   text        not null,
+  fecha_inicio  date,
+  fecha_fin     date,
+  actualidad    boolean     not null default false,
+  descripcion   text,
+  orden         int         not null default 0,
+  created_at    timestamptz not null default now(),
+
+  check (not actualidad or fecha_fin is null),
+  check (fecha_fin is null or fecha_inicio is null or fecha_fin >= fecha_inicio)
+);
+
+create index on nutriologo_experiencia (nutriologo_id);
+
+alter table nutriologo_experiencia enable row level security;
+
+create policy "nutriologo_experiencia_select" on nutriologo_experiencia
+for select to authenticated using (
+  nutriologo_id = auth.uid() or public.get_user_rol() = 'superadmin'
+);
+
+create policy "nutriologo_experiencia_insert" on nutriologo_experiencia
+for insert to authenticated with check (
+  nutriologo_id = auth.uid() or public.get_user_rol() = 'superadmin'
+);
+
+create policy "nutriologo_experiencia_update" on nutriologo_experiencia
+for update to authenticated using (
+  nutriologo_id = auth.uid() or public.get_user_rol() = 'superadmin'
+)
+with check (
+  nutriologo_id = auth.uid() or public.get_user_rol() = 'superadmin'
+);
+
+create policy "nutriologo_experiencia_delete" on nutriologo_experiencia
+for delete to authenticated using (
+  nutriologo_id = auth.uid() or public.get_user_rol() = 'superadmin'
+);
+
+-- ── 83.7 — nutriologo_consultorios — decisión 8 (lat/long), preparada ──
+-- para múltiples ubicaciones desde el día uno (ya es una relación 1:N).
+create table nutriologo_consultorios (
+  id                      uuid        default uuid_generate_v4() primary key,
+  nutriologo_id           uuid        references perfiles(id) on delete cascade not null,
+  nombre                  text,
+  direccion               text,
+  colonia                 text,
+  alcaldia_municipio      text,
+  ciudad                  text,
+  estado                  text,
+  codigo_postal           text,
+  latitud                 numeric(9,6),
+  longitud                numeric(9,6),
+  instrucciones_adicionales text,
+  orden                   int         not null default 0,
+  created_at              timestamptz not null default now(),
+
+  check (latitud is null or latitud between -90 and 90),
+  check (longitud is null or longitud between -180 and 180)
+);
+
+create index on nutriologo_consultorios (nutriologo_id);
+
+alter table nutriologo_consultorios enable row level security;
+
+create policy "nutriologo_consultorios_select" on nutriologo_consultorios
+for select to authenticated using (
+  nutriologo_id = auth.uid() or public.get_user_rol() = 'superadmin'
+);
+
+create policy "nutriologo_consultorios_insert" on nutriologo_consultorios
+for insert to authenticated with check (
+  nutriologo_id = auth.uid() or public.get_user_rol() = 'superadmin'
+);
+
+create policy "nutriologo_consultorios_update" on nutriologo_consultorios
+for update to authenticated using (
+  nutriologo_id = auth.uid() or public.get_user_rol() = 'superadmin'
+)
+with check (
+  nutriologo_id = auth.uid() or public.get_user_rol() = 'superadmin'
+);
+
+create policy "nutriologo_consultorios_delete" on nutriologo_consultorios
+for delete to authenticated using (
+  nutriologo_id = auth.uid() or public.get_user_rol() = 'superadmin'
+);
+
+-- ── 83.8 — nutriologo_disponibilidad — disponibilidad general (no agenda ──
+-- real todavía; preparada para eso: 1 fila por día de la semana ISO).
+create table nutriologo_disponibilidad (
+  id            uuid        default uuid_generate_v4() primary key,
+  nutriologo_id uuid        references perfiles(id) on delete cascade not null,
+  dia_semana    int         not null check (dia_semana between 1 and 7), -- ISO: 1=lunes .. 7=domingo
+  disponible    boolean     not null default true,
+  hora_inicio   time,
+  hora_fin      time,
+  created_at    timestamptz not null default now(),
+
+  unique (nutriologo_id, dia_semana),
+  check (disponible = false or (hora_inicio is not null and hora_fin is not null and hora_inicio < hora_fin))
+);
+
+alter table nutriologo_disponibilidad enable row level security;
+
+create policy "nutriologo_disponibilidad_select" on nutriologo_disponibilidad
+for select to authenticated using (
+  nutriologo_id = auth.uid() or public.get_user_rol() = 'superadmin'
+);
+
+create policy "nutriologo_disponibilidad_insert" on nutriologo_disponibilidad
+for insert to authenticated with check (
+  nutriologo_id = auth.uid() or public.get_user_rol() = 'superadmin'
+);
+
+create policy "nutriologo_disponibilidad_update" on nutriologo_disponibilidad
+for update to authenticated using (
+  nutriologo_id = auth.uid() or public.get_user_rol() = 'superadmin'
+)
+with check (
+  nutriologo_id = auth.uid() or public.get_user_rol() = 'superadmin'
+);
+
+create policy "nutriologo_disponibilidad_delete" on nutriologo_disponibilidad
+for delete to authenticated using (
+  nutriologo_id = auth.uid() or public.get_user_rol() = 'superadmin'
+);
+
+-- ── 83.9 — patient_nutritionists — decisión 7: SOLO preparación + backfill.
+-- perfiles.nutricionista_id sigue siendo la fuente funcional real; ningún
+-- flujo existente se modifica en esta migración.
+create table patient_nutritionists (
+  id               uuid        default uuid_generate_v4() primary key,
+  paciente_id      uuid        references auth.users(id) on delete cascade not null,
+  nutriologo_id    uuid        references auth.users(id) on delete set null,
+  fecha_asignacion timestamptz not null default now(),
+  fecha_fin        timestamptz,
+  estado           text        not null default 'activo' check (estado in ('activo', 'finalizado')),
+  asignado_por     uuid        references auth.users(id) on delete set null,
+  motivo           text,
+  created_at       timestamptz not null default now()
+);
+
+create index on patient_nutritionists (paciente_id);
+create index on patient_nutritionists (nutriologo_id);
+-- Como máximo una asignación ACTIVA por paciente — mismo mecanismo que ya
+-- usa radar_alertas_una_abierta_por_regla (Sección 73) para "una sola
+-- alerta abierta por problema".
+create unique index patient_nutritionists_un_activo
+  on patient_nutritionists (paciente_id)
+  where estado = 'activo';
+
+-- Backfill de una sola vez: una fila 'activo' por cada paciente que hoy
+-- ya tiene nutricionista_id — para que la tabla nazca con el historial
+-- actual en vez de vacía. asignado_por queda NULL (no sabemos quién hizo
+-- la asignación original histórica).
+insert into patient_nutritionists (paciente_id, nutriologo_id, fecha_asignacion, estado)
+select id, nutricionista_id, created_at, 'activo'
+from perfiles
+where nutricionista_id is not null and rol = 'usuario';
+
+alter table patient_nutritionists enable row level security;
+
+-- Mismo patrón de lectura que perfiles/score_snapshots/radar_alertas:
+-- el propio paciente, su nutriólogo (actual, vía perfiles.nutricionista_id
+-- — no un self-join circular sobre esta misma tabla), o superadmin.
+create policy "patient_nutritionists_select" on patient_nutritionists
+for select to authenticated using (
+  auth.uid() = paciente_id
+  or exists (select 1 from perfiles where id = patient_nutritionists.paciente_id and nutricionista_id = auth.uid())
+  or public.get_user_rol() = 'superadmin'
+);
+
+-- Sin policies de INSERT/UPDATE/DELETE para authenticated/anon todavía —
+-- esta tabla es de solo lectura desde el cliente en esta fase (decisión
+-- 7: nadie escribe aquí hasta que se implemente selección/cambio de
+-- nutriólogo). El backfill de arriba corrió como postgres, evade RLS.
+
+-- ── 83.10 — Storage: portada (bucket avatars existente) ──────────────
+-- Mismo patrón ya usado para avatars/suplementos/ (Sección 64) — una
+-- subcarpeta dedicada dentro del bucket existente, no un bucket nuevo.
+create policy "avatars: gestion portada propia" on storage.objects
+  for all to authenticated
+  using (bucket_id = 'avatars' and name like ('portadas/' || auth.uid()::text || '.%'))
+  with check (bucket_id = 'avatars' and name like ('portadas/' || auth.uid()::text || '.%'));
+
+-- ── 83.11 — Storage: certificaciones-nutriologos (bucket NUEVO, PRIVADO) ──
+-- Decisión 4: a diferencia de los 4 buckets existentes (todos
+-- public=true), este es privado — el documento original de una
+-- certificación solo lo puede leer su dueño o superadmin, nunca
+-- públicamente. admin-web (Fase B) debe usar createSignedUrl, no
+-- getPublicUrl.
+insert into storage.buckets (id, name, public)
+values ('certificaciones-nutriologos', 'certificaciones-nutriologos', false)
+on conflict (id) do nothing;
+
+create policy "certificaciones: lectura propia o superadmin" on storage.objects
+  for select to authenticated
+  using (
+    bucket_id = 'certificaciones-nutriologos'
+    and (name like (auth.uid()::text || '/%') or public.get_user_rol() = 'superadmin')
+  );
+
+create policy "certificaciones: gestion propia o superadmin" on storage.objects
+  for all to authenticated
+  using (
+    bucket_id = 'certificaciones-nutriologos'
+    and (name like (auth.uid()::text || '/%') or public.get_user_rol() = 'superadmin')
+  )
+  with check (
+    bucket_id = 'certificaciones-nutriologos'
+    and (name like (auth.uid()::text || '/%') or public.get_user_rol() = 'superadmin')
+  );
+
+-- ── 83.12 — Vistas públicas — decisión 3: superficie mínima, mismo molde ──
+-- que nutricionistas_publicos (Sección 56). Ninguna tabla base de arriba
+-- otorga SELECT a anon — el acceso público pasa únicamente por aquí.
+create view public.nutriologos_directorio_publico
+with (security_invoker = false, security_barrier = true)
+as
+select
+  p.id,
+  p.nombre_completo,
+  p.avatar_url,
+  np.titulo_profesional,
+  np.foto_portada_url,
+  np.cedula_profesional,
+  np.universidad,
+  np.anos_experiencia,
+  np.descripcion_corta,
+  np.biografia,
+  np.idiomas,
+  np.modalidad,
+  np.aceptando_pacientes,
+  np.verificado,
+  np.destacado,
+  np.orden_directorio,
+  np.instagram_url,
+  np.facebook_url,
+  np.tiktok_url,
+  np.sitio_web_url,
+  (
+    select array_agg(e.nombre order by e.nombre)
+    from nutriologo_especialidades ne
+    join especialidades e on e.id = ne.especialidad_id
+    where ne.nutriologo_id = p.id
+  ) as especialidades,
+  (
+    select min(s.precio) from nutriologo_servicios s
+    where s.nutriologo_id = p.id and s.activo
+  ) as precio_desde
+from perfiles p
+join nutriologo_perfiles np on np.perfil_id = p.id
+where p.rol in ('admin', 'superadmin') and p.is_active = true and np.perfil_visible = true;
+
+revoke all on public.nutriologos_directorio_publico from public, anon, authenticated;
+grant select on public.nutriologos_directorio_publico to anon, authenticated;
+
+create view public.nutriologo_especialidades_publico
+with (security_invoker = false, security_barrier = true)
+as
+select ne.nutriologo_id, e.id as especialidad_id, e.nombre
+from nutriologo_especialidades ne
+join especialidades e on e.id = ne.especialidad_id
+join perfiles p on p.id = ne.nutriologo_id
+join nutriologo_perfiles np on np.perfil_id = ne.nutriologo_id
+where p.is_active = true and np.perfil_visible = true;
+
+revoke all on public.nutriologo_especialidades_publico from public, anon, authenticated;
+grant select on public.nutriologo_especialidades_publico to anon, authenticated;
+
+create view public.nutriologo_servicios_publico
+with (security_invoker = false, security_barrier = true)
+as
+select s.id, s.nutriologo_id, s.nombre, s.descripcion, s.precio, s.moneda,
+       s.duracion_min, s.modalidad, s.incluye, s.orden
+from nutriologo_servicios s
+join perfiles p on p.id = s.nutriologo_id
+join nutriologo_perfiles np on np.perfil_id = s.nutriologo_id
+where s.activo and p.is_active = true and np.perfil_visible = true;
+
+revoke all on public.nutriologo_servicios_publico from public, anon, authenticated;
+grant select on public.nutriologo_servicios_publico to anon, authenticated;
+
+create view public.nutriologo_experiencia_publico
+with (security_invoker = false, security_barrier = true)
+as
+select x.id, x.nutriologo_id, x.puesto, x.institucion, x.fecha_inicio,
+       x.fecha_fin, x.actualidad, x.descripcion, x.orden
+from nutriologo_experiencia x
+join perfiles p on p.id = x.nutriologo_id
+join nutriologo_perfiles np on np.perfil_id = x.nutriologo_id
+where p.is_active = true and np.perfil_visible = true;
+
+revoke all on public.nutriologo_experiencia_publico from public, anon, authenticated;
+grant select on public.nutriologo_experiencia_publico to anon, authenticated;
+
+create view public.nutriologo_consultorios_publico
+with (security_invoker = false, security_barrier = true)
+as
+select c.id, c.nutriologo_id, c.nombre, c.direccion, c.colonia,
+       c.alcaldia_municipio, c.ciudad, c.estado, c.codigo_postal,
+       c.latitud, c.longitud, c.instrucciones_adicionales, c.orden
+from nutriologo_consultorios c
+join perfiles p on p.id = c.nutriologo_id
+join nutriologo_perfiles np on np.perfil_id = c.nutriologo_id
+where p.is_active = true and np.perfil_visible = true;
+
+revoke all on public.nutriologo_consultorios_publico from public, anon, authenticated;
+grant select on public.nutriologo_consultorios_publico to anon, authenticated;
+
+create view public.nutriologo_disponibilidad_publico
+with (security_invoker = false, security_barrier = true)
+as
+select d.id, d.nutriologo_id, d.dia_semana, d.disponible, d.hora_inicio, d.hora_fin
+from nutriologo_disponibilidad d
+join perfiles p on p.id = d.nutriologo_id
+join nutriologo_perfiles np on np.perfil_id = d.nutriologo_id
+where p.is_active = true and np.perfil_visible = true;
+
+revoke all on public.nutriologo_disponibilidad_publico from public, anon, authenticated;
+grant select on public.nutriologo_disponibilidad_publico to anon, authenticated;
+
+-- Decisión 4/3: SOLO nombre/institución/año/descripción — jamás
+-- documento_url ni documento_storage_path.
+create view public.nutriologo_certificaciones_publico
+with (security_invoker = false, security_barrier = true)
+as
+select cert.id, cert.nutriologo_id, cert.nombre, cert.institucion, cert.anio,
+       cert.descripcion, cert.orden
+from nutriologo_certificaciones cert
+join perfiles p on p.id = cert.nutriologo_id
+join nutriologo_perfiles np on np.perfil_id = cert.nutriologo_id
+where p.is_active = true and np.perfil_visible = true;
+
+revoke all on public.nutriologo_certificaciones_publico from public, anon, authenticated;
+grant select on public.nutriologo_certificaciones_publico to anon, authenticated;
+
+-- ============================================================
+-- ROLLBACK Sección 83 (referencia — NO ejecutar salvo que se decida
+-- revertir esta sección):
+--
+-- drop view if exists public.nutriologo_certificaciones_publico;
+-- drop view if exists public.nutriologo_disponibilidad_publico;
+-- drop view if exists public.nutriologo_consultorios_publico;
+-- drop view if exists public.nutriologo_experiencia_publico;
+-- drop view if exists public.nutriologo_servicios_publico;
+-- drop view if exists public.nutriologo_especialidades_publico;
+-- drop view if exists public.nutriologos_directorio_publico;
+-- drop policy if exists "certificaciones: gestion propia o superadmin" on storage.objects;
+-- drop policy if exists "certificaciones: lectura propia o superadmin" on storage.objects;
+-- delete from storage.buckets where id = 'certificaciones-nutriologos';
+-- drop policy if exists "avatars: gestion portada propia" on storage.objects;
+-- drop table if exists patient_nutritionists;
+-- drop table if exists nutriologo_disponibilidad;
+-- drop table if exists nutriologo_consultorios;
+-- drop table if exists nutriologo_experiencia;
+-- drop table if exists nutriologo_certificaciones;
+-- drop table if exists nutriologo_servicios;
+-- drop table if exists nutriologo_especialidades;
+-- drop trigger if exists trg_proteger_columnas_nutriologo_perfiles on nutriologo_perfiles;
+-- drop function if exists public.proteger_columnas_nutriologo_perfiles();
+-- drop trigger if exists trg_nutriologo_perfiles_updated_at on nutriologo_perfiles;
+-- drop function if exists public.set_updated_at();
+-- drop table if exists nutriologo_perfiles;
+-- drop table if exists especialidades;
+-- ============================================================
+
+-- ============================================================
+-- 84. MIGRACIÓN — corrección: superadmin debe poder gestionar la portada
+-- profesional de OTROS nutriólogos (hallazgo durante Fase B admin-web)
+-- ============================================================
+-- La policy de Storage para la portada (83.10) solo permitía que el path
+-- coincidiera con auth.uid() del actor, sin excepción para superadmin — a
+-- diferencia de las policies de certificaciones-nutriologos (83.11), que sí
+-- la incluyen. Esto bloqueaba a superadmin al intentar subir/reemplazar la
+-- portada de otro nutriólogo desde admin-web, aunque sí podía editar la
+-- fila en nutriologo_perfiles (esa tabla sí contempla superadmin). Se
+-- corrige unificando el mismo patrón ya usado en certificaciones.
+drop policy if exists "avatars: gestion portada propia" on storage.objects;
+
+create policy "avatars: gestion portada propia" on storage.objects
+  for all to authenticated
+  using (
+    bucket_id = 'avatars' and (
+      name like ('portadas/' || auth.uid()::text || '.%')
+      or public.get_user_rol() = 'superadmin'
+    )
+  )
+  with check (
+    bucket_id = 'avatars' and (
+      name like ('portadas/' || auth.uid()::text || '.%')
+      or public.get_user_rol() = 'superadmin'
+    )
+  );
+
+-- ============================================================
+-- ROLLBACK Sección 84 (referencia — NO ejecutar salvo que se decida
+-- revertir esta sección; restaura la policy original de 83.10):
+--
+-- drop policy if exists "avatars: gestion portada propia" on storage.objects;
+-- create policy "avatars: gestion portada propia" on storage.objects
+--   for all to authenticated
+--   using (bucket_id = 'avatars' and name like ('portadas/' || auth.uid()::text || '.%'))
+--   with check (bucket_id = 'avatars' and name like ('portadas/' || auth.uid()::text || '.%'));
 -- ============================================================

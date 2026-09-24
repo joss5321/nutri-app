@@ -6,7 +6,7 @@
 -- transacción (BEGIN ... ROLLBACK) — nunca se commitea nada.
 
 begin;
-select plan(21);
+select plan(27);
 
 -- storage.objects tiene un guard propio de Supabase (trigger STATEMENT-level
 -- "protect_objects_delete") que bloquea CUALQUIER DELETE directo por SQL,
@@ -130,9 +130,68 @@ select lives_ok(
   'avatars: superadmin UPDATE avatar de otro admin = permitido');
 reset role;
 
+-- ══════════ avatars/portadas/ (Sección 84 — corrección Fase B) ══════════
+-- La portada profesional (nutriologo_perfiles.foto_portada_*) vive en el
+-- mismo bucket avatars, subcarpeta portadas/. La policy original de la
+-- Sección 83.10 solo permitía path == auth.uid() del actor (sin excepción
+-- de superadmin); la Sección 84 la corrige para igualarla al patrón ya
+-- usado en certificaciones-nutriologos.
+
+-- 12. Admin A sube su propia portada = permitido.
+select tests.authenticate_as('80000000-0000-4000-8000-000000000003'::uuid);
+set local role authenticated;
+select lives_ok(
+  $$ insert into storage.objects (bucket_id, name) values ('avatars', 'portadas/80000000-0000-4000-8000-000000000003.jpg') $$,
+  'avatars/portadas: nutriólogo INSERT su propia portada = permitido');
+reset role;
+
+-- 13. Admin A intenta subir la portada de Admin B (ajena) = bloqueado.
+select tests.authenticate_as('80000000-0000-4000-8000-000000000003'::uuid);
+set local role authenticated;
+select throws_ok(
+  $$ insert into storage.objects (bucket_id, name) values ('avatars', 'portadas/80000000-0000-4000-8000-000000000004.jpg') $$,
+  '42501', null, 'avatars/portadas: nutriólogo INSERT portada ajena = bloqueado');
+reset role;
+
+-- 14. Paciente A intenta subir la portada de Admin A (ajena) = bloqueado.
+select tests.authenticate_as('80000000-0000-4000-8000-000000000001'::uuid);
+set local role authenticated;
+select throws_ok(
+  $$ insert into storage.objects (bucket_id, name) values ('avatars', 'portadas/80000000-0000-4000-8000-000000000003.jpg') $$,
+  '42501', null, 'avatars/portadas: paciente INSERT portada ajena de un nutriólogo = bloqueado');
+reset role;
+
+-- 15. Superadmin SUBE la portada de Admin B (que aún no tenía una) = permitido.
+--     Este es exactamente el caso que motivó la Sección 84: antes de la
+--     corrección, esto habría sido bloqueado por RLS.
+select tests.authenticate_as('80000000-0000-4000-8000-000000000005'::uuid);
+set local role authenticated;
+select lives_ok(
+  $$ insert into storage.objects (bucket_id, name) values ('avatars', 'portadas/80000000-0000-4000-8000-000000000004.jpg') $$,
+  'avatars/portadas: superadmin INSERT portada de otro nutriólogo = permitido (Sección 84)');
+reset role;
+
+-- 16. Superadmin REEMPLAZA (UPDATE) la portada de Admin B = permitido.
+select tests.authenticate_as('80000000-0000-4000-8000-000000000005'::uuid);
+set local role authenticated;
+select lives_ok(
+  $$ update storage.objects set metadata = '{"reemplazada_por_superadmin":true}'::jsonb
+     where bucket_id = 'avatars' and name = 'portadas/80000000-0000-4000-8000-000000000004.jpg' $$,
+  'avatars/portadas: superadmin UPDATE portada de otro nutriólogo = permitido (Sección 84)');
+reset role;
+
+-- 17. Superadmin ELIMINA la portada de Admin B = permitido.
+select tests.authenticate_as('80000000-0000-4000-8000-000000000005'::uuid);
+set local role authenticated;
+select lives_ok(
+  $$ delete from storage.objects
+     where bucket_id = 'avatars' and name = 'portadas/80000000-0000-4000-8000-000000000004.jpg' $$,
+  'avatars/portadas: superadmin DELETE portada de otro nutriólogo = permitido (Sección 84)');
+reset role;
+
 -- ══════════════════════════ videos-ejercicios ══════════════════════════
 
--- 12. Paciente INSERT = bloqueado
+-- 18. Paciente INSERT = bloqueado
 select tests.authenticate_as('80000000-0000-4000-8000-000000000001'::uuid);
 set local role authenticated;
 select throws_ok(
@@ -140,7 +199,7 @@ select throws_ok(
   '42501', null, 'videos-ejercicios: paciente INSERT = bloqueado');
 reset role;
 
--- 13. Paciente UPDATE = bloqueado
+-- 19. Paciente UPDATE = bloqueado
 select tests.authenticate_as('80000000-0000-4000-8000-000000000001'::uuid);
 set local role authenticated;
 with actualizado as (
@@ -151,7 +210,7 @@ with actualizado as (
 select is((select count(*) from actualizado)::int, 0, 'videos-ejercicios: paciente UPDATE = bloqueado');
 reset role;
 
--- 14. Paciente DELETE = bloqueado
+-- 20. Paciente DELETE = bloqueado
 select tests.authenticate_as('80000000-0000-4000-8000-000000000001'::uuid);
 set local role authenticated;
 with borrado as (
@@ -162,7 +221,7 @@ with borrado as (
 select is((select count(*) from borrado)::int, 0, 'videos-ejercicios: paciente DELETE = bloqueado');
 reset role;
 
--- 15-17. Admin INSERT/UPDATE/DELETE = permitido
+-- 21-23. Admin INSERT/UPDATE/DELETE = permitido
 select tests.authenticate_as('80000000-0000-4000-8000-000000000003'::uuid);
 set local role authenticated;
 select lives_ok(
@@ -185,7 +244,7 @@ select lives_ok(
   'videos-ejercicios: admin DELETE = permitido');
 reset role;
 
--- 18-20. Superadmin INSERT/UPDATE/DELETE = permitido
+-- 24-26. Superadmin INSERT/UPDATE/DELETE = permitido
 select tests.authenticate_as('80000000-0000-4000-8000-000000000005'::uuid);
 set local role authenticated;
 select lives_ok(
@@ -208,7 +267,7 @@ select lives_ok(
   'videos-ejercicios: superadmin DELETE = permitido');
 reset role;
 
--- 21. SELECT público (cualquier authenticated, incluido paciente) = permitido
+-- 27. SELECT público (cualquier authenticated, incluido paciente) = permitido
 select tests.authenticate_as('80000000-0000-4000-8000-000000000001'::uuid);
 set local role authenticated;
 select is((select count(*)::int from storage.objects where bucket_id = 'videos-ejercicios' and name = '10000000-0000-4000-8000-0000000000e1.mp4'), 1,

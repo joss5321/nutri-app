@@ -4,9 +4,10 @@ import { useState } from "react";
 import { Eye, EyeOff, Lock } from "lucide-react";
 
 
-export default function PasswordInput({ value, onChange }: {
+export default function PasswordInput({ value, onChange, placeholder = "Contraseña" }: {
   value: string;
-  onChange: (v: string) => void
+  onChange: (v: string) => void;
+  placeholder?: string;
 }) {
   const [showPass, setShowPass] = useState(false);
 
@@ -15,7 +16,7 @@ export default function PasswordInput({ value, onChange }: {
       <Lock size={18} className="text-muted shrink-0" />
       <input
         type={showPass ? "text" : "password"}
-        placeholder="Contraseña"
+        placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         required

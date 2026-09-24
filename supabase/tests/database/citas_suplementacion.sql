@@ -8,7 +8,7 @@
 -- reales de producción.
 
 begin;
-select plan(79);
+select plan(92);
 
 -- ── Fixtures sintéticos ──────────────────────────────────────────────
 select tests.create_user('50000000-0000-4000-8000-000000000003'::uuid, 'admin-a@test.local',    'admin');
@@ -695,6 +695,135 @@ select ok(
 select is(
   (select prosecdef from pg_proc where oid = 'public.guardar_plan_suplementacion(uuid, jsonb)'::regprocedure),
   false, 'guardar_plan_suplementacion: SECURITY INVOKER (prosecdef = false)');
+
+-- ══════════════════ suplemento_logs (Sección 71, Radar R3) ══════════════════
+-- Identidad: unique(user_id, plan_suplemento_id, fecha) — un log por
+-- paciente, por toma programada, por día.
+--
+-- Fixtures NUEVAS y propias (d1/d2), no se reutilizan f1/f2: la sección
+-- de guardar_plan_suplementacion (arriba) ya reemplazó por completo el
+-- plan_suplementacion de Paciente A a mitad del archivo (f1 ya no existe
+-- para cuando llegamos aquí) — verificado antes de escribir esto, no
+-- asumido.
+insert into plan_suplementacion (id, user_id, suplemento_id, dosis)
+values ('50000000-0000-4000-8000-0000000000d1', '50000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-0000000000e1', '1 tableta');
+insert into plan_suplementacion (id, user_id, suplemento_id, dosis)
+values ('50000000-0000-4000-8000-0000000000d2', '50000000-0000-4000-8000-000000000002', '50000000-0000-4000-8000-0000000000e1', '1 tableta');
+
+-- 80. Paciente A INSERT log propio = permitido
+select tests.authenticate_as('50000000-0000-4000-8000-000000000001'::uuid);
+set local role authenticated;
+select lives_ok(
+  $$ insert into suplemento_logs (id, user_id, plan_suplemento_id, fecha, tomado)
+     values ('50000000-0000-4000-8000-0000000000c1', '50000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-0000000000d1', (now() at time zone 'America/Mexico_City')::date, true) $$,
+  'suplemento_logs: paciente propio INSERT = permitido');
+reset role;
+
+-- 81. Paciente A puede leer su propio log
+select tests.authenticate_as('50000000-0000-4000-8000-000000000001'::uuid);
+set local role authenticated;
+select is((select count(*) from suplemento_logs where id = '50000000-0000-4000-8000-0000000000c1')::int, 1,
+  'suplemento_logs: paciente propio SELECT = permitido');
+reset role;
+
+-- 82. Paciente A INSERT para user_id ajeno (suplantación) = bloqueado
+select tests.authenticate_as('50000000-0000-4000-8000-000000000001'::uuid);
+set local role authenticated;
+select throws_ok(
+  $$ insert into suplemento_logs (user_id, plan_suplemento_id, fecha, tomado)
+     values ('50000000-0000-4000-8000-000000000002', '50000000-0000-4000-8000-0000000000d2', (now() at time zone 'America/Mexico_City')::date, true) $$,
+  '42501', null, 'suplemento_logs: paciente INSERT para user_id ajeno = bloqueado');
+reset role;
+
+-- 83. Duplicado (mismo user_id+plan_suplemento_id+fecha) = bloqueado por UNIQUE
+select tests.authenticate_as('50000000-0000-4000-8000-000000000001'::uuid);
+set local role authenticated;
+select throws_ok(
+  $$ insert into suplemento_logs (user_id, plan_suplemento_id, fecha, tomado)
+     values ('50000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-0000000000d1', (now() at time zone 'America/Mexico_City')::date, false) $$,
+  '23505', null, 'suplemento_logs: UNIQUE(user_id, plan_suplemento_id, fecha) impide un segundo log');
+reset role;
+
+-- 84. Paciente A puede desmarcar (UPDATE tomado) su propio log de HOY —
+--     el checkbox ya era un toggle bidireccional, se preserva.
+select tests.authenticate_as('50000000-0000-4000-8000-000000000001'::uuid);
+set local role authenticated;
+select lives_ok(
+  $$ update suplemento_logs set tomado = false where id = '50000000-0000-4000-8000-0000000000c1' $$,
+  'suplemento_logs: paciente propio UPDATE (desmarcar) del log de HOY = permitido');
+reset role;
+
+-- 85. Paciente A NO puede modificar un log de un día pasado
+insert into suplemento_logs (id, user_id, plan_suplemento_id, fecha, tomado)
+values ('50000000-0000-4000-8000-0000000000c2', '50000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-0000000000d1', (now() at time zone 'America/Mexico_City')::date - 1, true);
+
+select tests.authenticate_as('50000000-0000-4000-8000-000000000001'::uuid);
+set local role authenticated;
+with actualizado as (
+  update suplemento_logs set tomado = false where id = '50000000-0000-4000-8000-0000000000c2' returning 1
+)
+select is((select count(*) from actualizado)::int, 0,
+  'suplemento_logs: paciente propio UPDATE de un día pasado = bloqueado');
+reset role;
+
+-- 86. Paciente A SELECT del log de Paciente B = bloqueado (aislamiento)
+insert into suplemento_logs (id, user_id, plan_suplemento_id, fecha, tomado)
+values ('50000000-0000-4000-8000-0000000000c3', '50000000-0000-4000-8000-000000000002', '50000000-0000-4000-8000-0000000000d2', (now() at time zone 'America/Mexico_City')::date, true);
+
+select tests.authenticate_as('50000000-0000-4000-8000-000000000001'::uuid);
+set local role authenticated;
+select is((select count(*) from suplemento_logs where id = '50000000-0000-4000-8000-0000000000c3')::int, 0,
+  'suplemento_logs: paciente ajeno SELECT = bloqueado');
+reset role;
+
+-- 87. Admin A (nutricionista_id real) SELECT del log de su Paciente A = permitido
+select tests.authenticate_as('50000000-0000-4000-8000-000000000003'::uuid);
+set local role authenticated;
+select is((select count(*) from suplemento_logs where id = '50000000-0000-4000-8000-0000000000c1')::int, 1,
+  'suplemento_logs: nutriólogo dueño SELECT = permitido');
+reset role;
+
+-- 88. Admin A SELECT del log de Paciente B (no es su paciente) = bloqueado
+select tests.authenticate_as('50000000-0000-4000-8000-000000000003'::uuid);
+set local role authenticated;
+select is((select count(*) from suplemento_logs where id = '50000000-0000-4000-8000-0000000000c3')::int, 0,
+  'suplemento_logs: nutriólogo ajeno SELECT = bloqueado');
+reset role;
+
+-- 89. Admin A NO puede modificar lo que reportó su propio paciente
+select tests.authenticate_as('50000000-0000-4000-8000-000000000003'::uuid);
+set local role authenticated;
+with actualizado as (
+  update suplemento_logs set tomado = false where id = '50000000-0000-4000-8000-0000000000c1' returning 1
+)
+select is((select count(*) from actualizado)::int, 0,
+  'suplemento_logs: nutriólogo dueño UPDATE del autorreporte del paciente = bloqueado');
+reset role;
+
+-- 90. Admin A NO puede insertar un log a nombre de su paciente
+select tests.authenticate_as('50000000-0000-4000-8000-000000000003'::uuid);
+set local role authenticated;
+select throws_ok(
+  $$ insert into suplemento_logs (user_id, plan_suplemento_id, fecha, tomado)
+     values ('50000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-0000000000d1', (now() at time zone 'America/Mexico_City')::date - 2, true) $$,
+  '42501', null, 'suplemento_logs: nutriólogo INSERT a nombre del paciente = bloqueado');
+reset role;
+
+-- 91. Superadmin SELECT de cualquier paciente = permitido
+select tests.authenticate_as('50000000-0000-4000-8000-000000000005'::uuid);
+set local role authenticated;
+select is((select count(*) from suplemento_logs where id = '50000000-0000-4000-8000-0000000000c3')::int, 1,
+  'suplemento_logs: superadmin SELECT = permitido');
+reset role;
+
+-- 92. Sin DELETE para nadie — paciente propio DELETE = bloqueado
+select tests.authenticate_as('50000000-0000-4000-8000-000000000001'::uuid);
+set local role authenticated;
+with borrado as (
+  delete from suplemento_logs where id = '50000000-0000-4000-8000-0000000000c1' returning 1
+)
+select is((select count(*) from borrado)::int, 0, 'suplemento_logs: paciente propio DELETE = bloqueado (sin policy)');
+reset role;
 
 select * from finish();
 rollback;

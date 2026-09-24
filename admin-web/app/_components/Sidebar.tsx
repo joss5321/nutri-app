@@ -18,6 +18,7 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
+  Activity,
 } from "lucide-react";
 
 type LucideIcon = React.ComponentType<{
@@ -35,6 +36,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/usuarios", label: "Pacientes", icon: Users },
+      { href: "/radar", label: "Radar", icon: Activity },
     ],
   },
   {

@@ -19,6 +19,12 @@ import { COLORS } from '@/constants/colors'
 import { useAuthStore } from '@/store/auth'
 import { useNewsStore } from '@/store/news'
 import { fetchMisEquivalentes, type Equivalente } from '@/lib/api/nutricion'
+import {
+  fetchNutricionCheckHoy,
+  registrarNutricionCheck,
+  type NutricionCheck,
+  type NutricionCheckEstado,
+} from '@/lib/api/nutricion-checks'
 
 // ─── EQUIVALENTES ─────────────────────────────────────────────────────────────
 const MEAL_LABELS = ['Desayuno', 'Colación 1', 'Comida', 'Colación 2', 'Cena']
@@ -41,6 +47,107 @@ function mapEquivalentesToGroups(equivalentes: Equivalente[]): FoodGroupRow[] {
     label: LABEL_MAP[eq.grupo] ?? eq.grupo,
     meals: [eq.desayuno, eq.colacion_1, eq.comida, eq.colacion_2, eq.cena],
   }))
+}
+
+// ─── Radar (Blueprint v1.1, R2) — check diario de nutrición ──────────────────
+const CHECK_OPTIONS: { value: NutricionCheckEstado; label: string; emoji: string }[] = [
+  { value: 'seguido', label: 'Lo seguí', emoji: '🙌' },
+  { value: 'parcial', label: 'Parcialmente', emoji: '🤏' },
+  { value: 'no_seguido', label: 'No lo seguí', emoji: '📝' },
+]
+
+const CHECK_SUMMARY: Record<NutricionCheckEstado, string> = {
+  seguido: 'Hoy: lo seguiste',
+  parcial: 'Hoy: parcialmente',
+  no_seguido: 'Hoy: no lo seguiste',
+}
+
+function DailyCheckCard() {
+  const { user } = useAuthStore()
+  const userId = user?.id ?? ''
+
+  const [loading, setLoading] = useState(true)
+  const [check, setCheck] = useState<NutricionCheck | null>(null)
+  const [editing, setEditing] = useState(false)
+  const [saving, setSaving] = useState<NutricionCheckEstado | null>(null)
+  const [showNota, setShowNota] = useState(false)
+  const [nota, setNota] = useState('')
+
+  useEffect(() => {
+    if (!userId) return
+    fetchNutricionCheckHoy(userId)
+      .then((c) => { setCheck(c); setNota(c?.nota ?? '') })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [userId])
+
+  const guardar = (estado: NutricionCheckEstado, notaTexto?: string) => {
+    if (!userId) return
+    setSaving(estado)
+    registrarNutricionCheck(userId, estado, notaTexto)
+      .then((c) => { setCheck(c); setEditing(false); setShowNota(false) })
+      .catch(() => Alert.alert('No se pudo guardar', 'Intenta de nuevo en unos segundos.'))
+      .finally(() => setSaving(null))
+  }
+
+  if (loading || !userId) return null
+
+  const showChooser = editing || !check
+
+  return (
+    <View style={s.checkCard}>
+      <Text style={s.checkTitle}>¿Cómo te fue hoy con tu plan?</Text>
+
+      {showChooser ? (
+        <>
+          <View style={s.checkOptionsRow}>
+            {CHECK_OPTIONS.map((opt) => (
+              <TouchableOpacity
+                key={opt.value}
+                style={s.checkOptionBtn}
+                onPress={() => guardar(opt.value, nota)}
+                disabled={saving !== null}
+                activeOpacity={0.8}
+              >
+                {saving === opt.value ? (
+                  <ActivityIndicator size="small" color={COLORS.primary} />
+                ) : (
+                  <>
+                    <Text style={{ fontSize: 20 }}>{opt.emoji}</Text>
+                    <Text style={s.checkOptionLabel}>{opt.label}</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+          {showNota ? (
+            <TextInput
+              style={s.checkNotaInput}
+              placeholder="Cena fuera / evento / viaje… (opcional)"
+              placeholderTextColor={COLORS.muted}
+              value={nota}
+              onChangeText={setNota}
+              maxLength={140}
+            />
+          ) : (
+            <TouchableOpacity onPress={() => setShowNota(true)}>
+              <Text style={s.checkNotaLink}>+ Agregar nota (opcional)</Text>
+            </TouchableOpacity>
+          )}
+        </>
+      ) : (
+        <TouchableOpacity style={s.checkSummaryRow} onPress={() => setEditing(true)} activeOpacity={0.75}>
+          <Text style={s.checkSummaryText}>
+            {CHECK_SUMMARY[check!.estado]} {CHECK_OPTIONS.find((o) => o.value === check!.estado)?.emoji}
+          </Text>
+          <View style={s.checkEditBtn}>
+            <Ionicons name="pencil" size={13} color={COLORS.primary} />
+            <Text style={s.checkEditText}>Cambiar</Text>
+          </View>
+        </TouchableOpacity>
+      )}
+    </View>
+  )
 }
 
 function EquivalentesTab() {
@@ -144,6 +251,8 @@ function EquivalentesTab() {
             </View>
           </View>
         </View>
+
+        <DailyCheckCard />
 
         <View style={s.grid}>
           {groups.map((g, i) => {
@@ -567,6 +676,8 @@ function RecetasTab() {
 // ─── SUPLEMENTACIÓN ───────────────────────────────────────────────────────────
 import {
   fetchMisSuplementos,
+  fetchSuplementoLogsHoy,
+  registrarSuplementoTomado,
   updateSuplementoHora,
   updateSuplementoMomento,
   updateSuplementoNotas,
@@ -610,8 +721,11 @@ function SuplementacionTab() {
       if (!userId) return
       if (isRefresh) setRefreshing(true)
       else setLoading(true)
-      fetchMisSuplementos(userId)
-        .then(setSuplementos)
+      Promise.all([fetchMisSuplementos(userId), fetchSuplementoLogsHoy(userId)])
+        .then(([sups, tomadosHoy]) => {
+          setSuplementos(sups)
+          setChecked(tomadosHoy)
+        })
         .catch(() => {})
         .finally(() => {
           setLoading(false)
@@ -623,12 +737,27 @@ function SuplementacionTab() {
 
   useFocusEffect(useCallback(() => { loadData() }, [loadData]))
 
+  // Radar (Blueprint v1.1, R3): Supabase es la fuente de verdad — el
+  // checkbox sigue siendo un toggle bidireccional (marcar/desmarcar),
+  // ahora persistido. Optimista + rollback si falla, mismo patrón que
+  // rutinas.tsx/nutricion.tsx (DailyCheckCard).
   const toggleCheck = (id: string) => {
+    if (!userId) return
+    const wasChecked = checked.has(id)
     setChecked((prev) => {
       const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
+      if (wasChecked) next.delete(id)
       else next.add(id)
       return next
+    })
+    registrarSuplementoTomado(userId, id, !wasChecked).catch(() => {
+      setChecked((prev) => {
+        const reverted = new Set(prev)
+        if (wasChecked) reverted.add(id)
+        else reverted.delete(id)
+        return reverted
+      })
+      Alert.alert('No se pudo guardar', 'Intenta de nuevo en unos segundos.')
     })
   }
 
@@ -1148,6 +1277,60 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+
+  // Check diario (Radar R2)
+  checkCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    gap: 12,
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+  },
+  checkTitle: { fontSize: 15, fontWeight: '700', color: COLORS.text },
+  checkOptionsRow: { flexDirection: 'row', gap: 8 },
+  checkOptionBtn: {
+    flex: 1,
+    minHeight: 64,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.inputBg,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 10,
+  },
+  checkOptionLabel: { fontSize: 11, fontWeight: '700', color: COLORS.text, textAlign: 'center' },
+  checkNotaInput: {
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 13,
+    color: COLORS.text,
+    backgroundColor: COLORS.inputBg,
+  },
+  checkNotaLink: { fontSize: 12, fontWeight: '600', color: COLORS.primary },
+  checkSummaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.completed,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  checkSummaryText: { fontSize: 13, fontWeight: '700', color: COLORS.completedText },
+  checkEditBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  checkEditText: { fontSize: 12, fontWeight: '700', color: COLORS.primary },
+
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   gridItem: {
     width: '30%',

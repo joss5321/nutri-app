@@ -2,51 +2,27 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, Image, Linking, Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { Image as ExpoImage } from 'expo-image'
 import { proxyGifUrl } from '@/lib/gif-proxy'
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Ionicons } from '@expo/vector-icons'
 import { randomUUID } from 'expo-crypto'
 import { useFocusEffect } from '@react-navigation/native'
 import { COLORS } from '@/constants/colors'
 import { useAuthStore } from '@/store/auth'
 import { useNewsStore } from '@/store/news'
-import { fetchMiRutina, type RutinaCompleta, type SerieDetalle } from '@/lib/api/rutinas'
+import {
+  fetchMiRutina,
+  fetchDiasCompletadosSemana,
+  marcarDiaCompletado,
+  type RutinaCompleta,
+  type SerieDetalle,
+} from '@/lib/api/rutinas'
 import { fetchEjercicioLogs, fetchAllEjercicioLogs, createEjercicioLog, deleteEjercicioLogsForToday, type EjercicioLog } from '@/lib/api/ejercicio_logs'
+import { getRadarWeekStart, getRadarWeekEnd } from '@/lib/radar-date'
 
-// ─── Persistencia del progreso semanal ───────────────────────────────────────
-const WEEK_KEY = '@rutinas_week_state'
-
-function getCurrentMondayISO(): string {
-  const now = new Date()
-  const day = now.getDay()                       // 0=Dom, 1=Lun, ..., 6=Sab
-  const diff = day === 0 ? -6 : 1 - day         // días hasta el lunes anterior
-  const monday = new Date(now)
-  monday.setDate(now.getDate() + diff)
-  return monday.toISOString().slice(0, 10)       // "YYYY-MM-DD"
-}
-
-async function loadWeekState(): Promise<number[]> {
-  try {
-    const raw = await AsyncStorage.getItem(WEEK_KEY)
-    if (!raw) return []
-    const stored = JSON.parse(raw) as { weekStart: string; completedDays: number[] }
-    if (stored.weekStart !== getCurrentMondayISO()) {
-      await AsyncStorage.removeItem(WEEK_KEY)    // nueva semana → limpiar
-      return []
-    }
-    return stored.completedDays ?? []
-  } catch {
-    return []
-  }
-}
-
-async function saveWeekState(completedDays: number[]): Promise<void> {
-  try {
-    await AsyncStorage.setItem(
-      WEEK_KEY,
-      JSON.stringify({ weekStart: getCurrentMondayISO(), completedDays }),
-    )
-  } catch {}
-}
+// ─── Progreso semanal ─────────────────────────────────────────────────────────
+// Radar (Blueprint v1.1, R1): Supabase es la fuente de verdad — "día
+// completado" ya no vive solo en el teléfono. La semana se calcula con la
+// zona horaria oficial de Radar (America/Mexico_City, ver lib/radar-date.ts)
+// para que el corte de "qué semana es hoy" sea consistente con el servidor.
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 type DayStatus = 'completado' | 'pendiente' | 'descanso'
@@ -59,14 +35,15 @@ interface Exercise {
   series_detalle: SerieDetalle[] | null
 }
 interface Day {
-  num: number; name: string; status: DayStatus; isRest: boolean; exercises: Exercise[]
+  id: string; num: number; name: string; status: DayStatus; isRest: boolean; exercises: Exercise[]
 }
 
-function mapRutinaToDays(rutina: RutinaCompleta): Day[] {
+function mapRutinaToDays(rutina: RutinaCompleta, completedDiaIds: Set<string>): Day[] {
   return rutina.rutina_dias.map((dia) => ({
+    id: dia.id,
     num: dia.numero_dia,
     name: dia.nombre_dia,
-    status: dia.es_descanso ? 'descanso' : 'pendiente',
+    status: dia.es_descanso ? 'descanso' : completedDiaIds.has(dia.id) ? 'completado' : 'pendiente',
     isRest: dia.es_descanso,
     exercises: dia.rutina_ejercicios.map((ej) => ({
       id: ej.id,
@@ -580,20 +557,18 @@ export default function RutinasScreen() {
   const loadData = useCallback((isRefresh = false) => {
     if (!userId) return
     if (isRefresh) setRefreshing(true); else setLoading(true)
-    Promise.all([fetchMiRutina(userId), fetchAllEjercicioLogs(userId), loadWeekState()])
-      .then(([rutina, logs, completedDays]) => {
+    Promise.all([
+      fetchMiRutina(userId),
+      fetchAllEjercicioLogs(userId),
+      fetchDiasCompletadosSemana(userId, getRadarWeekStart(), getRadarWeekEnd()),
+    ])
+      .then(([rutina, logs, completedDiaIds]) => {
         if (rutina) {
-          const mapped = mapRutinaToDays(rutina)
-          // Restaurar días completados de esta semana
-          const withStatus = mapped.map((d) =>
-            !d.isRest && completedDays.includes(d.num)
-              ? { ...d, status: 'completado' as DayStatus }
-              : d
-          )
-          setDays(withStatus)
+          const mapped = mapRutinaToDays(rutina, new Set(completedDiaIds))
+          setDays(mapped)
           setRutinaNombre(rutina.nombre)
           setAllExercises(buildProgressList(mapped, logs))
-          const firstWorkout = withStatus.find((d) => !d.isRest)
+          const firstWorkout = mapped.find((d) => !d.isRest)
           if (firstWorkout) setExpanded([firstWorkout.num])
         } else {
           setDays([])
@@ -621,18 +596,22 @@ export default function RutinasScreen() {
   const toggleDay = (num: number) =>
     setExpanded((prev) => prev.includes(num) ? prev.filter((d) => d !== num) : [...prev, num])
 
-  const markComplete = (dayNum: number) => {
-    setDays((prev) => {
-      const next = prev.map((d) =>
-        d.num === dayNum ? { ...d, status: 'completado' as DayStatus } : d
-      )
-      const completed = next.filter((d) => !d.isRest && d.status === 'completado').map((d) => d.num)
-      saveWeekState(completed)
-      return next
+  // Optimista: refleja "completado" de inmediato y persiste en Supabase.
+  // Si falla, revierte el día a 'pendiente' y avisa — nunca se queda en un
+  // estado que el servidor no confirmó (Supabase es la fuente de verdad,
+  // no el teléfono).
+  const markComplete = (day: Day) => {
+    if (!userId || day.status === 'completado') return
+    setDays((prev) => prev.map((d) => d.id === day.id ? { ...d, status: 'completado' as DayStatus } : d))
+    marcarDiaCompletado(userId, day.id).catch(() => {
+      setDays((prev) => prev.map((d) => d.id === day.id ? { ...d, status: 'pendiente' as DayStatus } : d))
+      Alert.alert('No se pudo guardar', 'No se pudo marcar el día como completado. Intenta de nuevo.')
     })
   }
 
-  // Detectar semana completa y ofrecer reinicio
+  // Detectar semana completa — solo felicita; no hay "reiniciar" manual,
+  // la semana siguiente empieza vacía sola (Supabase es la fuente de verdad
+  // y dias_completados de la semana nueva, por fecha, no tiene filas).
   useEffect(() => {
     if (loading) return
     const nonRest = days.filter((d) => !d.isRest)
@@ -646,15 +625,6 @@ export default function RutinasScreen() {
     Alert.alert(
       '¡Semana completa! 🎉',
       'Completaste todos los entrenamientos de la semana. ¡Excelente trabajo!',
-      [{
-        text: 'Reiniciar semana',
-        onPress: () => {
-          AsyncStorage.removeItem(WEEK_KEY).catch(() => {})
-          weekAlertShown.current = false
-          setDays((prev) => prev.map((d) => d.isRest ? d : { ...d, status: 'pendiente' as DayStatus }))
-        },
-      }],
-      { cancelable: false },
     )
   }, [days, loading])
 
@@ -779,7 +749,7 @@ export default function RutinasScreen() {
                         <ExerciseCard key={ex.id} ex={ex} index={i} onPress={() => setSelectedExercise(ex)} />
                       ))}
                       {day.status === 'pendiente' && (
-                        <TouchableOpacity style={s.completeBtn} onPress={() => markComplete(day.num)} activeOpacity={0.85}>
+                        <TouchableOpacity style={s.completeBtn} onPress={() => markComplete(day)} activeOpacity={0.85}>
                           <Ionicons name="checkmark-circle" size={18} color={COLORS.white} />
                           <Text style={{ color: COLORS.white, fontWeight: '700', fontSize: 14 }}>
                             Marcar día como completado

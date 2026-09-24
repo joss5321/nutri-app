@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>MyFitTrack — Manual de Usuario</title>
+<style>
+  @page { size: A4; margin: 20mm 18mm 22mm 18mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    color: #1c2b2f;
+    font-size: 10.8pt;
+    line-height: 1.55;
+    margin: 0;
+  }
+  :root {
+    --ink: #192C31;
+    --highlight: #FFF824;
+    --primary: #2EBD8C;
+    --sidebar: #0B2B22;
+    --muted: #6b7a7d;
+    --border: #dfe6e5;
+  }
+  .cover {
+    height: 257mm;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    background: linear-gradient(160deg, var(--ink) 0%, #10201f 100%);
+    color: #fff;
+    padding: 24mm;
+    page-break-after: always;
+  }
+  .cover .logotype { font-size: 15pt; letter-spacing: .12em; text-transform: uppercase; color: var(--highlight); font-weight: 700; margin-bottom: 6mm; }
+  .cover h1 { font-size: 34pt; margin: 0 0 4mm 0; line-height: 1.15; }
+  .cover .subtitle { font-size: 13pt; color: #d7e6e3; max-width: 120mm; }
+  .cover .meta { margin-top: 18mm; font-size: 9.5pt; color: #9db3ae; border-top: 1px solid rgba(255,255,255,.18); padding-top: 5mm; }
+
+  .toc { page-break-after: always; }
+  .toc h2 { color: var(--ink); }
+  .toc ol { padding-left: 18px; }
+  .toc li { margin-bottom: 3mm; }
+  .toc .part { font-weight: 700; color: var(--ink); margin-top: 6mm; }
+
+  h1.part-title {
+    font-size: 20pt;
+    color: var(--ink);
+    border-bottom: 3px solid var(--highlight);
+    padding-bottom: 3mm;
+    margin-top: 0;
+    page-break-before: always;
+  }
+  h2 { font-size: 14pt; color: var(--ink); margin-top: 9mm; margin-bottom: 3mm; border-left: 4px solid var(--primary); padding-left: 3mm; }
+  h3 { font-size: 11.5pt; color: #234; margin-top: 6mm; margin-bottom: 2mm; }
+  p { margin: 2mm 0; }
+  ol, ul { margin: 2mm 0; padding-left: 20px; }
+  li { margin-bottom: 1.3mm; }
+
+  .callout {
+    background: #eefbf5;
+    border-left: 4px solid var(--primary);
+    padding: 3mm 4mm;
+    margin: 4mm 0;
+    border-radius: 2px;
+    font-size: 10pt;
+  }
+  .callout.warn { background: #fff7e6; border-left-color: #e0a300; }
+  .callout.role { background: #f2f5f9; border-left-color: #4a6fa5; }
+  .callout strong.tag { text-transform: uppercase; font-size: 8.5pt; letter-spacing: .05em; display: block; margin-bottom: 1mm; color: var(--muted); }
+
+  table.steps { width: 100%; border-collapse: collapse; margin: 3mm 0 5mm 0; font-size: 9.8pt; }
+  table.steps th { background: var(--ink); color: #fff; text-align: left; padding: 2mm 3mm; }
+  table.steps td { padding: 2mm 3mm; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table.steps tr:nth-child(even) td { background: #f8faf9; }
+
+  .badge { display: inline-block; font-size: 8.3pt; font-weight: 700; padding: .8mm 2.3mm; border-radius: 3px; margin-right: 1.5mm; }
+  .badge.paciente { background: #e6f7f0; color: #14805e; }
+  .badge.admin { background: #eef1fb; color: #3a4fa0; }
+  .badge.superadmin { background: #fdeee9; color: #b5502a; }
+
+  .faq dt { font-weight: 700; margin-top: 4mm; color: var(--ink); }
+  .faq dd { margin: 1mm 0 0 0; color: #333; }
+
+  footer.pagefoot { font-size: 8pt; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<section class="cover">
+  <div class="logotype">MyFitTrack</div>
+  <h1>Manual de Usuario</h1>
+  <div class="subtitle">Guía completa para pacientes, nutriólogos y administradores de la plataforma MyFitTrack — app móvil y panel web.</div>
+  <div class="meta">Versión 1.0 · Documento generado a partir del estado real del producto</div>
+</section>
+
+<section class="toc">
+  <h2>Contenido</h2>
+  <ol>
+    <li>Introducción — qué es MyFitTrack y quién usa qué</li>
+    <li class="part">Parte 1 — App móvil (pacientes)</li>
+    <li>Crear tu cuenta y elegir a tu nutriólogo</li>
+    <li>Iniciar sesión y qué significa "cuenta pendiente"</li>
+    <li>Recuperar tu contraseña</li>
+    <li>Tu progreso y medidas</li>
+    <li>Tus rutinas de entrenamiento</li>
+    <li>Tu plan de nutrición</li>
+    <li>Suplementación</li>
+    <li>Tu perfil y tus citas</li>
+    <li>Tu membresía</li>
+    <li class="part">Parte 2 — Panel web (nutriólogos y administradores)</li>
+    <li>Iniciar sesión en el panel</li>
+    <li>Dashboard</li>
+    <li>Pacientes</li>
+    <li>Nutrición</li>
+    <li>Entrenamiento</li>
+    <li>Catálogos: alimentos, recetas, ejercicios, suplementos</li>
+    <li>Administradores (solo superadmin)</li>
+    <li>Configuración de tu cuenta</li>
+    <li class="part">Preguntas frecuentes</li>
+  </ol>
+</section>
+
+<h1 class="part-title">Introducción</h1>
+
+<p>MyFitTrack es la plataforma de seguimiento nutricional y de entrenamiento que conecta a un paciente con su nutriólogo. Tiene dos partes:</p>
+
+<table class="steps">
+  <tr><th>Componente</th><th>Para quién</th><th>Qué se hace ahí</th></tr>
+  <tr><td><strong>App móvil</strong></td><td><span class="badge paciente">Paciente</span></td><td>Seguir tu plan de nutrición y entrenamiento día a día, registrar tu progreso, ver tus recetas y citas.</td></tr>
+  <tr><td><strong>Panel web (admin-web)</strong></td><td><span class="badge admin">Nutriólogo</span> <span class="badge superadmin">Superadmin</span></td><td>Dar de alta y aprobar pacientes, diseñar sus planes de nutrición y rutinas, gestionar catálogos de alimentos/recetas/ejercicios/suplementos, y (solo superadmin) gestionar cuentas de otros nutriólogos.</td></tr>
+</table>
+
+<div class="callout role">
+  <strong class="tag">Roles</strong>
+  Cada cuenta tiene exactamente un rol: <strong>paciente</strong> (usa solo la app móvil), <strong>nutriólogo/administrador</strong> (usa el panel web, gestiona a sus propios pacientes) o <strong>superadministrador</strong> (usa el panel web, ve y gestiona todo, incluyendo otras cuentas de nutriólogo).
+</div>
+
+<h1 class="part-title">Parte 1 — App móvil (pacientes)</h1>
+
+<h2>1. Crear tu cuenta y elegir a tu nutriólogo</h2>
+<p>Al abrir la app por primera vez verás la pantalla de bienvenida. Toca <strong>"Comenzar ahora"</strong> para registrarte.</p>
+<table class="steps">
+  <tr><th>Paso</th><th>Qué hacer</th></tr>
+  <tr><td>1</td><td>Elige a tu nutriólogo de la lista disponible — esta elección es obligatoria y se hace antes de crear tu contraseña.</td></tr>
+  <tr><td>2</td><td>Captura tu nombre, correo electrónico y una contraseña de al menos 8 caracteres.</td></tr>
+  <tr><td>3</td><td>Confirma el registro. Recibirás un correo de confirmación de cuenta.</td></tr>
+</table>
+<div class="callout">
+  <strong class="tag">Importante</strong>
+  Crear tu cuenta no te da acceso inmediato. Tu nutriólogo debe <strong>aprobar</strong> tu registro desde el panel web antes de que puedas entrar a la app — ver la sección siguiente.
+</div>
+
+<h2>2. Iniciar sesión y qué significa "cuenta pendiente"</h2>
+<p>Al intentar iniciar sesión con tu correo y contraseña, la app revisa el estado de tu cuenta:</p>
+<table class="steps">
+  <tr><th>Estado de tu cuenta</th><th>Qué ves al iniciar sesión</th></tr>
+  <tr><td>Pendiente de aprobación</td><td>Mensaje "Cuenta pendiente de aprobación por tu nutriólogo" — no puedes entrar todavía.</td></tr>
+  <tr><td>Rechazada</td><td>Mensaje de solicitud rechazada — contacta a tu nutriólogo.</td></tr>
+  <tr><td>Deshabilitada</td><td>Mensaje de cuenta deshabilitada.</td></tr>
+  <tr><td>Aprobada y activa</td><td>Entras normalmente a la app.</td></tr>
+</table>
+
+<h2>3. Recuperar tu contraseña</h2>
+<p>En la pantalla de inicio de sesión toca <strong>"¿Olvidaste tu contraseña?"</strong>, captura tu correo y recibirás un enlace para crear una nueva contraseña (mínimo 8 caracteres).</p>
+
+<h2>4. Tu progreso y medidas</h2>
+<p>La pestaña <strong>Progreso</strong> es donde registras tus medidas corporales.</p>
+<ul>
+  <li>La primera vez, llena el formulario inicial: sexo, edad, peso, estatura, cintura, cadera, % músculo, % grasa, brazo y pantorrilla.</li>
+  <li>Después de tu primer registro verás tu historial de medidas y una gráfica interactiva de peso, cintura, cadera e IMC a lo largo del tiempo.</li>
+  <li>Desliza hacia abajo para actualizar la pantalla.</li>
+</ul>
+
+<h2>5. Tus rutinas de entrenamiento</h2>
+<p>La pestaña <strong>Rutinas</strong> muestra la rutina semanal que tu nutriólogo te asignó, organizada por día.</p>
+<table class="steps">
+  <tr><th>Qué puedes hacer</th><th>Cómo</th></tr>
+  <tr><td>Ver los ejercicios de un día</td><td>Toca el día para expandirlo.</td></tr>
+  <tr><td>Ver el detalle de un ejercicio</td><td>Toca el ejercicio — verás video/GIF de la técnica, descripción y el plan de series/repeticiones/peso.</td></tr>
+  <tr><td>Registrar tu peso usado</td><td>Dentro del detalle del ejercicio, captura el peso que usaste en cada serie del día. Tu historial queda agrupado por sesión.</td></tr>
+  <tr><td>Marcar un día como completado</td><td>Al terminar todos los ejercicios del día, márcalo como completado — este dato queda guardado.</td></tr>
+  <tr><td>Ver tu progreso por ejercicio</td><td>En la sub-pestaña "Progreso" verás una gráfica de tu mejor peso e historial por ejercicio.</td></tr>
+</table>
+<div class="callout">Si tu nutriólogo actualiza tu rutina, verás un aviso dentro de la app.</div>
+
+<h2>6. Tu plan de nutrición</h2>
+<p>La pestaña <strong>Plan Nutricional</strong> tiene tres secciones:</p>
+<h3>Equivalentes</h3>
+<p>Muestra cuántos equivalentes de cada grupo de alimentos te corresponden por tiempo de comida (desayuno, colación 1, comida, colación 2, cena). Cada día puedes responder <strong>"¿Cómo te fue hoy con tu plan?"</strong> eligiendo <em>Seguido</em>, <em>Parcial</em> o <em>No seguido</em>, y agregar una nota opcional — esto ayuda a tu nutriólogo a dar seguimiento a tu adherencia.</p>
+<h3>Recetas</h3>
+<p>Lista de recetas que tu nutriólogo te asignó, organizadas por tiempo de comida y con buscador. Toca una receta para ver sus ingredientes y pasos de preparación.</p>
+<h3>Suplementación</h3>
+<p>Marca cada suplemento como tomado en el día, ajusta la hora y el momento del día en que lo tomas, agrega notas personales, y activa recordatorios (notificaciones del celular a la hora que configures).</p>
+
+<h2>7. Suplementación</h2>
+<p>Ver la sección anterior — la suplementación vive dentro de la pestaña Plan Nutricional.</p>
+
+<h2>8. Tu perfil y tus citas</h2>
+<p>La pestaña <strong>Perfil</strong> reúne:</p>
+<ul>
+  <li>Tus datos personales (nombre, fecha de nacimiento, sexo, estatura) — puedes editarlos y subir una foto.</li>
+  <li>Tus próximas citas con tu nutriólogo — puedes <strong>confirmar</strong> o <strong>cancelar</strong> una cita pendiente.</li>
+  <li>Tu plan de membresía actual.</li>
+  <li>El botón para cerrar sesión.</li>
+</ul>
+
+<h2>9. Tu membresía</h2>
+<p>Desde la pestaña Perfil puedes ver tu plan actual y tocar <strong>"Elegir plan"</strong> para cambiarlo. Esto abre el pago seguro de Stripe dentro de la app; al terminar el pago tu plan se actualiza automáticamente.</p>
+
+<h1 class="part-title">Parte 2 — Panel web (nutriólogos y administradores)</h1>
+
+<h2>1. Iniciar sesión en el panel</h2>
+<p>Entra con tu correo y contraseña. El panel solo permite el acceso a cuentas con rol de <span class="badge admin">Administrador</span> o <span class="badge superadmin">Superadministrador</span> — si tu cuenta no tiene ese rol, verás un mensaje de "No tienes permisos" y se cerrará tu sesión.</p>
+<div class="callout warn">
+  <strong class="tag">Cómo se crea una cuenta de nutriólogo</strong>
+  El registro público del panel (botón "Crear cuenta") crea una cuenta sin rol de administrador — un superadministrador debe promoverla desde <strong>Administradores</strong> (ver más abajo) antes de poder usarla.
+</div>
+
+<h2>2. Dashboard</h2>
+<p>Pantalla de inicio con un resumen: total de usuarios (y su distribución Premium/Básico), rutinas activas, tamaño del catálogo de recetas, y citas pendientes de confirmar (toca la tarjeta para ver el listado completo). También muestra tus últimos pacientes registrados y una gráfica de distribución de planes.</p>
+
+<h2>3. Pacientes</h2>
+<p>Esta es la sección más usada del panel — gestiona a todos tus pacientes.</p>
+<table class="steps">
+  <tr><th>Acción</th><th>Cómo</th></tr>
+  <tr><td>Ver solicitudes pendientes</td><td>Usa la pestaña "Pendientes" de la lista.</td></tr>
+  <tr><td>Aprobar o rechazar un registro</td><td>Desde la fila del paciente, usa los botones de aprobar/rechazar.</td></tr>
+  <tr><td>Habilitar/deshabilitar un paciente ya aprobado</td><td>Desde su fila, alterna su estado activo.</td></tr>
+  <tr><td>Dar de alta un paciente manualmente</td><td>Botón "Nuevo paciente" — útil para pacientes que aún no usan la app móvil (nombre, fecha de nacimiento, sexo, teléfono, correo).</td></tr>
+  <tr><td>Ver el detalle de un paciente</td><td>Botón "Ver detalle" — abre una ventana con 4 pestañas: Historial Clínico, Progreso de Medidas, Progreso de Ejercicios y Próximas Citas.</td></tr>
+  <tr><td>Agregar/eliminar una cita</td><td>Dentro del detalle del paciente, pestaña "Próximas Citas" — captura fecha, hora, tipo, profesional, modalidad y notas.</td></tr>
+</table>
+
+<h2>4. Nutrición</h2>
+<p>Elige un paciente de la lista y toca "Asignar" para abrir su plan nutricional, con 4 pestañas:</p>
+<ul>
+  <li><strong>Dietocálculo</strong> — formulario de cálculo nutricional.</li>
+  <li><strong>Cálculo de equivalentes</strong> — asigna equivalentes de grupos de alimentos por tiempo de comida.</li>
+  <li><strong>Recetas</strong> — asigna recetas del catálogo al plan del paciente.</li>
+  <li><strong>Suplementos</strong> — asigna suplementos del catálogo.</li>
+</ul>
+<p>Puedes exportar el plan completo a PDF con el botón "Exportar plan a PDF".</p>
+
+<h2>5. Entrenamiento</h2>
+<p>Elige un paciente y toca "Ver rutina" para construir o editar su rutina semanal: días de entrenamiento, días de descanso, ejercicios por día, series, repeticiones, peso sugerido, descanso entre series, RIR/RPE.</p>
+
+<h2>6. Catálogos: alimentos, recetas, ejercicios, suplementos</h2>
+<table class="steps">
+  <tr><th>Catálogo</th><th>Qué puedes hacer</th></tr>
+  <tr><td>Alimentos</td><td>Buscar y filtrar por categoría; crear, editar o eliminar alimentos con su información nutricional.</td></tr>
+  <tr><td>Recetas</td><td>Buscar y ver el detalle (ingredientes, preparación, información nutricional); crear, editar, duplicar o eliminar recetas; vincular ingredientes al catálogo de alimentos para que las macros se calculen automáticamente.</td></tr>
+  <tr><td>Ejercicios</td><td>Filtrar por músculo, parte del cuerpo, equipo, dificultad y categoría; ver el detalle con video/GIF; crear, editar o eliminar.</td></tr>
+  <tr><td>Suplementos</td><td>Crear, editar o eliminar suplementos del catálogo (nombre, marca, gramaje, descripción, imagen).</td></tr>
+</table>
+<div class="callout">Solo puedes editar o eliminar los elementos que tú creaste. Los superadministradores también pueden editar elementos "globales" sin dueño asignado.</div>
+
+<h2>7. Administradores <span class="badge superadmin">Solo superadmin</span></h2>
+<p>Esta sección solo aparece en el menú si tu cuenta es superadministrador.</p>
+<ul>
+  <li><strong>Crear una cuenta de nutriólogo nueva</strong> — da de alta el correo y contraseña; la cuenta queda lista para usar el panel de inmediato.</li>
+  <li><strong>Editar</strong> el nombre o la foto de cualquier administrador.</li>
+  <li><strong>Cambiar tu propia contraseña</strong> (no la de otros administradores).</li>
+  <li><strong>Quitar el acceso de administrador</strong> a una cuenta (no puedes quitarte el tuyo ni el de otro superadministrador).</li>
+</ul>
+
+<h2>8. Configuración de tu cuenta</h2>
+<p>Desde "Configuración" en el menú puedes subir tu foto de perfil, editar tu nombre y cambiar tu contraseña. Tu correo, rol, sexo y fecha de registro se muestran de solo lectura.</p>
+
+<h1 class="part-title">Preguntas frecuentes</h1>
+<dl class="faq">
+  <dt>Me registré en la app pero no puedo entrar, ¿por qué?</dt>
+  <dd>Tu cuenta necesita ser aprobada por tu nutriólogo desde el panel web antes de poder usar la app. Contacta a tu nutriólogo si tu solicitud lleva varios días sin respuesta.</dd>
+
+  <dt>¿Puedo cambiar de nutriólogo después de registrarme?</dt>
+  <dd>La elección del nutriólogo se hace una sola vez durante el registro. Contacta directamente a tu nutriólogo o al soporte de la plataforma para cualquier cambio.</dd>
+
+  <dt>Me registré en el panel web pero no veo ninguna opción, ¿qué pasa?</dt>
+  <dd>El registro público del panel no otorga automáticamente el rol de administrador. Un superadministrador debe promover tu cuenta desde "Administradores".</dd>
+
+  <dt>¿Cómo marco un día de entrenamiento como completado si me equivoqué?</dt>
+  <dd>Dentro de la app, un día ya marcado no puede desmarcarse el mismo día — esto es intencional para mantener un historial confiable. Si necesitas corregir un registro, contacta a tu nutriólogo.</dd>
+
+  <dt>¿Puedo editar los alimentos, recetas o ejercicios que creó otro nutriólogo?</dt>
+  <dd>No, salvo que tengas rol de superadministrador y el elemento no tenga un dueño asignado.</dd>
+
+  <dt>¿Dónde veo el estado de pago de mi membresía?</dt>
+  <dd>Desde la pestaña Perfil en la app móvil. El panel web no gestiona pagos — solo muestra el plan del paciente como referencia.</dd>
+</dl>
+
+<footer class="pagefoot">MyFitTrack — Manual de Usuario</footer>
+
+</body>
+</html>

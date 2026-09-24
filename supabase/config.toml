@@ -248,6 +248,13 @@ otp_expiry = 3600
 # subject = "You have been invited"
 # content_path = "./supabase/templates/invite.html"
 
+# Plantilla de recuperación de contraseña en español (solo local — el
+# hosted real se configura aparte en el dashboard de Supabase,
+# Authentication > Email Templates, ver reporte de esta migración).
+[auth.email.template.recovery]
+subject = "Restablece tu contraseña de MyFitTrack"
+content_path = "./supabase/templates/recovery.html"
+
 # Uncomment to customize notification email template
 # [auth.email.notification.password_changed]
 # enabled = true

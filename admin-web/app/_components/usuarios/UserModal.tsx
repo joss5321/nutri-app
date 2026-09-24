@@ -6,7 +6,8 @@ import { fetchRutinaActiva, type Rutina } from "@/app/_data/rutinas";
 import { fetchEjercicioLogsByUser, type EjercicioLog } from "@/app/_data/ejercicio_logs";
 import InformacionPersonalForm from "./InformacionPersonalForm";
 import CitasManager from "./CitasManager";
-import { X, Crown, Lock, Cake, Stethoscope, BarChart3, Dumbbell, CalendarDays, Trophy } from "lucide-react";
+import RadarTab from "@/app/_components/radar/RadarTab";
+import { X, Crown, Lock, Cake, Stethoscope, BarChart3, Dumbbell, CalendarDays, Trophy, Activity } from "lucide-react";
 
 type LucideIcon = React.ComponentType<{ size?: number; className?: string; strokeWidth?: number }>;
 
@@ -631,10 +632,18 @@ function formatFecha(fecha: string | null): string {
 }
 
 // ── Modal principal ──────────────────────────────────────────
-type Tab = "historial" | "progresoMedidas" | "progresoEjercicios" | "citas";
+type Tab = "historial" | "progresoMedidas" | "progresoEjercicios" | "citas" | "radar";
 
-export default function UserModal({ perfil: perfilInicial, onClose }: { perfil: Perfil; onClose: () => void }) {
-  const [tab, setTab] = useState<Tab>("historial");
+export default function UserModal({
+  perfil: perfilInicial,
+  onClose,
+  initialTab = "historial",
+}: {
+  perfil: Perfil;
+  onClose: () => void;
+  initialTab?: Tab;
+}) {
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [perfil, setPerfil] = useState<Perfil>(perfilInicial);
 
   const refreshPerfil = () => {
@@ -648,6 +657,7 @@ export default function UserModal({ perfil: perfilInicial, onClose }: { perfil: 
     { key: "progresoMedidas",    label: "Progreso Medidas",    Icon: BarChart3 },
     { key: "progresoEjercicios", label: "Progreso Ejercicios", Icon: Dumbbell },
     { key: "citas",              label: "Próximas Citas",      Icon: CalendarDays },
+    { key: "radar",              label: "Radar",               Icon: Activity },
   ];
 
   const nombre = perfil.nombre_completo || "Usuario sin nombre";
@@ -719,6 +729,7 @@ export default function UserModal({ perfil: perfilInicial, onClose }: { perfil: 
           {tab === "progresoMedidas"    && <ProgresoMedidas userId={perfil.id} />}
           {tab === "progresoEjercicios" && <ProgresoEjercicios userId={perfil.id} />}
           {tab === "citas"              && <CitasManager userId={perfil.id} />}
+          {tab === "radar"              && <RadarTab userId={perfil.id} />}
         </div>
       </div>
     </div>

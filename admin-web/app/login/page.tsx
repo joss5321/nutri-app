@@ -3,6 +3,7 @@ import { Suspense, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import PasswordInput from "./PasswordInput";
+import ForgotPasswordModal from "@/app/_components/ForgotPasswordModal";
 import { useSearchParams } from "next/navigation";
 import { Mail, Utensils, Dumbbell, ClipboardList } from "lucide-react";
 
@@ -23,6 +24,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showForgot, setShowForgot] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -158,14 +160,19 @@ export default function LoginPage() {
               {loading ? "Ingresando..." : "Ingresar"}
             </button>
 
-            <a href="/forgot-password" className="text-center text-primary text-sm font-semibold hover:underline">
-              Olvide mi contraseña
-            </a>
+            <button
+              type="button"
+              onClick={() => setShowForgot(true)}
+              className="text-center text-primary text-sm font-semibold hover:underline"
+            >
+              Olvidé mi contraseña
+            </button>
           </form>
 
         </div>
       </div>
     </div>
+    {showForgot && <ForgotPasswordModal onClose={() => setShowForgot(false)} />}
     </>
   );
 }

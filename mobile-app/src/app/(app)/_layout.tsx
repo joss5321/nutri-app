@@ -1,10 +1,11 @@
 import { useEffect } from 'react'
-import { Platform, StyleSheet, View } from 'react-native'
+import { AppState, Platform, StyleSheet, View } from 'react-native'
 import { Tabs, useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuthStore } from '@/store/auth'
 import { useNewsStore } from '@/store/news'
 import { COLORS } from '@/constants/colors'
+import { registrarActividadSiCorresponde } from '@/lib/activity'
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name']
 
@@ -64,6 +65,19 @@ export default function AppLayout() {
     if (user?.id) {
       checkAll(user.id)
     }
+  }, [user?.id])
+
+  // Radar (Blueprint v1.1, R3) — PATIENT_ACTIVE: una señal por día, nunca
+  // por pantalla. Se registra al entrar a la zona autenticada y cada vez
+  // que la app vuelve a primer plano; registrarActividadSiCorresponde ya
+  // trae su propio guard local para no escribir más de una vez al día.
+  useEffect(() => {
+    if (!user?.id) return
+    registrarActividadSiCorresponde(user.id)
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') registrarActividadSiCorresponde(user.id)
+    })
+    return () => sub.remove()
   }, [user?.id])
 
   return (

@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import { getRadarToday } from '@/lib/radar-date'
 
 export type EjercicioLog = {
   id: string
@@ -40,7 +41,12 @@ export async function deleteEjercicioLogsForToday(
   userId: string,
   ejercicioId: string,
 ): Promise<void> {
-  const today = new Date().toISOString().slice(0, 10)
+  // R2.5 (Blueprint v1.1): "hoy" se calcula con la zona horaria oficial de
+  // Radar (America/Mexico_City) — antes usaba toISOString(), que es UTC y
+  // podía registrar/borrar bajo la fecha equivocada entre medianoche y
+  // ~6am hora de México. ejercicio_logs es una señal que Radar usará
+  // directamente para calcular adherencia de entrenamiento.
+  const today = getRadarToday()
   const { error } = await supabase
     .from('ejercicio_logs')
     .delete()
@@ -65,7 +71,7 @@ export async function createEjercicioLog(
       peso_kg: pesoKg,
       numero_serie: numeroSerie,
       sesion_id: sesionId,
-      fecha: new Date().toISOString().slice(0, 10),
+      fecha: getRadarToday(),
     })
   if (error) throw error
 }

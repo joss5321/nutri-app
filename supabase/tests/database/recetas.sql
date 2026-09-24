@@ -641,7 +641,8 @@ select lives_ok(
        '60000000-0000-4000-8000-0000000000b1'::uuid,
        'Receta RPC catálogo (editada)', null, 'Desayuno', null, null, null, null, null, null, null, null, null, null, null,
        '[{"descripcion":"Ingrediente nuevo 1"},{"descripcion":"Ingrediente nuevo 2"}]'::jsonb,
-       '["Paso nuevo 1", "Paso nuevo 2"]'::jsonb
+       '["Paso nuevo 1", "Paso nuevo 2"]'::jsonb,
+       null, null
      ) $$,
   'actualizar_receta_completa: admin creador actualiza catálogo completo = permitido');
 reset role;
@@ -664,7 +665,8 @@ select throws_ok(
        '60000000-0000-4000-8000-0000000000b1'::uuid,
        'Nombre que no debería aplicarse', null, 'Desayuno', null, null, null, null, null, null, null, null, null, null, null,
        '[{"descripcion":"ok"},{"descripcion":"bad","alimento_id":"60000000-0000-4000-8000-ffffffffffff"}]'::jsonb,
-       '["Paso ok"]'::jsonb
+       '["Paso ok"]'::jsonb,
+       null, null
      ) $$,
   '23503', null, 'actualizar_receta_completa: alimento_id inexistente en ingrediente 2 = bloqueado (FK)');
 reset role;
@@ -687,7 +689,8 @@ select throws_ok(
   $$ select public.actualizar_receta_completa(
        '60000000-0000-4000-8000-0000000000b1'::uuid,
        'hack', null, null, null, null, null, null, null, null, null, null, null, null, null,
-       '[]'::jsonb, '[]'::jsonb
+       '[]'::jsonb, '[]'::jsonb,
+       null, null
      ) $$,
   null, null, 'actualizar_receta_completa: admin no-creador UPDATE catálogo ajeno = bloqueado');
 reset role;
@@ -701,7 +704,8 @@ select lives_ok(
        '60000000-0000-4000-8000-0000000000f2'::uuid,
        'Receta personalizada A (RPC)', null, null, null, null, null, null, null, null, null, null, null, null, null,
        '[{"descripcion":"Ingrediente A vía RPC"}]'::jsonb,
-       '["Paso A vía RPC"]'::jsonb
+       '["Paso A vía RPC"]'::jsonb,
+       null, null
      ) $$,
   'actualizar_receta_completa: admin dueño actualiza personalizada de su paciente = permitido');
 reset role;
@@ -716,14 +720,14 @@ select is((select nombre from recetas where id = '60000000-0000-4000-8000-000000
 -- 79. authenticated SÍ tiene EXECUTE.
 select ok(
   has_function_privilege('authenticated',
-    'public.actualizar_receta_completa(uuid, text, text, text, text, text, int, int, int, text, int, text, numeric, numeric, numeric, jsonb, jsonb)',
+    'public.actualizar_receta_completa(uuid, text, text, text, text, text, int, int, int, text, int, text, numeric, numeric, numeric, jsonb, jsonb, text, text)',
     'EXECUTE'),
   'actualizar_receta_completa: authenticated tiene EXECUTE');
 
 -- 80. anon NO tiene EXECUTE.
 select ok(
   not has_function_privilege('anon',
-    'public.actualizar_receta_completa(uuid, text, text, text, text, text, int, int, int, text, int, text, numeric, numeric, numeric, jsonb, jsonb)',
+    'public.actualizar_receta_completa(uuid, text, text, text, text, text, int, int, int, text, int, text, numeric, numeric, numeric, jsonb, jsonb, text, text)',
     'EXECUTE'),
   'actualizar_receta_completa: anon NO tiene EXECUTE');
 
@@ -741,7 +745,7 @@ select ok(
 -- 82. Sigue siendo SECURITY INVOKER (prosecdef = false).
 select is(
   (select prosecdef from pg_proc where oid =
-    'public.actualizar_receta_completa(uuid, text, text, text, text, text, int, int, int, text, int, text, numeric, numeric, numeric, jsonb, jsonb)'::regprocedure),
+    'public.actualizar_receta_completa(uuid, text, text, text, text, text, int, int, int, text, int, text, numeric, numeric, numeric, jsonb, jsonb, text, text)'::regprocedure),
   false, 'actualizar_receta_completa: SECURITY INVOKER (prosecdef = false)');
 
 -- ══════════════════ crear_receta_completa (Sección 63, H1) ══════════════════
