@@ -9,6 +9,19 @@ name: Claude Dev Agent
 # No hace merge, no se aprueba a si mismo, no despliega y no tiene ninguna
 # credencial de Stripe/Vercel/EAS en este workflow — solo puede leer/escribir
 # issues, PRs y contenido del repo via el token minimo de abajo.
+#
+# Secretos requeridos (ninguno se pide por chat, se configuran en Settings
+# -> Secrets and variables -> Actions):
+#   - ANTHROPIC_API_KEY (o CLAUDE_CODE_OAUTH_TOKEN): autentica a Claude Code.
+#   - PROJECTS_TOKEN: un Personal Access Token (classic, scopes "repo" +
+#     "project" + "workflow"; o fine-grained con Issues/Pull
+#     requests/Contents en Read-and-write y Projects en Read-and-write)
+#     SOLO para las llamadas a
+#     la API de GitHub Projects (v2). El GITHUB_TOKEN automatico de Actions
+#     NO tiene acceso a Projects v2 bajo ninguna combinacion del bloque
+#     "permissions:" — es una limitacion de la plataforma, no una omision
+#     aqui. Sin este secret, el job "gate" fallara al intentar leer el
+#     estado del tablero.
 on:
   workflow_dispatch:
     inputs:
@@ -50,7 +63,10 @@ jobs:
       - name: Issue abierto + etiqueta agent-ready + tablero en 'Lista' + limite de 3 intentos
         id: check
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # PROJECTS_TOKEN, no GITHUB_TOKEN: este paso consulta el tablero
+          # de Projects v2, y el token automatico de Actions no tiene acceso
+          # a esa API (ver nota de secretos arriba).
+          GH_TOKEN: ${{ secrets.PROJECTS_TOKEN }}
           ISSUE: ${{ inputs.issue_number }}
           REPO: ${{ github.repository }}
         run: |
@@ -85,9 +101,25 @@ jobs:
             exit 1
           fi
 
-          ATTEMPTS=$(gh api "repos/$REPO/branches" --paginate --jq '.[].name' | { grep -c "^agent/issue-${ISSUE}-attempt" || true; })
+          OTRA_ACTIVA=$(gh api graphql -f query='query($project:ID!){node(id:$project){... on ProjectV2{items(first:100){nodes{content{... on Issue{number}} fieldValueByName(name:"Estado"){... on ProjectV2ItemFieldSingleSelectValue{name}}}}}}}' -F project="$PROJECT_ID" \
+            | jq -r --argjson issue "$ISSUE" '[.data.node.items.nodes[] | select(.content.number != null and .content.number != $issue) | select(.fieldValueByName.name == "En desarrollo" or .fieldValueByName.name == "En revisión") | .content.number] | .[0] // empty')
+          if [ -n "$OTRA_ACTIVA" ]; then
+            echo "::error::Ya hay otra tarea activa en el tablero: issue #$OTRA_ACTIVA. Regla de una tarea a la vez — espera a que termine o se bloquee antes de iniciar #$ISSUE."
+            exit 1
+          fi
+
+          # Conteo de intentos vía etiquetas del issue (attempt-1/2/3), no
+          # vía ramas existentes: borrar una rama "agent/issue-N-attemptK"
+          # no resetea nada, porque la etiqueta queda en el issue.
+          LABELS=$(gh issue view "$ISSUE" --repo "$REPO" --json labels --jq '[.labels[].name]')
+          ATTEMPTS=0
+          for N in 1 2 3; do
+            if echo "$LABELS" | jq -e --argjson n "$N" '. as $l | ($l | index("attempt-" + ($n|tostring))) != null' >/dev/null; then
+              ATTEMPTS=$N
+            fi
+          done
           if [ "$ATTEMPTS" -ge 3 ]; then
-            echo "::error::El issue #$ISSUE ya tiene $ATTEMPTS intento(s) previos (limite: 3). Marcalo Bloqueada manualmente y describe que falta — este workflow no lo hace solo."
+            echo "::error::El issue #$ISSUE ya tiene la etiqueta attempt-3 (limite: 3 intentos). Marcalo Bloqueada manualmente y describe que falta — este workflow no lo hace solo."
             exit 1
           fi
           NEXT_ATTEMPT=$((ATTEMPTS + 1))
@@ -108,12 +140,23 @@ jobs:
       contents: write
       pull-requests: write
       issues: write
+      # id-token: requerido por la autenticacion por defecto de la GitHub
+      # App de Claude (ver docs oficiales de claude-code-action). actions:
+      # read le permite a Claude leer resultados de CI en el PR mientras
+      # trabaja. Ninguno de los dos se usa para nada mas en este job.
       id-token: write
       actions: read
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 1
+
+      - name: Marcar intento attempt-${{ needs.gate.outputs.attempt }} en el issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh issue edit "${{ inputs.issue_number }}" --repo "${{ github.repository }}" --add-label "attempt-${{ needs.gate.outputs.attempt }}"
 
       - name: Claude Code — implementar el issue
         uses: anthropics/claude-code-action@v1
@@ -159,7 +202,9 @@ jobs:
       - name: Buscar el PR generado y mover el issue a 'En revisión' en el tablero
         if: always()
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # PROJECTS_TOKEN: este paso escribe en el tablero (Projects v2),
+          # ademas de listar/mergear el PR — ver nota de secretos al inicio.
+          GH_TOKEN: ${{ secrets.PROJECTS_TOKEN }}
         run: |
           set -euo pipefail
           BRANCH="agent/issue-${{ inputs.issue_number }}-attempt${{ needs.gate.outputs.attempt }}"
@@ -180,10 +225,20 @@ jobs:
             -F field="$ESTADO_FIELD_ID" \
             -F option="$ESTADO_EN_REVISION" > /dev/null
           echo "Tablero actualizado: issue #${{ inputs.issue_number }} -> En revisión"
+
+          # Programa auto-merge (no mergea nada ahora mismo): GitHub solo
+          # completara el merge cuando se cumplan los checks requeridos Y la
+          # revision aprobatoria requerida por la proteccion de rama de main.
+          # El propio PR (autor: el bot de Claude) no puede aprobarse a si
+          # mismo — eso lo hace claude-review.yml con una identidad distinta.
+          gh pr merge "$PR_NUMBER" --repo "${{ github.repository }}" --auto --squash || \
+            echo "No se pudo programar auto-merge todavia (normal si aun faltan checks por registrarse)."
+
           {
             echo "### Resultado"
             echo "- PR: #$PR_NUMBER"
             echo "- Tablero: issue #${{ inputs.issue_number }} movido a **En revisión**"
+            echo "- Auto-merge programado (esperando checks + revision aprobatoria)"
             echo ""
-            echo "Pendiente de intervencion humana: revisar el PR, correr/validar las comprobaciones, y decidir aprobar + mergear manualmente. Este workflow nunca aprueba ni mergea."
+            echo "Pendiente: la revision separada de claude-review.yml y que los checks de ci.yml pasen. Este workflow nunca aprueba ni mergea por si mismo — solo programa el auto-merge nativo de GitHub, que respeta la proteccion de rama."
           } >> "$GITHUB_STEP_SUMMARY"

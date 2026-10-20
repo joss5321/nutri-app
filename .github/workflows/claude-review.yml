@@ -1,0 +1,118 @@
+name: Claude Review Agent
+
+# Revisor independiente del PR que abre claude-dev.yml. Corre en una
+# ejecucion separada de GitHub Actions (contexto, historial y memoria
+# propios — no hereda nada de la corrida que escribio el codigo) y usa el
+# MISMO modelo subyacente que el desarrollador (Claude Sonnet 5, vease
+# claude_args abajo): no es una revision de un modelo distinto, es una
+# ejecucion distinta del mismo modelo, sin contexto compartido. Esto se
+# declara explicitamente para no presentarlo como algo que no es.
+#
+# Solo se activa para PRs abiertos por el propio ciclo automatico (rama
+# agent/issue-*) — nunca revisa PRs humanos rutinarios.
+#
+# Usa una identidad de GitHub DISTINTA a la del desarrollador (secret
+# CLAUDE_REVIEWER_TOKEN, un Personal Access Token de alcance minimo) porque
+# GitHub prohibe que un PR se apruebe a si mismo: si el revisor usara la
+# misma identidad que abrio el PR, GitHub rechazaria la aprobacion.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  # Una nueva version del mismo PR invalida la revision de la version
+  # anterior en curso (y, a nivel de branch protection, dismiss_stale_reviews
+  # ya invalida cualquier aprobacion previa cuando llega un commit nuevo).
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+
+jobs:
+  review:
+    name: Revisar PR del agente
+    if: startsWith(github.event.pull_request.head.ref, 'agent/issue-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Ubicar el issue vinculado y sus criterios de aceptacion
+        id: issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          BODY=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json body --jq .body)
+          ISSUE_NUM=$(echo "$BODY" | grep -ioE 'closes #[0-9]+' | head -1 | grep -oE '[0-9]+' || true)
+          if [ -z "$ISSUE_NUM" ]; then
+            echo "::warning::El PR #$PR_NUMBER no tiene un 'Closes #N' detectable en su descripcion."
+            echo "issue_number=" >> "$GITHUB_OUTPUT"
+            echo "issue_body=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "issue_number=$ISSUE_NUM" >> "$GITHUB_OUTPUT"
+          ISSUE_BODY=$(gh issue view "$ISSUE_NUM" --repo "$REPO" --json body --jq .body)
+          {
+            echo "issue_body<<EOF_ISSUE_BODY"
+            echo "$ISSUE_BODY"
+            echo "EOF_ISSUE_BODY"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Claude Code — revisar el PR
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.CLAUDE_REVIEWER_TOKEN }}
+          prompt: |
+            Revisa de forma independiente el PR #${{ github.event.pull_request.number }}
+            de este repositorio (rama ${{ github.event.pull_request.head.ref }}).
+            No asumas que el codigo esta bien solo porque alguien diga que lo esta.
+
+            Issue que este PR dice resolver (#${{ steps.issue.outputs.issue_number }}),
+            con sus criterios de aceptacion:
+            ---
+            ${{ steps.issue.outputs.issue_body }}
+            ---
+
+            Haz esto, en orden:
+            1. Lee el diff completo del PR (`gh pr diff ${{ github.event.pull_request.number }}`).
+            2. Compara el cambio contra los criterios de aceptacion de arriba.
+               ¿Resuelve exactamente eso, sin tocar nada fuera de alcance?
+            3. Revisa la seccion "Comprobaciones ejecutadas" del PR. ¿La salida
+               pegada ahi corresponde de verdad a correr los comandos reales
+               (tsc, build, etc.), o es una afirmacion sin evidencia? Si tienes
+               dudas, corre tu mismo los comandos relevantes dentro del
+               checkout para confirmar.
+            4. Revisa el estado real de los checks de CI: `gh pr checks ${{ github.event.pull_request.number }}`.
+            5. Verifica que el PR NO haya tocado pagos/Stripe, permisos,
+               migraciones de base de datos, ni nada fuera del issue.
+            6. Decide: ¿apruebas, o pides cambios?
+               - Si apruebas: `gh pr review ${{ github.event.pull_request.number }} --approve --body "<tu justificacion concreta>"`.
+                 Al final de tu body de aprobacion, agrega una linea literal:
+                 "CRITERIOS_VERIFICABLES_EN_CI: si" si TODO lo que pide el
+                 issue quedo objetivamente comprobado por los checks
+                 automaticos, o "CRITERIOS_VERIFICABLES_EN_CI: no" si falta
+                 una prueba manual, en dispositivo, o posterior al deploy
+                 para considerarlo realmente resuelto.
+               - Si pides cambios: `gh pr review ${{ github.event.pull_request.number }} --request-changes --body "<observaciones concretas, una por una, con que archivo/linea>"`.
+                 Nunca pidas cambios vagos tipo "mejora esto" — cada
+                 observacion debe decir exactamente que esta mal y que
+                 esperarias ver en su lugar.
+            7. No hagas commits, no hagas push, no toques codigo. Tu unica
+               salida es el review que dejas con `gh pr review`. No tienes
+               permiso de escritura sobre el contenido del repo en este
+               workflow (el token que usas es de solo lectura sobre codigo).
+            8. No apruebes un PR que no resuelve lo que dice resolver solo
+               porque "se ve bien" o porque TypeScript compila — eso no es
+               el criterio.
+          claude_args: |
+            --max-turns 20
+            --model claude-sonnet-5

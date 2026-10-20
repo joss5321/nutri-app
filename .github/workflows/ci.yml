@@ -16,6 +16,35 @@ permissions:
   contents: read
 
 jobs:
+  sensitive-paths-guard:
+    name: sensitive-paths-guard
+    # Solo se aplica a PRs del ciclo automatico (rama agent/issue-*). Nunca
+    # restringe el trabajo humano normal en estos mismos archivos — es un
+    # control tecnico, no solo una instruccion de prompt, para que el
+    # agente no pueda tocar pagos/permisos/migraciones aunque algo en su
+    # contexto lo empuje a intentarlo.
+    if: startsWith(github.head_ref, 'agent/issue-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Verificar que el diff no toque rutas sensibles
+        run: |
+          set -euo pipefail
+          DIFF=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
+          echo "$DIFF"
+          PATRON='supabase_schema\.sql|supabase_stripe_schema\.sql|supabase/functions/|supabase/migrations/|lib/permissions\.ts|LockedModal|stripe|pago'
+          MATCH=$(echo "$DIFF" | grep -iE "$PATRON" || true)
+          if [ -n "$MATCH" ]; then
+            echo "::error::Este PR automatico toca ruta(s) fuera de lo permitido (pagos/permisos/migraciones):"
+            echo "$MATCH"
+            exit 1
+          fi
+          echo "OK: ninguna ruta sensible tocada."
+
   mobile-app:
     name: mobile-app
     runs-on: ubuntu-latest
