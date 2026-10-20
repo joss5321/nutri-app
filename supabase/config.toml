@@ -431,6 +431,16 @@ entrypoint = "./functions/crear-checkout/index.ts"
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/crear-checkout/*.html" ]
 
+[functions.crear-portal-sesion]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/crear-portal-sesion/index.ts"
+
+[functions.cambiar-nutriologo]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/cambiar-nutriologo/index.ts"
+
 # Las siguientes 4 son herramientas manuales/internas (superadmin-only, ver
 # supabase/functions/_shared/auth.ts). verify_jwt=true ya era el default,
 # se deja explícito para no depender de un default implícito.

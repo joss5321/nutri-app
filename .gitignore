@@ -13,3 +13,6 @@ yarn-error.log*
 
 .DS_Store
 Thumbs.db
+
+# Archivos de bloqueo temporal de Office (Word/Excel) — nunca deben versionarse
+~$*

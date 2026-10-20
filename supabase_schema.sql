@@ -8423,3 +8423,209 @@ create policy "avatars: gestion portada propia" on storage.objects
 --   using (bucket_id = 'avatars' and name like ('portadas/' || auth.uid()::text || '.%'))
 --   with check (bucket_id = 'avatars' and name like ('portadas/' || auth.uid()::text || '.%'));
 -- ============================================================
+
+-- ============================================================
+-- 85. MIGRACIÓN — columna objetivo en perfiles (registro sin nutriólogo)
+-- ============================================================
+-- Único campo nuevo necesario: no existe ningún lugar hoy para guardar el
+-- objetivo de un paciente que se registra sin nutriólogo (planes_nutricionales
+-- la gestiona el nutriólogo y no aplica a este flujo). telefono/fecha_nacimiento
+-- ya existían y simplemente se reutilizan.
+alter table perfiles add column if not exists objetivo text;
+
+-- ============================================================
+-- ROLLBACK Sección 85 (referencia — NO ejecutar salvo que se decida
+-- revertir esta sección):
+--
+-- alter table perfiles drop column if exists objetivo;
+-- ============================================================
+
+-- ============================================================
+-- 86. MIGRACIÓN — crear_perfil_nuevo_usuario(): registro sin nutriólogo
+-- ============================================================
+-- Nueva rama ADITIVA controlada por raw_user_meta_data->>'sin_nutricionista'.
+-- Si viene true: nutricionista_id queda NULL, is_active=true, estatus=
+-- 'aprobado' (auto-aprobado, igual que pacientes creados desde admin-web en
+-- la Sección 44 — no hay nutriólogo que los apruebe). Si viene false/ausente
+-- (TODO registro actual y futuro que selecciona nutriólogo): exactamente la
+-- misma lógica de siempre (fallback por email, is_active=false,
+-- estatus='pendiente') — comportamiento 100% sin cambios para ese flujo.
+-- También se guardan telefono/fecha_nacimiento/objetivo si vienen en
+-- metadata (antes nunca venían, así que para el flujo actual quedan NULL
+-- igual que hasta ahora).
+create or replace function crear_perfil_nuevo_usuario()
+returns trigger language plpgsql security definer as $$
+declare
+  v_nutricionista_id uuid;
+  v_sin_nutricionista boolean;
+  v_is_active boolean;
+  v_estatus text;
+begin
+  v_sin_nutricionista := coalesce((new.raw_user_meta_data->>'sin_nutricionista')::boolean, false);
+
+  if v_sin_nutricionista then
+    v_nutricionista_id := null;
+    v_is_active := true;
+    v_estatus := 'aprobado';
+  else
+    v_nutricionista_id := (new.raw_user_meta_data->>'nutricionista_id')::uuid;
+    if v_nutricionista_id is null then
+      select id into v_nutricionista_id
+      from auth.users
+      where email = 'j.rym5312@gmail.com'
+      limit 1;
+    end if;
+    v_is_active := false;
+    v_estatus := 'pendiente';
+  end if;
+
+  insert into public.perfiles (
+    id, nombre_completo, email, telefono, fecha_nacimiento, objetivo,
+    nutricionista_id, is_active, estatus
+  ) values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'full_name', new.email),
+    new.email,
+    new.raw_user_meta_data->>'telefono',
+    (new.raw_user_meta_data->>'fecha_nacimiento')::date,
+    new.raw_user_meta_data->>'objetivo',
+    v_nutricionista_id,
+    v_is_active,
+    v_estatus
+  );
+  return new;
+end;
+$$;
+
+-- ============================================================
+-- ROLLBACK Sección 86 (referencia — NO ejecutar salvo que se decida
+-- revertir esta sección; restaura la versión anterior, sin rama
+-- sin_nutricionista ni columnas telefono/fecha_nacimiento/objetivo en el insert):
+--
+-- create or replace function crear_perfil_nuevo_usuario()
+-- returns trigger language plpgsql security definer as $$
+-- declare
+--   v_nutricionista_id uuid;
+-- begin
+--   v_nutricionista_id := (new.raw_user_meta_data->>'nutricionista_id')::uuid;
+--   if v_nutricionista_id is null then
+--     select id into v_nutricionista_id from auth.users where email = 'j.rym5312@gmail.com' limit 1;
+--   end if;
+--   insert into public.perfiles (id, nombre_completo, email, nutricionista_id, is_active, estatus)
+--   values (new.id, coalesce(new.raw_user_meta_data->>'full_name', new.email), new.email, v_nutricionista_id, false, 'pendiente');
+--   return new;
+-- end;
+-- $$;
+-- ============================================================
+
+-- ============================================================
+-- 87. MIGRACIÓN — tabla ejercicios_personalizados (aislada, RLS dueño-only)
+-- ============================================================
+-- Ejercicios que cada paciente crea para sí mismo, disponibles para TODOS
+-- los pacientes (con y sin nutriólogo). Deliberadamente NO vive dentro de
+-- rutinas/rutina_dias/rutina_ejercicios/ejercicios (esas tablas y su RLS
+-- son exclusivas del nutriólogo) — es una tabla y un set de políticas 100%
+-- nuevas e independientes, dueño-only por user_id = auth.uid(), sin
+-- relación con nutricionista_id ni con get_user_rol(). "Marcar como usado"
+-- se resuelve con la columna ultima_vez_usado en vez de una tabla de logs
+-- separada (mínimo viable, menor blast radius).
+create table if not exists ejercicios_personalizados (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  nombre text not null,
+  grupo_muscular text,
+  series integer,
+  repeticiones text,
+  peso_sugerido_kg numeric,
+  unidad_peso text not null default 'kg',
+  descanso_seg integer,
+  notas text,
+  ultima_vez_usado timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_ejercicios_personalizados_user_id
+  on ejercicios_personalizados(user_id);
+
+drop trigger if exists trg_ejercicios_personalizados_updated_at on ejercicios_personalizados;
+create trigger trg_ejercicios_personalizados_updated_at
+  before update on ejercicios_personalizados
+  for each row execute function public.set_updated_at();
+
+alter table ejercicios_personalizados enable row level security;
+
+drop policy if exists "ejercicios_personalizados_select" on ejercicios_personalizados;
+drop policy if exists "ejercicios_personalizados_insert" on ejercicios_personalizados;
+drop policy if exists "ejercicios_personalizados_update" on ejercicios_personalizados;
+drop policy if exists "ejercicios_personalizados_delete" on ejercicios_personalizados;
+
+create policy "ejercicios_personalizados_select" on ejercicios_personalizados
+for select to authenticated using (user_id = auth.uid());
+
+create policy "ejercicios_personalizados_insert" on ejercicios_personalizados
+for insert to authenticated with check (user_id = auth.uid());
+
+create policy "ejercicios_personalizados_update" on ejercicios_personalizados
+for update to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+create policy "ejercicios_personalizados_delete" on ejercicios_personalizados
+for delete to authenticated using (user_id = auth.uid());
+
+-- ============================================================
+-- ROLLBACK Sección 87 (referencia — NO ejecutar salvo que se decida
+-- revertir esta sección):
+--
+-- drop table if exists ejercicios_personalizados;
+-- ============================================================
+
+-- ============================================================
+-- 88. MIGRACIÓN — perfiles.plan_membresia admite el plan "pro"
+-- ============================================================
+-- Bug bloqueante encontrado en la auditoría final de Stripe: el plan "pro"
+-- ya tiene su price_id (mobile-app/src/constants/planes.ts) y su propio
+-- mapeo en supabase/functions/stripe-webhook/index.ts, pero el CHECK
+-- constraint original (Sección 1) solo permitía 'basico'/'premium'.
+-- Cualquier pago del plan "pro" hacía que el webhook fallara con un 500 en
+-- bucle de reintentos de Stripe (nunca lograba sincronizar plan_membresia).
+alter table perfiles drop constraint if exists perfiles_plan_membresia_check;
+
+alter table perfiles add constraint perfiles_plan_membresia_check
+  check (plan_membresia in ('basico', 'pro', 'premium'));
+
+-- ============================================================
+-- ROLLBACK Sección 88 (referencia — NO ejecutar salvo que se decida
+-- revertir esta sección; volvería a romper el plan "pro"):
+--
+-- alter table perfiles drop constraint if exists perfiles_plan_membresia_check;
+-- alter table perfiles add constraint perfiles_plan_membresia_check
+--   check (plan_membresia in ('basico', 'premium'));
+-- ============================================================
+
+-- ============================================================
+-- 89. MIGRACIÓN — idempotencia de stripe-webhook (stripe_webhook_events)
+-- ============================================================
+-- Defensa en profundidad pedida explícitamente en la auditoría de Stripe:
+-- Stripe puede reenviar el mismo webhook más de una vez (timeout, reintento
+-- manual, etc.). El código actual ya es naturalmente idempotente (upsert
+-- por stripe_subscription_id, update sin efectos acumulativos), pero esta
+-- tabla deja la protección explícita por event.id en vez de depender solo
+-- de esa idempotencia incidental. Mismo patrón deny-by-default que
+-- "suscripciones" (Sección 62 de supabase_stripe_schema.sql): RLS enabled,
+-- cero policies, grants revocados — solo accesible por service_role desde
+-- stripe-webhook.
+create table if not exists stripe_webhook_events (
+  event_id   text primary key,
+  event_type text not null,
+  created_at timestamptz not null default now()
+);
+
+alter table stripe_webhook_events enable row level security;
+revoke all on stripe_webhook_events from anon, authenticated;
+
+-- ============================================================
+-- ROLLBACK Sección 89 (referencia — NO ejecutar salvo que se decida
+-- revertir esta sección):
+--
+-- drop table if exists stripe_webhook_events;
+-- ============================================================
