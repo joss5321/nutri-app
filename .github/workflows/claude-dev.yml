@@ -1,0 +1,189 @@
+name: Claude Dev Agent
+
+# Primera version del "desarrollador" automatico del ciclo descrito en
+# WORKFLOW.md. Deliberadamente solo arranca a mano (workflow_dispatch),
+# nunca por comentarios ni por eventos de PRs externos: eso evita por
+# diseno cualquier bucle disparado por los propios comentarios del agente,
+# y evita exponer secretos a contenido de un fork no confiable.
+#
+# No hace merge, no se aprueba a si mismo, no despliega y no tiene ninguna
+# credencial de Stripe/Vercel/EAS en este workflow — solo puede leer/escribir
+# issues, PRs y contenido del repo via el token minimo de abajo.
+on:
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Numero del issue a implementar (debe estar Abierto, en estado 'Lista' del tablero 'MyfitTrack — Lanzamiento', y con la etiqueta agent-ready)"
+        required: true
+        type: string
+
+concurrency:
+  # Grupo fijo (no parametrizado por issue): como mucho UNA corrida de este
+  # workflow activa en todo el repo a la vez, sin importar que issue se pida.
+  group: claude-dev-agent
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: read
+
+env:
+  PROJECT_ID: "PVT_kwHOAxCIPc4Bn-p9"
+  ESTADO_FIELD_ID: "PVTSSF_lAHOAxCIPc4Bn-p9zhmgzMI"
+  ESTADO_LISTA: "345dfbc1"
+  ESTADO_EN_REVISION: "fdf9ab59"
+
+jobs:
+  gate:
+    name: Validar condiciones del issue
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: read
+    outputs:
+      proceed: ${{ steps.check.outputs.proceed }}
+      item_id: ${{ steps.check.outputs.item_id }}
+      attempt: ${{ steps.check.outputs.attempt }}
+      issue_title: ${{ steps.check.outputs.issue_title }}
+    steps:
+      - name: Issue abierto + etiqueta agent-ready + tablero en 'Lista' + limite de 3 intentos
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE: ${{ inputs.issue_number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          OWNER="${REPO%/*}"
+          NAME="${REPO#*/}"
+
+          STATE=$(gh issue view "$ISSUE" --repo "$REPO" --json state --jq .state)
+          if [ "$STATE" != "OPEN" ]; then
+            echo "::error::El issue #$ISSUE no esta abierto (estado: $STATE)."
+            exit 1
+          fi
+
+          HAS_LABEL=$(gh issue view "$ISSUE" --repo "$REPO" --json labels --jq '([.labels[].name] | index("agent-ready")) != null')
+          if [ "$HAS_LABEL" != "true" ]; then
+            echo "::error::El issue #$ISSUE no tiene la etiqueta agent-ready."
+            exit 1
+          fi
+
+          QUERY='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){issue(number:$number){projectItems(first:10){nodes{id project{id} fieldValueByName(name:"Estado"){... on ProjectV2ItemFieldSingleSelectValue{optionId name}}}}}}}'
+          RESULT=$(gh api graphql -f query="$QUERY" -F owner="$OWNER" -F name="$NAME" -F number="$ISSUE")
+          ITEM_ID=$(echo "$RESULT" | jq -r --arg pid "$PROJECT_ID" '.data.repository.issue.projectItems.nodes[] | select(.project.id==$pid) | .id')
+          ESTADO_ID=$(echo "$RESULT" | jq -r --arg pid "$PROJECT_ID" '.data.repository.issue.projectItems.nodes[] | select(.project.id==$pid) | .fieldValueByName.optionId')
+          ESTADO_NOMBRE=$(echo "$RESULT" | jq -r --arg pid "$PROJECT_ID" '.data.repository.issue.projectItems.nodes[] | select(.project.id==$pid) | .fieldValueByName.name')
+
+          if [ -z "$ITEM_ID" ]; then
+            echo "::error::El issue #$ISSUE no esta en el tablero MyfitTrack — Lanzamiento."
+            exit 1
+          fi
+          if [ "$ESTADO_ID" != "$ESTADO_LISTA" ]; then
+            echo "::error::El issue #$ISSUE esta en estado '$ESTADO_NOMBRE' en el tablero, no 'Lista'."
+            exit 1
+          fi
+
+          ATTEMPTS=$(gh api "repos/$REPO/branches" --paginate --jq '.[].name' | { grep -c "^agent/issue-${ISSUE}-attempt" || true; })
+          if [ "$ATTEMPTS" -ge 3 ]; then
+            echo "::error::El issue #$ISSUE ya tiene $ATTEMPTS intento(s) previos (limite: 3). Marcalo Bloqueada manualmente y describe que falta — este workflow no lo hace solo."
+            exit 1
+          fi
+          NEXT_ATTEMPT=$((ATTEMPTS + 1))
+
+          echo "proceed=true" >> "$GITHUB_OUTPUT"
+          echo "item_id=$ITEM_ID" >> "$GITHUB_OUTPUT"
+          echo "attempt=$NEXT_ATTEMPT" >> "$GITHUB_OUTPUT"
+          TITLE=$(gh issue view "$ISSUE" --repo "$REPO" --json title --jq .title)
+          echo "issue_title=$TITLE" >> "$GITHUB_OUTPUT"
+
+  dev:
+    name: Implementar issue con Claude Code
+    needs: gate
+    if: needs.gate.outputs.proceed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Claude Code — implementar el issue
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Implementa EXCLUSIVAMENTE el issue #${{ inputs.issue_number }}
+            ("${{ needs.gate.outputs.issue_title }}") de este repositorio.
+
+            Reglas estrictas, no negociables:
+            - Crea y trabaja solo en la rama
+              agent/issue-${{ inputs.issue_number }}-attempt${{ needs.gate.outputs.attempt }}
+            - No toques nada fuera del alcance de este issue puntual. No "mejores"
+              cosas que el issue no pidio.
+            - No modifiques migraciones de base de datos, logica de
+              permisos/autorizacion, ni nada relacionado con Stripe o cobros. Si
+              resolver este issue requiriera eso, detente y explica por que en
+              el PR en vez de hacerlo.
+            - No hagas merge de ningun PR, no apruebes ningun PR (ni el tuyo ni
+              de nadie), no despliegues a produccion, no habilites cobros
+              reales. No tienes ninguna credencial de Stripe, Vercel ni EAS en
+              este workflow — si algo pidiera una, es señal de que este issue
+              no es apto para este flujo automatico: detente y dilo.
+            - Corre los comandos reales de verificacion que correspondan a lo
+              que toques (por ejemplo "npx tsc --noEmit" dentro de mobile-app o
+              admin-web si tocas ese proyecto). Pega la salida real de esos
+              comandos en el cuerpo del PR bajo un encabezado "Comprobaciones
+              ejecutadas". No afirmes que algo "funciona" o "pasa" sin haberlo
+              corrido de verdad.
+            - Haz commit en esa rama, pushea, y abre un Pull Request hacia
+              main que incluya "Closes #${{ inputs.issue_number }}" en la
+              descripcion para vincular el issue automaticamente.
+            - En la descripcion del PR incluye: que hiciste, por que, que NO
+              hiciste (si frenaste por alguna regla de arriba), y la salida de
+              los comandos de verificacion.
+            - Si no se puede resolver dentro de estas reglas, NO abras un PR a
+              medias: deja un comentario claro en el issue explicando
+              exactamente que lo bloquea, y no hagas push de nada.
+          claude_args: |
+            --max-turns 30
+            --model claude-sonnet-5
+
+      - name: Buscar el PR generado y mover el issue a 'En revisión' en el tablero
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          BRANCH="agent/issue-${{ inputs.issue_number }}-attempt${{ needs.gate.outputs.attempt }}"
+          PR_NUMBER=$(gh pr list --repo "${{ github.repository }}" --head "$BRANCH" --state all --json number --jq '.[0].number // empty')
+
+          if [ -z "$PR_NUMBER" ]; then
+            echo "No se encontro ningun PR para la rama $BRANCH en este intento (#${{ needs.gate.outputs.attempt }})."
+            echo "Esto es esperado si Claude decidio frenar por alguna de las reglas del prompt — revisa los comentarios del issue #${{ inputs.issue_number }}."
+            echo "El tablero NO se mueve de 'Lista' en este caso."
+            exit 0
+          fi
+
+          echo "PR encontrado: #$PR_NUMBER (rama $BRANCH)"
+          MUTATION='mutation($project:ID!,$item:ID!,$field:ID!,$option:String!){updateProjectV2ItemFieldValue(input:{projectId:$project,itemId:$item,fieldId:$field,value:{singleSelectOptionId:$option}}){projectV2Item{id}}}'
+          gh api graphql -f query="$MUTATION" \
+            -F project="$PROJECT_ID" \
+            -F item="${{ needs.gate.outputs.item_id }}" \
+            -F field="$ESTADO_FIELD_ID" \
+            -F option="$ESTADO_EN_REVISION" > /dev/null
+          echo "Tablero actualizado: issue #${{ inputs.issue_number }} -> En revisión"
+          {
+            echo "### Resultado"
+            echo "- PR: #$PR_NUMBER"
+            echo "- Tablero: issue #${{ inputs.issue_number }} movido a **En revisión**"
+            echo ""
+            echo "Pendiente de intervencion humana: revisar el PR, correr/validar las comprobaciones, y decidir aprobar + mergear manualmente. Este workflow nunca aprueba ni mergea."
+          } >> "$GITHUB_STEP_SUMMARY"
