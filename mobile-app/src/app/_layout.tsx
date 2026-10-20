@@ -54,62 +54,70 @@ export default function RootLayout() {
 
   // Inicializa sesión y escucha cambios de auth
   useEffect(() => {
+    // Valida estatus/is_active de un perfil recién autenticado y cierra la
+    // sesión si no corresponde dejarlo entrar. Devuelve true si la sesión
+    // sigue siendo válida (hay que llamar setSession/setInitialized con
+    // ella), false si ya se cerró (el caller no debe setear esa sesión).
+    // Centralizado aquí porque login.tsx ya hacía este mismo chequeo justo
+    // después de signInWithPassword, pero el registro (signUp) con
+    // confirmación de email desactivada deja una sesión activa de
+    // inmediato vía onAuthStateChange — sin este chequeo ahí, un paciente
+    // recién registrado (estatus='pendiente') entraba a la app sin que
+    // nadie lo hubiera aprobado, hasta el siguiente cierre/apertura de la
+    // app (que sí pasaba por getSession() abajo).
+    async function validarPerfilOCerrarSesion(session: NonNullable<Awaited<ReturnType<typeof supabase.auth.getSession>>['data']['session']>): Promise<boolean> {
+      const { data: perfil } = await supabase
+        .from('perfiles')
+        .select('is_active, estatus, movil_vinculado')
+        .eq('id', session.user.id)
+        .single()
+
+      if (!perfil) return true
+
+      if (perfil.estatus === 'pendiente') {
+        console.log('[APP] User is pending — signing out')
+        await supabase.auth.signOut()
+        Alert.alert('Cuenta pendiente', 'Tu cuenta está pendiente de aprobación por tu nutriólogo.')
+        setSession(null)
+        setInitialized(true)
+        return false
+      }
+      if (perfil.estatus === 'rechazado') {
+        console.log('[APP] User is rejected — signing out')
+        await supabase.auth.signOut()
+        Alert.alert('Solicitud rechazada', 'Tu solicitud de registro fue rechazada. Contacta a tu nutriólogo para más información.')
+        setSession(null)
+        setInitialized(true)
+        return false
+      }
+      if (perfil.is_active === false) {
+        console.log('[APP] User is disabled — signing out')
+        await supabase.auth.signOut()
+        Alert.alert('Cuenta deshabilitada', 'Tu cuenta se encuentra deshabilitada. Comunícate con tu administrador o nutriólogo para obtener más información.')
+        setSession(null)
+        setInitialized(true)
+        return false
+      }
+      if (perfil.movil_vinculado === false) {
+        supabase
+          .from('perfiles')
+          .update({ movil_vinculado: true })
+          .eq('id', session.user.id)
+          .then(({ error }) => {
+            if (error) console.error('[APP] No se pudo marcar movil_vinculado:', error.message)
+          })
+      }
+      return true
+    }
+
     console.log('[APP] Loading Supabase session...')
     supabase.auth
       .getSession()
       .then(async ({ data: { session } }) => {
         console.log('[APP] Supabase session loaded, user:', session?.user?.id ?? 'none')
         if (session) {
-          const { data: perfil } = await supabase
-            .from('perfiles')
-            .select('is_active, estatus, movil_vinculado')
-            .eq('id', session.user.id)
-            .single()
-
-          if (perfil) {
-            if (perfil.estatus === 'pendiente') {
-              console.log('[APP] User is pending — signing out')
-              await supabase.auth.signOut()
-              Alert.alert(
-                'Cuenta pendiente',
-                'Tu cuenta está pendiente de aprobación por tu nutriólogo.',
-              )
-              setSession(null)
-              setInitialized(true)
-              return
-            }
-            if (perfil.estatus === 'rechazado') {
-              console.log('[APP] User is rejected — signing out')
-              await supabase.auth.signOut()
-              Alert.alert(
-                'Solicitud rechazada',
-                'Tu solicitud de registro fue rechazada. Contacta a tu nutriólogo para más información.',
-              )
-              setSession(null)
-              setInitialized(true)
-              return
-            }
-            if (perfil.is_active === false) {
-              console.log('[APP] User is disabled — signing out')
-              await supabase.auth.signOut()
-              Alert.alert(
-                'Cuenta deshabilitada',
-                'Tu cuenta se encuentra deshabilitada. Comunícate con tu administrador o nutriólogo para obtener más información.',
-              )
-              setSession(null)
-              setInitialized(true)
-              return
-            }
-            if (perfil.movil_vinculado === false) {
-              supabase
-                .from('perfiles')
-                .update({ movil_vinculado: true })
-                .eq('id', session.user.id)
-                .then(({ error }) => {
-                  if (error) console.error('[APP] No se pudo marcar movil_vinculado:', error.message)
-                })
-            }
-          }
+          const sigueValida = await validarPerfilOCerrarSesion(session)
+          if (!sigueValida) return
         }
         setSession(session)
         setInitialized(true)
@@ -132,6 +140,17 @@ export default function RootLayout() {
         // revisan antes de redirigir automáticamente por tener session.
         if (_event === 'PASSWORD_RECOVERY') {
           setPasswordRecovery(true)
+        }
+        // SIGNED_IN cubre tanto un login normal (ya validado por login.tsx
+        // antes de llegar aquí) como un signUp con confirmación de email
+        // desactivada (nunca validado por nadie más) — validar aquí cierra
+        // ese hueco sin duplicar trabajo para el login normal (si el perfil
+        // ya está aprobado, validarPerfilOCerrarSesion no hace nada extra).
+        if (_event === 'SIGNED_IN' && session) {
+          validarPerfilOCerrarSesion(session).then((sigueValida) => {
+            if (sigueValida) setSession(session)
+          })
+          return
         }
         setSession(session)
       },

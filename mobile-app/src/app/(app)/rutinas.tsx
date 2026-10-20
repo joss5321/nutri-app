@@ -17,6 +17,7 @@ import {
 } from '@/lib/api/rutinas'
 import { fetchEjercicioLogs, fetchAllEjercicioLogs, createEjercicioLog, deleteEjercicioLogsForToday, type EjercicioLog } from '@/lib/api/ejercicio_logs'
 import { getRadarWeekStart, getRadarWeekEnd } from '@/lib/radar-date'
+import { MisEjercicios } from '@/components/rutinas/MisEjercicios'
 
 // ─── Progreso semanal ─────────────────────────────────────────────────────────
 // Radar (Blueprint v1.1, R1): Supabase es la fuente de verdad — "día
@@ -547,7 +548,7 @@ export default function RutinasScreen() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [rutinaNombre, setRutinaNombre] = useState('')
-  const [activeTab, setActiveTab] = useState<'rutinas' | 'progreso'>('rutinas')
+  const [activeTab, setActiveTab] = useState<'rutinas' | 'progreso' | 'mios'>('rutinas')
   const [days, setDays] = useState<Day[]>([])
   const [expanded, setExpanded] = useState<number[]>([])
   const [allExercises, setAllExercises] = useState<ProgressExercise[]>([])
@@ -645,17 +646,21 @@ export default function RutinasScreen() {
           </View>
         )}
         <View style={s.tabs}>
-          {(['rutinas', 'progreso'] as const).map((tab) => (
+          {(['rutinas', 'progreso', 'mios'] as const).map((tab) => (
             <TouchableOpacity key={tab} style={[s.tab, activeTab === tab && s.tabActive]} onPress={() => setActiveTab(tab)}>
               <Text style={[s.tabText, activeTab === tab && s.tabTextActive]}>
-                {tab === 'rutinas' ? 'Rutinas' : 'Progreso'}
+                {tab === 'rutinas' ? 'Rutinas' : tab === 'progreso' ? 'Progreso' : 'Mis ejercicios'}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
       </View>
 
-      {loading ? (
+      {activeTab === 'mios' ? (
+        <ScrollView style={s.body} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+          <MisEjercicios userId={userId} />
+        </ScrollView>
+      ) : loading ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <ActivityIndicator size="large" color={COLORS.primary} />
         </View>

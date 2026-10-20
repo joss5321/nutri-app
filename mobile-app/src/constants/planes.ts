@@ -1,9 +1,9 @@
 export type PlanKey = 'basico' | 'pro' | 'premium'
 
 export const STRIPE_PRICE_IDS: Record<PlanKey, string> = {
-  basico: 'price_1TqeAK420EpqkxR07XvpXJCo',   // price_id basico
-  pro: 'price_1TrPcJ420EpqkxR0lOxubTrs',      // price_id pro
-  premium: 'price_1Tqe9r420EpqkxR0KYROnlr4',  // price_id premium 
+  basico: 'price_1USJQj0xj7uyAsKdZOqxpQ0i',   // price_id basico
+  pro: 'price_1USJRa0xj7uyAsKdi09cMZ6S',      // price_id pro
+  premium: 'price_1USJS70xj7uyAsKdhZP6QRmc',  // price_id premium
 }
 
 // Mapeo inverso: lo usa el webhook para saber qué plan activar según el price_id que pagó el usuario

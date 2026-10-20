@@ -13,11 +13,15 @@ import {
   View,
 } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
+import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { AppHeader } from '@/components/ui/AppHeader'
+import { LockedModal } from '@/components/ui/LockedModal'
 import { COLORS } from '@/constants/colors'
 import { useAuthStore } from '@/store/auth'
 import { useNewsStore } from '@/store/news'
+import { fetchMiPerfil, type Perfil } from '@/lib/api/perfiles'
+import { canAccessPremiumFeatures } from '@/lib/permissions'
 import { fetchMisEquivalentes, type Equivalente } from '@/lib/api/nutricion'
 import {
   fetchNutricionCheckHoy,
@@ -1168,8 +1172,19 @@ type TabKey = 'equivalentes' | 'recetas' | 'suplementacion'
 export default function NutricionScreen() {
   const [tab, setTab] = useState<TabKey>('equivalentes')
   const { user } = useAuthStore()
+  const router = useRouter()
   const { hasNewNutricion, markNutricionViewed } = useNewsStore()
   const [showNewBanner, setShowNewBanner] = useState(false)
+  const [miPerfil, setMiPerfil] = useState<Perfil | null>(null)
+  const [perfilCargado, setPerfilCargado] = useState(false)
+
+  useEffect(() => {
+    if (!user?.id) return
+    fetchMiPerfil(user.id)
+      .then(setMiPerfil)
+      .catch(() => {})
+      .finally(() => setPerfilCargado(true))
+  }, [user?.id])
 
   useFocusEffect(
     useCallback(() => {
@@ -1179,6 +1194,37 @@ export default function NutricionScreen() {
       }
     }, [hasNewNutricion, user?.id]),
   )
+
+  // Mientras no sabemos el estado real del perfil, no mostramos nada que
+  // dependa de él (ni el contenido premium ni el modal de bloqueo) — igual
+  // que progreso.tsx, para no parpadear "bloqueado" un instante a quien sí
+  // tiene acceso.
+  if (!perfilCargado) {
+    return (
+      <View style={s.container}>
+        <AppHeader title={'Plan\nNutricional'} />
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+        </View>
+      </View>
+    )
+  }
+
+  // Defensa en profundidad: el tab ya está oculto para pacientes
+  // independientes en (app)/_layout.tsx, pero esto protege contra
+  // navegación directa (deep link, back button, etc.).
+  if (!canAccessPremiumFeatures(miPerfil)) {
+    return (
+      <View style={s.container}>
+        <AppHeader title={'Plan\nNutricional'} />
+        <LockedModal
+          visible
+          onDismiss={() => router.replace('/(app)/rutinas')}
+          onSuscribirme={() => router.replace('/(app)/perfil')}
+        />
+      </View>
+    )
+  }
 
   const TABS: { key: TabKey; label: string }[] = [
     { key: 'equivalentes', label: 'Equivalentes' },
