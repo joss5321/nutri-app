@@ -129,6 +129,39 @@ jobs:
       - name: Build (next build — incluye el type-check de Next.js)
         run: npm run build
 
+  e2e-admin-web:
+    name: e2e-admin-web
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: admin-web
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: admin-web/package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Instalar navegador de Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Pruebas e2e (build de produccion real, sin tocar datos reales)
+        # Usa "next build && next start" (no "next dev"): el cliente de HMR
+        # de Turbopack en modo dev bloquea la hidratacion de React en este
+        # tipo de entorno sandboxeado (confirmado en vivo), ademas de que
+        # probar contra un build real es mas representativo. Las pruebas
+        # interceptan las llamadas a Supabase con page.route(), nunca pegan
+        # a la base de datos real.
+        run: npm run test:e2e
+
   rls-tests:
     name: rls-tests
     runs-on: ubuntu-latest
