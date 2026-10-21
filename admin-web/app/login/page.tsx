@@ -19,7 +19,6 @@ function SearchParamsHandler({ onError }: { onError: (msg: string) => void }) {
 
 export default function LoginPage() {
   const router = useRouter();
-  const [showPass, setShowPass] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
