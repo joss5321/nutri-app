@@ -90,6 +90,19 @@ export default function PerfilScreen() {
   const [perfil, setPerfil] = useState<Perfil | null>(null)
   const [medida, setMedida] = useState<Medida | null>(null)
   const [citas, setCitas] = useState<Cita[]>([])
+  const [updatingCitaId, setUpdatingCitaId] = useState<string | null>(null)
+
+  const handleUpdateEstadoCita = async (citaId: string, estado: 'confirmada' | 'cancelada') => {
+    setUpdatingCitaId(citaId)
+    try {
+      await updateEstadoCita(citaId, estado)
+      setCitas((prev) => prev.map((ci) => ci.id === citaId ? { ...ci, estado } : ci))
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo actualizar la cita.')
+    } finally {
+      setUpdatingCitaId(null)
+    }
+  }
 
   const loadData = useCallback((isRefresh = false) => {
     if (!userId) return
@@ -361,25 +374,33 @@ export default function PerfilScreen() {
                         <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
                           <TouchableOpacity
                             style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: '#D1FAE5', borderRadius: 8, paddingVertical: 7 }}
-                            onPress={async () => {
-                              await updateEstadoCita(c.id, 'confirmada')
-                              setCitas((prev) => prev.map((ci) => ci.id === c.id ? { ...ci, estado: 'confirmada' } : ci))
-                            }}
+                            onPress={() => handleUpdateEstadoCita(c.id, 'confirmada')}
+                            disabled={updatingCitaId === c.id}
                             activeOpacity={0.7}
                           >
-                            <Ionicons name="checkmark-circle" size={14} color="#065F46" />
-                            <Text style={{ fontSize: 12, fontWeight: '600', color: '#065F46' }}>Confirmar</Text>
+                            {updatingCitaId === c.id ? (
+                              <ActivityIndicator size="small" color="#065F46" />
+                            ) : (
+                              <>
+                                <Ionicons name="checkmark-circle" size={14} color="#065F46" />
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: '#065F46' }}>Confirmar</Text>
+                              </>
+                            )}
                           </TouchableOpacity>
                           <TouchableOpacity
                             style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: '#FEE2E2', borderRadius: 8, paddingVertical: 7 }}
-                            onPress={async () => {
-                              await updateEstadoCita(c.id, 'cancelada')
-                              setCitas((prev) => prev.map((ci) => ci.id === c.id ? { ...ci, estado: 'cancelada' } : ci))
-                            }}
+                            onPress={() => handleUpdateEstadoCita(c.id, 'cancelada')}
+                            disabled={updatingCitaId === c.id}
                             activeOpacity={0.7}
                           >
-                            <Ionicons name="close-circle" size={14} color="#991B1B" />
-                            <Text style={{ fontSize: 12, fontWeight: '600', color: '#991B1B' }}>Cancelar</Text>
+                            {updatingCitaId === c.id ? (
+                              <ActivityIndicator size="small" color="#991B1B" />
+                            ) : (
+                              <>
+                                <Ionicons name="close-circle" size={14} color="#991B1B" />
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: '#991B1B' }}>Cancelar</Text>
+                              </>
+                            )}
                           </TouchableOpacity>
                         </View>
                       )}
