@@ -1,0 +1,136 @@
+name: Claude Fix Agent
+
+# Cierra el ciclo "revision pide cambios -> desarrollador corrige" sin
+# intervencion humana. Solo arranca cuando claude-review.yml deja un review
+# con cambios solicitados sobre un PR que abrio claude-dev.yml (rama
+# agent/issue-*) — nunca sobre un PR humano.
+#
+# Limite explicito: maximo 3 ciclos de correccion por tarea. Si ya hubo 3
+# reviews con cambios solicitados sobre este PR, no se intenta un cuarto:
+# se marca el issue como Bloqueada y se detiene, dejando el PR abierto para
+# que una persona decida.
+on:
+  pull_request_review:
+    types: [submitted]
+
+concurrency:
+  # Mismo grupo que claude-dev.yml: una correccion tambien cuenta como la
+  # "tarea activa" del sistema, no se solapa con un nuevo issue arrancando.
+  group: claude-dev-agent
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: read
+
+env:
+  PROJECT_ID: "PVT_kwHOAxCIPc4Bn-p9"
+  ESTADO_FIELD_ID: "PVTSSF_lAHOAxCIPc4Bn-p9zhmgzMI"
+  ESTADO_BLOQUEADA: "fb9f40c4"
+
+jobs:
+  gate:
+    name: Validar que corresponde corregir
+    if: github.event.review.state == 'CHANGES_REQUESTED' && startsWith(github.event.pull_request.head.ref, 'agent/issue-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      proceed: ${{ steps.check.outputs.proceed }}
+      issue_number: ${{ steps.check.outputs.issue_number }}
+      item_id: ${{ steps.check.outputs.item_id }}
+      review_body: ${{ steps.check.outputs.review_body }}
+    steps:
+      - name: Contar rondas de correccion previas (limite: 3)
+        id: check
+        env:
+          # PROJECTS_TOKEN, no GITHUB_TOKEN: este paso lee/escribe en el
+          # tablero de Projects v2 (ver nota de secretos en claude-dev.yml).
+          GH_TOKEN: ${{ secrets.PROJECTS_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          # Pasado por env, nunca interpolado directo en el script: el cuerpo
+          # del review es texto libre y no debe poder inyectar comandos.
+          REVIEW_BODY_RAW: ${{ github.event.review.body }}
+        run: |
+          set -euo pipefail
+          ROUNDS=$(gh api "repos/$REPO/pulls/$PR_NUMBER/reviews" --paginate --jq '[.[] | select(.state=="CHANGES_REQUESTED")] | length')
+          echo "Rondas de 'changes requested' hasta ahora: $ROUNDS"
+
+          BODY=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json body --jq .body)
+          ISSUE_NUM=$(echo "$BODY" | grep -ioE 'closes #[0-9]+' | head -1 | grep -oE '[0-9]+' || true)
+          if [ -z "$ISSUE_NUM" ]; then
+            echo "::error::No se encontro 'Closes #N' en el PR #$PR_NUMBER — no se puede ubicar el issue."
+            exit 1
+          fi
+
+          QUERY='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){issue(number:$number){projectItems(first:10){nodes{id project{id}}}}}}'
+          OWNER="${REPO%/*}"; NAME="${REPO#*/}"
+          ITEM_ID=$(gh api graphql -f query="$QUERY" -F owner="$OWNER" -F name="$NAME" -F number="$ISSUE_NUM" \
+            | jq -r --arg pid "$PROJECT_ID" '.data.repository.issue.projectItems.nodes[] | select(.project.id==$pid) | .id')
+          echo "item_id=$ITEM_ID" >> "$GITHUB_OUTPUT"
+          echo "issue_number=$ISSUE_NUM" >> "$GITHUB_OUTPUT"
+
+          if [ "$ROUNDS" -ge 3 ]; then
+            echo "::error::El PR #$PR_NUMBER ya acumulo $ROUNDS rondas de correccion (limite: 3). Se marca Bloqueada, no se intenta otra vez."
+            MUTATION='mutation($project:ID!,$item:ID!,$field:ID!,$option:String!){updateProjectV2ItemFieldValue(input:{projectId:$project,itemId:$item,fieldId:$field,value:{singleSelectOptionId:$option}}){projectV2Item{id}}}'
+            gh api graphql -f query="$MUTATION" -F project="$PROJECT_ID" -F item="$ITEM_ID" -F field="$ESTADO_FIELD_ID" -F option="$ESTADO_BLOQUEADA" > /dev/null
+            gh issue comment "$ISSUE_NUM" --repo "$REPO" --body "Bloqueada automaticamente: el PR #$PR_NUMBER acumulo $ROUNDS rondas de revision con cambios solicitados (limite: 3) sin llegar a aprobarse. Revisa manualmente el historial de revisiones del PR para decidir como seguir."
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "proceed=true" >> "$GITHUB_OUTPUT"
+          {
+            echo "review_body<<EOF_REVIEW_BODY"
+            printf '%s\n' "$REVIEW_BODY_RAW"
+            echo "EOF_REVIEW_BODY"
+          } >> "$GITHUB_OUTPUT"
+
+  fix:
+    name: Corregir segun observaciones del revisor
+    needs: gate
+    if: needs.gate.outputs.proceed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: read
+      id-token: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 1
+
+      - name: Claude Code — aplicar correcciones
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            El revisor pidio cambios concretos sobre el PR #${{ github.event.pull_request.number }}
+            (rama ${{ github.event.pull_request.head.ref }}, issue #${{ needs.gate.outputs.issue_number }}).
+
+            Observaciones del revisor:
+            ---
+            ${{ needs.gate.outputs.review_body }}
+            ---
+
+            Reglas estrictas, no negociables (las mismas de siempre):
+            - Trabaja solo en esta rama, NO abras un PR nuevo — haz commit y
+              push de las correcciones sobre la misma rama.
+            - No toques nada fuera de lo que pide esta ronda de observaciones
+              mas el alcance original del issue.
+            - No modifiques migraciones, permisos/autorizacion, ni nada de
+              Stripe/cobros. No apruebes ni mergees nada.
+            - Corre de nuevo los comandos reales de verificacion pertinentes
+              y actualiza la seccion "Comprobaciones ejecutadas" del PR
+              (`gh pr edit ${{ github.event.pull_request.number }} --body "..."`)
+              con la salida real y actualizada.
+            - Si alguna observacion del revisor no se puede resolver dentro
+              de estas reglas, no la ignores en silencio: comenta en el PR
+              explicando por que, en vez de hacer un cambio que la viole.
+          claude_args: |
+            --max-turns 30
+            --model claude-sonnet-5

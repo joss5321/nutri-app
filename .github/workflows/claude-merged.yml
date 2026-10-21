@@ -1,0 +1,73 @@
+name: Claude Post-Merge
+
+# Corre solo cuando un PR del ciclo automatico (rama agent/issue-*) termina
+# de mergearse de verdad (merge real confirmado por GitHub, no "el agente
+# dice que termino" ni "paso TypeScript"). Decide entre dejar el issue en
+# 'En validación' o cerrarlo como 'Terminada', basandose en una señal
+# estructurada y explicita que el revisor (claude-review.yml) tuvo que
+# dejar en su aprobacion — nunca en una lectura libre de su prosa.
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  PROJECT_ID: "PVT_kwHOAxCIPc4Bn-p9"
+  ESTADO_FIELD_ID: "PVTSSF_lAHOAxCIPc4Bn-p9zhmgzMI"
+  ESTADO_EN_VALIDACION: "1642d6be"
+  ESTADO_TERMINADA: "f5f1ba66"
+
+jobs:
+  post_merge:
+    name: Actualizar tablero tras el merge
+    if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'agent/issue-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Decidir En validación vs Terminada
+        env:
+          # PROJECTS_TOKEN, no GITHUB_TOKEN: este paso escribe en el tablero
+          # de Projects v2 (ver nota de secretos en claude-dev.yml).
+          GH_TOKEN: ${{ secrets.PROJECTS_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          BODY=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json body --jq .body)
+          ISSUE_NUM=$(echo "$BODY" | grep -ioE 'closes #[0-9]+' | head -1 | grep -oE '[0-9]+' || true)
+          if [ -z "$ISSUE_NUM" ]; then
+            echo "::warning::El PR #$PR_NUMBER no tiene 'Closes #N' detectable — no se puede actualizar el tablero."
+            exit 0
+          fi
+
+          OWNER="${REPO%/*}"; NAME="${REPO#*/}"
+          QUERY='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){issue(number:$number){projectItems(first:10){nodes{id project{id}}}}}}'
+          ITEM_ID=$(gh api graphql -f query="$QUERY" -F owner="$OWNER" -F name="$NAME" -F number="$ISSUE_NUM" \
+            | jq -r --arg pid "$PROJECT_ID" '.data.repository.issue.projectItems.nodes[] | select(.project.id==$pid) | .id')
+          if [ -z "$ITEM_ID" ]; then
+            echo "::warning::El issue #$ISSUE_NUM no esta en el tablero — no se puede actualizar."
+            exit 0
+          fi
+
+          # Ultima review APROBADA (no cualquier comentario) y su señal explicita.
+          LAST_APPROVAL=$(gh api "repos/$REPO/pulls/$PR_NUMBER/reviews" --paginate \
+            --jq '[.[] | select(.state=="APPROVED")] | last | .body // ""')
+          VERIFICABLE="no"
+          if echo "$LAST_APPROVAL" | grep -q "CRITERIOS_VERIFICABLES_EN_CI: *si"; then
+            VERIFICABLE="si"
+          fi
+
+          MUTATION='mutation($project:ID!,$item:ID!,$field:ID!,$option:String!){updateProjectV2ItemFieldValue(input:{projectId:$project,itemId:$item,fieldId:$field,value:{singleSelectOptionId:$option}}){projectV2Item{id}}}'
+
+          if [ "$VERIFICABLE" = "si" ]; then
+            gh api graphql -f query="$MUTATION" -F project="$PROJECT_ID" -F item="$ITEM_ID" -F field="$ESTADO_FIELD_ID" -F option="$ESTADO_TERMINADA" > /dev/null
+            gh issue close "$ISSUE_NUM" --repo "$REPO" --comment "Cerrado automaticamente: PR #$PR_NUMBER mergeado, checks de CI pasaron, y el revisor confirmo explicitamente que los criterios de aceptacion quedaron verificados por esos checks (sin pendiente de prueba manual/dispositivo/post-deploy). Tablero: **Terminada**."
+            echo "Issue #$ISSUE_NUM -> Terminada (cerrado)"
+          else
+            gh api graphql -f query="$MUTATION" -F project="$PROJECT_ID" -F item="$ITEM_ID" -F field="$ESTADO_FIELD_ID" -F option="$ESTADO_EN_VALIDACION" > /dev/null
+            gh issue comment "$ISSUE_NUM" --repo "$REPO" --body "PR #$PR_NUMBER mergeado. El revisor indico que quedan criterios de aceptacion que no se pueden verificar solo con los checks automaticos (prueba manual, en dispositivo, o posterior al deploy). Tablero: **En validación** — el issue sigue abierto hasta confirmar eso manualmente."
+            echo "Issue #$ISSUE_NUM -> En validación (sigue abierto)"
+          fi
