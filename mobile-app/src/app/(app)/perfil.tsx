@@ -97,6 +97,7 @@ export default function PerfilScreen() {
     try {
       await updateEstadoCita(citaId, estado)
       setCitas((prev) => prev.map((ci) => ci.id === citaId ? { ...ci, estado } : ci))
+      Alert.alert('Listo', estado === 'confirmada' ? 'Cita confirmada.' : 'Cita cancelada.')
     } catch (err) {
       Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo actualizar la cita.')
     } finally {
