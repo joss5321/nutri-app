@@ -12,7 +12,9 @@ name: Claude Dev Agent
 #
 # Secretos requeridos (ninguno se pide por chat, se configuran en Settings
 # -> Secrets and variables -> Actions):
-#   - ANTHROPIC_API_KEY (o CLAUDE_CODE_OAUTH_TOKEN): autentica a Claude Code.
+#   - CLAUDE_CODE_OAUTH_TOKEN: autentica a Claude Code usando tu suscripcion
+#     (generado localmente con "claude setup-token"). Alternativa:
+#     ANTHROPIC_API_KEY si se prefiere pagar por uso en vez de suscripcion.
 #   - PROJECTS_TOKEN: un Personal Access Token (classic, scopes "repo" +
 #     "project" + "workflow"; o fine-grained con Issues/Pull
 #     requests/Contents en Read-and-write y Projects en Read-and-write)
@@ -161,7 +163,7 @@ jobs:
       - name: Claude Code — implementar el issue
         uses: anthropics/claude-code-action@v1
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: |
             Implementa EXCLUSIVAMENTE el issue #${{ inputs.issue_number }}
             ("${{ needs.gate.outputs.issue_title }}") de este repositorio.
