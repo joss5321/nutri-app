@@ -120,6 +120,6 @@ jobs:
                porque "se ve bien" o porque TypeScript compila — eso no es
                el criterio.
           claude_args: |
-            --max-turns 20
+            --max-turns 40
             --model claude-sonnet-5
             --allowedTools "Bash,Read,Glob,Grep"
