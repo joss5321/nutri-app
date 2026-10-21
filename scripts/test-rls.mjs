@@ -29,6 +29,17 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
 const isWin = process.platform === 'win32';
 
+// En CI, ci.yml ya instala el binario real de Supabase CLI directo en el
+// PATH via supabase/setup-cli@v1 — usarlo tal cual es mas confiable que
+// "npx supabase", que resuelve su propio binario via npm en cada corrida y
+// a veces falla con "No matching Supabase CLI binary package found for
+// linux-x64" (visto en vivo en CI, intermitente, no relacionado con ningun
+// cambio de codigo). Localmente (sin CI) se mantiene "npx supabase" como
+// hasta ahora.
+function supabaseCmd(args) {
+  return process.env.CI ? ['supabase', args] : ['npx', ['supabase', ...args]];
+}
+
 // Todos los comandos que este script invoca son literales fijos (nunca
 // interpolan input externo/de usuario), pero igual evitamos el patrón
 // deprecado de spawnSync(cmd, args, {shell:true}) (Node DEP0190: con shell
@@ -62,7 +73,7 @@ function checkDocker() {
 }
 
 function isSupabaseRunning() {
-  return runQuiet('npx', ['supabase', 'status']).ok;
+  return runQuiet(...supabaseCmd(['status'])).ok;
 }
 
 function ensureSupabaseStarted() {
@@ -71,7 +82,7 @@ function ensureSupabaseStarted() {
     return;
   }
   console.log('Supabase local no está activo. Ejecutando "supabase start" (puede tardar la primera vez)...');
-  if (!run('npx', ['supabase', 'start'])) {
+  if (!run(...supabaseCmd(['start']))) {
     console.error('');
     console.error('"supabase start" falló. Revisa el log de arriba.');
     console.error('');
@@ -233,7 +244,7 @@ function resetDatabase() {
   console.log('Corriendo "supabase db reset" — esto reconstruye el schema completo desde cero');
   console.log('a partir de supabase/migrations/ y es lo que valida que supabase_schema.sql');
   console.log('realmente es reproducible.');
-  if (!run('npx', ['supabase', 'db', 'reset'])) {
+  if (!run(...supabaseCmd(['db', 'reset']))) {
     console.error('');
     console.error('"supabase db reset" falló — el schema/migraciones NO se reconstruyeron');
     console.error('correctamente. Deteniendo aquí: no voy a correr pgTAP contra un schema');
@@ -250,6 +261,6 @@ syncTestMigrations();
 resetDatabase();
 
 console.log('"supabase db reset" OK. Corriendo "supabase test db" ...');
-if (!run('npx', ['supabase', 'test', 'db'])) {
+if (!run(...supabaseCmd(['test', 'db']))) {
   process.exit(1);
 }
