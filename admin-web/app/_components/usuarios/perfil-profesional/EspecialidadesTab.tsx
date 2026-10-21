@@ -22,11 +22,25 @@ export default function EspecialidadesTab({
 }) {
   const [catalogo, setCatalogo] = useState<Especialidad[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const loadCatalogo = () => {
+    setLoading(true);
+    setLoadError(null);
+    fetchEspecialidadesCatalogo()
+      .then(setCatalogo)
+      .catch((err) => setLoadError(err instanceof Error ? err.message : "No se pudo cargar el catálogo de especialidades."))
+      .finally(() => setLoading(false));
+  };
+
   useEffect(() => {
-    fetchEspecialidadesCatalogo().then(setCatalogo).catch(() => {}).finally(() => setLoading(false));
+    // Se difiere a un microtask porque `loadCatalogo` llama a setState de
+    // forma síncrona al iniciar (setLoading/setLoadError), y la regla
+    // react-hooks/set-state-in-effect exige que esas llamadas ocurran
+    // dentro de un callback, no directamente en el cuerpo del efecto.
+    queueMicrotask(loadCatalogo);
   }, []);
 
   const seleccionadasIds = new Set(seleccionadas.map((e) => e.id));
@@ -58,6 +72,17 @@ export default function EspecialidadesTab({
   };
 
   if (loading) return <p className="text-sm text-muted text-center py-10">Cargando catálogo...</p>;
+
+  if (loadError) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 py-10">
+        <p className="text-sm text-error">{loadError}</p>
+        <button type="button" onClick={loadCatalogo} className="text-sm text-primary font-semibold hover:underline">
+          Reintentar
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
