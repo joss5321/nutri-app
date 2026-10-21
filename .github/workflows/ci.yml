@@ -23,6 +23,13 @@ jobs:
     # control tecnico, no solo una instruccion de prompt, para que el
     # agente no pueda tocar pagos/permisos/migraciones aunque algo en su
     # contexto lo empuje a intentarlo.
+    #
+    # Incluye .github/ (estos mismos workflows) y WORKFLOW.md/CLAUDE.md/
+    # AGENTS.md a proposito: el ciclo automatico no puede modificar sus
+    # propias reglas, limites o permisos via su propio circuito de
+    # auto-merge. Como este check es requerido en la proteccion de rama de
+    # main, un PR del agente que toque estas rutas queda bloqueado sin
+    # intervencion humana explicita (merge por bypass de administrador).
     if: startsWith(github.head_ref, 'agent/issue-')
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -36,10 +43,10 @@ jobs:
           set -euo pipefail
           DIFF=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
           echo "$DIFF"
-          PATRON='supabase_schema\.sql|supabase_stripe_schema\.sql|supabase/functions/|supabase/migrations/|lib/permissions\.ts|LockedModal|stripe|pago'
+          PATRON='supabase_schema\.sql|supabase_stripe_schema\.sql|supabase/functions/|supabase/migrations/|lib/permissions\.ts|LockedModal|stripe|pago|^\.github/|WORKFLOW\.md|CLAUDE\.md|AGENTS\.md'
           MATCH=$(echo "$DIFF" | grep -iE "$PATRON" || true)
           if [ -n "$MATCH" ]; then
-            echo "::error::Este PR automatico toca ruta(s) fuera de lo permitido (pagos/permisos/migraciones):"
+            echo "::error::Este PR automatico toca ruta(s) fuera de lo permitido (pagos/permisos/migraciones/workflows/config de agentes):"
             echo "$MATCH"
             exit 1
           fi

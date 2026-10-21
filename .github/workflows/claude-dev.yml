@@ -174,9 +174,12 @@ jobs:
             - No toques nada fuera del alcance de este issue puntual. No "mejores"
               cosas que el issue no pidio.
             - No modifiques migraciones de base de datos, logica de
-              permisos/autorizacion, ni nada relacionado con Stripe o cobros. Si
-              resolver este issue requiriera eso, detente y explica por que en
-              el PR en vez de hacerlo.
+              permisos/autorizacion, nada relacionado con Stripe o cobros, ni
+              nada dentro de .github/ (estos mismos workflows) o
+              WORKFLOW.md/CLAUDE.md/AGENTS.md — un check tecnico separado
+              (sensitive-paths-guard) rechaza esto de todas formas, pero no
+              lo intentes siquiera. Si resolver este issue requiriera algo de
+              esto, detente y explica por que en el PR en vez de hacerlo.
             - No hagas merge de ningun PR, no apruebes ningun PR (ni el tuyo ni
               de nadie), no despliegues a produccion, no habilites cobros
               reales. No tienes ninguna credencial de Stripe, Vercel ni EAS en
