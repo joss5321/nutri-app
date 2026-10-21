@@ -57,9 +57,9 @@ jobs:
           echo "Rondas de 'changes requested' hasta ahora: $ROUNDS"
 
           BODY=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json body --jq .body)
-          ISSUE_NUM=$(echo "$BODY" | grep -ioE 'closes #[0-9]+' | head -1 | grep -oE '[0-9]+' || true)
+          ISSUE_NUM=$(echo "$BODY" | grep -ioE 'issue: *#[0-9]+' | head -1 | grep -oE '[0-9]+' || true)
           if [ -z "$ISSUE_NUM" ]; then
-            echo "::error::No se encontro 'Closes #N' en el PR #$PR_NUMBER — no se puede ubicar el issue."
+            echo "::error::No se encontro 'Issue: #N' en el PR #$PR_NUMBER — no se puede ubicar el issue."
             exit 1
           fi
 
