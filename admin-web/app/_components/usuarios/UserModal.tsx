@@ -11,28 +11,6 @@ import { X, Crown, Lock, Cake, Stethoscope, BarChart3, Dumbbell, CalendarDays, T
 
 type LucideIcon = React.ComponentType<{ size?: number; className?: string; strokeWidth?: number }>;
 
-// ── Círculo de progreso SVG ─────────────────────────────────
-function CircleProgress({ value, label, sub }: { value: number; label: string; sub: string }) {
-  const r = 34;
-  const circ = 2 * Math.PI * r;
-  const offset = circ - (value / 100) * circ;
-  return (
-    <div className="flex flex-col items-center gap-1">
-      <div className="relative w-20 h-20">
-        <svg viewBox="0 0 80 80" className="w-full h-full">
-          <circle cx="40" cy="40" r={r} fill="none" stroke="#E5E7EB" strokeWidth="7" />
-          <circle cx="40" cy="40" r={r} fill="none" stroke="#2EBD8C" strokeWidth="7"
-            strokeLinecap="round" strokeDasharray={circ} strokeDashoffset={offset}
-            transform="rotate(-90 40 40)" />
-        </svg>
-        <span className="absolute inset-0 flex items-center justify-center text-sm font-bold text-text-primary">{value}%</span>
-      </div>
-      <p className="text-xs font-semibold text-text-primary">{label}</p>
-      <p className="text-xs text-primary">{sub}</p>
-    </div>
-  );
-}
-
 // ── Mini gráfica de línea ────────────────────────────────────
 function LineChart({ data, unit = "" }: { data: { label: string; value: number }[]; unit?: string }) {
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);

@@ -44,7 +44,7 @@ function distribuirEnComidas(total: number): [number, number, number, number, nu
   const sum = w.reduce((a, b) => a + b, 0);
   const norm = w.map((x) => x / sum);
   const floors = norm.map((x) => Math.floor(x * total));
-  let rem = total - floors.reduce((a, b) => a + b, 0);
+  const rem = total - floors.reduce((a, b) => a + b, 0);
   // Distribuir sobrante a los de mayor parte decimal
   const order = norm
     .map((x, i) => ({ i, frac: x * total - floors[i] }))
