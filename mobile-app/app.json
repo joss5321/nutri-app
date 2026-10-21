@@ -44,6 +44,12 @@
       "expo-font",
       "expo-web-browser",
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "Esta app necesita acceso a tus fotos para que puedas elegir una imagen de perfil."
+        }
+      ],
+      [
         "expo-notifications",
         {
           "icon": "./assets/branding/android-icon-monochrome.png",
