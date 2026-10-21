@@ -40,7 +40,7 @@ jobs:
       item_id: ${{ steps.check.outputs.item_id }}
       review_body: ${{ steps.check.outputs.review_body }}
     steps:
-      - name: Contar rondas de correccion previas (limite: 3)
+      - name: "Contar rondas de correccion previas (limite: 3)"
         id: check
         env:
           # PROJECTS_TOKEN, no GITHUB_TOKEN: este paso lee/escribe en el
