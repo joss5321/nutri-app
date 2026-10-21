@@ -37,9 +37,9 @@ jobs:
         run: |
           set -euo pipefail
           BODY=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json body --jq .body)
-          ISSUE_NUM=$(echo "$BODY" | grep -ioE 'closes #[0-9]+' | head -1 | grep -oE '[0-9]+' || true)
+          ISSUE_NUM=$(echo "$BODY" | grep -ioE 'issue: *#[0-9]+' | head -1 | grep -oE '[0-9]+' || true)
           if [ -z "$ISSUE_NUM" ]; then
-            echo "::warning::El PR #$PR_NUMBER no tiene 'Closes #N' detectable — no se puede actualizar el tablero."
+            echo "::warning::El PR #$PR_NUMBER no tiene 'Issue: #N' detectable — no se puede actualizar el tablero."
             exit 0
           fi
 

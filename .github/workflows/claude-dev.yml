@@ -189,8 +189,12 @@ jobs:
               ejecutadas". No afirmes que algo "funciona" o "pasa" sin haberlo
               corrido de verdad.
             - Haz commit en esa rama, pushea, y abre un Pull Request hacia
-              main que incluya "Closes #${{ inputs.issue_number }}" en la
-              descripcion para vincular el issue automaticamente.
+              main que incluya "Issue: #${{ inputs.issue_number }}" en la
+              descripcion para vincular el issue (usa exactamente esa frase,
+              "Issue: #N" — NUNCA "Closes #N"/"Fixes #N"/"Resolves #N" ni
+              variantes: esas frases hacen que GitHub cierre el issue
+              automaticamente al mergear, y aqui el cierre lo decide
+              claude-merged.yml de forma explicita, no el merge en si).
             - En la descripcion del PR incluye: que hiciste, por que, que NO
               hiciste (si frenaste por alguna regla de arriba), y la salida de
               los comandos de verificacion.
