@@ -200,6 +200,7 @@ jobs:
           claude_args: |
             --max-turns 30
             --model claude-sonnet-5
+            --allowedTools "Bash,Read,Write,Edit,Glob,Grep"
 
       - name: Buscar el PR generado y mover el issue a 'En revisión' en el tablero
         if: always()
