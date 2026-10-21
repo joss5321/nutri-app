@@ -4,8 +4,6 @@
  * - gif_url en WorkoutX (plan agotado): no hay forma de servirlo → null (fallback a emoji).
  *   Ya no existe ni se usa ninguna Edge Function gif-proxy — se retiró de producción.
  */
-const SUPABASE_URL = "https://uvfdbvzydbogfkntfuix.supabase.co";
-
 export function proxyGifUrl(gifUrl: string | null | undefined): string | null {
   if (!gifUrl) return null;
   if (gifUrl.includes("supabase.co/storage")) return gifUrl;
