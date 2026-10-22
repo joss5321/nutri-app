@@ -15,6 +15,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native'
 import { Ionicons } from '@expo/vector-icons'
 import { AppHeader } from '@/components/ui/AppHeader'
+import { RetryError } from '@/components/ui/RetryError'
 import { COLORS } from '@/constants/colors'
 import { useAuthStore } from '@/store/auth'
 import { useNewsStore } from '@/store/news'
@@ -156,6 +157,7 @@ function EquivalentesTab() {
 
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [groups, setGroups] = useState<FoodGroupRow[]>([])
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null)
   const expandAnim = useRef(new Animated.Value(0)).current
@@ -177,6 +179,7 @@ function EquivalentesTab() {
       if (!userId) return
       if (isRefresh) setRefreshing(true)
       else setLoading(true)
+      setLoadError(null)
       fetchMisEquivalentes(userId)
         .then((result) => {
           if (result && result.equivalentes.length > 0) {
@@ -186,7 +189,7 @@ function EquivalentesTab() {
             setGroups([])
           }
         })
-        .catch(() => {})
+        .catch(() => setLoadError('No se pudo cargar tu plan de equivalentes.'))
         .finally(() => {
           setLoading(false)
           setRefreshing(false)
@@ -205,6 +208,10 @@ function EquivalentesTab() {
         <ActivityIndicator size="large" color={COLORS.primary} />
       </View>
     )
+  }
+
+  if (loadError) {
+    return <RetryError message={loadError} onRetry={() => loadData()} />
   }
 
   if (groups.length === 0) {
@@ -533,6 +540,7 @@ function RecetasTab() {
 
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [recipes, setRecipes] = useState<Recipe[]>([])
   const [search, setSearch] = useState('')
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null)
@@ -542,9 +550,10 @@ function RecetasTab() {
       if (!userId) return
       if (isRefresh) setRefreshing(true)
       else setLoading(true)
+      setLoadError(null)
       fetchMisRecetas(userId)
         .then((data) => setRecipes(data.map(mapReceta)))
-        .catch(() => {})
+        .catch(() => setLoadError('No se pudieron cargar tus recetas.'))
         .finally(() => {
           setLoading(false)
           setRefreshing(false)
@@ -577,6 +586,10 @@ function RecetasTab() {
         <ActivityIndicator size="large" color={COLORS.primary} />
       </View>
     )
+  }
+
+  if (loadError) {
+    return <RetryError message={loadError} onRetry={() => loadData()} />
   }
 
   if (recipes.length === 0) {
@@ -700,6 +713,7 @@ function SuplementacionTab() {
 
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [suplementos, setSuplementos] = useState<SuplementoAsignado[]>([])
   const [checked, setChecked] = useState<Set<string>>(new Set())
   const [notificationsEnabled, setNotificationsEnabled] = useState(false)
@@ -721,12 +735,13 @@ function SuplementacionTab() {
       if (!userId) return
       if (isRefresh) setRefreshing(true)
       else setLoading(true)
+      setLoadError(null)
       Promise.all([fetchMisSuplementos(userId), fetchSuplementoLogsHoy(userId)])
         .then(([sups, tomadosHoy]) => {
           setSuplementos(sups)
           setChecked(tomadosHoy)
         })
-        .catch(() => {})
+        .catch(() => setLoadError('No se pudieron cargar tus suplementos.'))
         .finally(() => {
           setLoading(false)
           setRefreshing(false)
@@ -865,6 +880,10 @@ function SuplementacionTab() {
         <ActivityIndicator size="large" color={COLORS.primary} />
       </View>
     )
+  }
+
+  if (loadError) {
+    return <RetryError message={loadError} onRetry={() => loadData()} />
   }
 
   if (suplementos.length === 0) {

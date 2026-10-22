@@ -3,6 +3,7 @@ import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TextIn
 import { useFocusEffect } from '@react-navigation/native'
 import { Ionicons } from '@expo/vector-icons'
 import { AppHeader } from '@/components/ui/AppHeader'
+import { RetryError } from '@/components/ui/RetryError'
 import { COLORS } from '@/constants/colors'
 import { useAuthStore } from '@/store/auth'
 import { fetchMiPerfil, updateMiPerfil } from '@/lib/api/perfiles'
@@ -167,6 +168,7 @@ export default function ProgresoScreen() {
   const [hasData, setHasData] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   const [historial, setHistorial] = useState<Medida[]>([])
   const [alturaCm, setAlturaCm] = useState<number | null>(null)
@@ -191,15 +193,16 @@ export default function ProgresoScreen() {
   const loadData = useCallback((isRefresh = false) => {
     if (!userId) return
     if (isRefresh) setRefreshing(true); else setLoading(true)
+    setLoadError(null)
     Promise.all([fetchUltimaMedida(userId), fetchMiPerfil(userId)])
       .then(([medida, perfil]) => {
         setAlturaCm(perfil?.altura_cm ?? null)
         if (medida) {
           setHasData(true)
-          fetchMedidasHistorial(userId).then(setHistorial)
+          return fetchMedidasHistorial(userId).then(setHistorial)
         }
       })
-      .catch(() => {})
+      .catch(() => setLoadError('No se pudo cargar tu progreso.'))
       .finally(() => { setLoading(false); setRefreshing(false) })
   }, [userId])
 
@@ -254,6 +257,16 @@ export default function ProgresoScreen() {
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <ActivityIndicator size="large" color={COLORS.primary} />
         </View>
+      </View>
+    )
+  }
+
+  // ── Error de carga ──────────────────────────────────────────────────────────
+  if (loadError) {
+    return (
+      <View style={s.container}>
+        <AppHeader title="Mi Progreso" />
+        <RetryError message={loadError} onRetry={() => loadData()} />
       </View>
     )
   }
