@@ -37,7 +37,10 @@ jobs:
           DESDE=$(date -u -d "24 hours ago" +"%Y-%m-%dT%H:%M:%SZ")
 
           # ── Tablero: conteo por estado ──────────────────────────────
-          ITEMS=$(gh api graphql -f query='query($project:ID!){node(id:$project){... on ProjectV2{items(first:150){nodes{content{... on Issue{number title state url}} fieldValueByName(name:"Estado"){... on ProjectV2ItemFieldSingleSelectValue{name}}}}}}}' -F project="$PROJECT_ID")
+          # 100 es el maximo permitido por pagina en la API de GitHub
+          # (un "first" mayor lo rechaza). Si el tablero llega a superar
+          # 100 items habria que paginar con "after" — no es el caso hoy.
+          ITEMS=$(gh api graphql -f query='query($project:ID!){node(id:$project){... on ProjectV2{items(first:100){nodes{content{... on Issue{number title state url}} fieldValueByName(name:"Estado"){... on ProjectV2ItemFieldSingleSelectValue{name}}}}}}}' -F project="$PROJECT_ID")
 
           CONTEO=$(echo "$ITEMS" | jq -r '
             [.data.node.items.nodes[] | .fieldValueByName.name // "Sin estado"]
