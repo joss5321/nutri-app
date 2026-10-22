@@ -17,11 +17,10 @@ on:
   schedule:
     # Red de seguridad: por si una tarea quedo lista pero nadie le puso la
     # etiqueta despues (ej. se resolvio una dependencia manualmente). Cada
-    # 30 min es deliberadamente poco frecuente — esto es logica
-    # deterministica sin costo de modelo, pero igual consume minutos de
-    # Actions, así que no hace falta mas seguido que esto para un proyecto
-    # de este tamaño.
-    - cron: "*/30 * * * *"
+    # hora es logica deterministica sin costo de modelo, pero igual
+    # consume minutos de Actions, así que no hace falta mas seguido que
+    # esto para un proyecto de este tamaño.
+    - cron: "0 * * * *"
   workflow_dispatch: {}
 
 concurrency:

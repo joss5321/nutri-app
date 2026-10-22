@@ -97,6 +97,24 @@ jobs:
         run: npx expo export --platform web
         continue-on-error: true
 
+      - name: Verificar texto en español del permiso de fotos (iOS)
+        # Issue #17. "expo config" resuelve la config efectiva incluyendo
+        # config plugins — es exactamente lo que "expo prebuild" usaria
+        # para generar el Info.plist real, sin necesitar una build nativa
+        # completa (no hay runner macOS en este repo). Determinista: si
+        # este valor es correcto, el Info.plist generado lo sera tambien.
+        run: |
+          set -euo pipefail
+          TEXTO=$(npx expo config --type public --json | python3 -c "
+          import json, sys
+          d = json.load(sys.stdin)
+          for p in d.get('plugins', []):
+              if isinstance(p, list) and 'image-picker' in str(p[0]):
+                  print(p[1].get('photosPermission', ''))
+          ")
+          echo "Texto configurado: $TEXTO"
+          echo "$TEXTO" | grep -qi "fotos" || { echo "::error::El texto del permiso de fotos no esta en español (o el plugin no esta configurado)."; exit 1; }
+
   admin-web:
     name: admin-web
     runs-on: ubuntu-latest
