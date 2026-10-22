@@ -71,12 +71,17 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.CLAUDE_REVIEWER_TOKEN }}
-          # Por defecto la action rechaza cualquier PR abierto por un bot
-          # (proteccion anti-bucle). Se permite explicitamente solo "claude"
-          # (el bot que abre los PRs de claude-dev.yml) — no "*", para no
-          # abrir la puerta a cualquier otro bot que alguna vez tenga
-          # permiso de push en este repo.
-          allowed_bots: "claude"
+          # Por defecto la action rechaza cualquier PR/push de un bot
+          # (proteccion anti-bucle). Se permiten solo los dos que este
+          # mismo ciclo usa — "claude" (claude-dev.yml abriendo el PR) y
+          # "github-actions" (claude-fix.yml empujando una correccion con
+          # el GITHUB_TOKEN por defecto, confirmado en vivo: "Workflow
+          # initiated by non-human actor: github-actions (type: Bot)") —
+          # nunca "*", para no abrir la puerta a cualquier otro bot que
+          # alguna vez tenga permiso de push en este repo. Ninguno de los
+          # dos aplica a PRs humanos: el job entero esta condicionado a
+          # startsWith(head.ref, 'agent/issue-').
+          allowed_bots: "claude,github-actions"
           prompt: |
             Revisa de forma independiente el PR #${{ github.event.pull_request.number }}
             de este repositorio (rama ${{ github.event.pull_request.head.ref }}).
