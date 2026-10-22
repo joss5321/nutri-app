@@ -1,0 +1,115 @@
+name: Claude Daily Report
+
+# Resumen diario del ciclo automatico. No manda nada a servicios externos
+# (nunca se configuro Slack/email/etc., tal como se pidio) — publica un
+# comentario nuevo cada dia en el issue #53 ("Resumen diario del ciclo
+# automatico"), usando el tablero y el registro real de corridas de los
+# workflows como unicas fuentes. No invoca a Claude: es logica
+# deterministica (bash + gh api).
+on:
+  schedule:
+    - cron: "0 13 * * *" # 07:00 hora de Ciudad de Mexico (UTC-6)
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+  actions: read
+
+env:
+  PROJECT_ID: "PVT_kwHOAxCIPc4Bn-p9"
+  REPORT_ISSUE: "53"
+
+jobs:
+  report:
+    name: Generar y publicar el resumen
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Construir y publicar el resumen
+        env:
+          GH_TOKEN: ${{ secrets.PROJECTS_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          HOY=$(date -u +"%Y-%m-%d")
+          DESDE=$(date -u -d "24 hours ago" +"%Y-%m-%dT%H:%M:%SZ")
+
+          # ── Tablero: conteo por estado ──────────────────────────────
+          ITEMS=$(gh api graphql -f query='query($project:ID!){node(id:$project){... on ProjectV2{items(first:150){nodes{content{... on Issue{number title state url}} fieldValueByName(name:"Estado"){... on ProjectV2ItemFieldSingleSelectValue{name}}}}}}}' -F project="$PROJECT_ID")
+
+          CONTEO=$(echo "$ITEMS" | jq -r '
+            [.data.node.items.nodes[] | .fieldValueByName.name // "Sin estado"]
+            | group_by(.) | map("\(.[0]): \(length)") | join("\n")')
+
+          TERMINADAS_HOY=$(echo "$ITEMS" | jq -r --arg d "$DESDE" '
+            [.data.node.items.nodes[] | select(.fieldValueByName.name=="Terminada") | select(.content.state=="CLOSED") | .content]
+            | map("- #\(.number) \(.title)") | .[0:20] | join("\n")')
+
+          EN_VALIDACION=$(echo "$ITEMS" | jq -r '
+            [.data.node.items.nodes[] | select(.fieldValueByName.name=="En validación") | .content]
+            | map("- #\(.number) \(.title) — \(.url)") | join("\n")')
+
+          BLOQUEADAS=$(echo "$ITEMS" | jq -r '
+            [.data.node.items.nodes[] | select(.fieldValueByName.name=="Bloqueada") | .content]
+            | map("- #\(.number) \(.title) — \(.url)") | join("\n")')
+
+          # Motivo de cada bloqueo: ultimo comentario del issue (si lo hay).
+          MOTIVOS=""
+          BLOQUEADAS_NUMS=$(echo "$ITEMS" | jq -r '[.data.node.items.nodes[] | select(.fieldValueByName.name=="Bloqueada") | .content.number] | .[]')
+          for NUM in $BLOQUEADAS_NUMS; do
+            ULTIMO=$(gh issue view "$NUM" --repo "$REPO" --json comments --jq '.comments[-1].body // "(sin comentarios)"' | head -c 300)
+            MOTIVOS="${MOTIVOS}#${NUM}: ${ULTIMO}
+          "
+          done
+
+          # ── Corridas de los workflows del ciclo en las ultimas 24h ──
+          RUNS_FALLIDOS=""
+          for WF in claude-dev.yml claude-review.yml claude-fix.yml claude-merged.yml; do
+            FALLOS=$(gh run list --repo "$REPO" --workflow "$WF" --created ">=${DESDE}" --json conclusion,url,displayTitle,headBranch --jq '[.[] | select(.conclusion=="failure")] | map("  - [\(.displayTitle)](\(.url)) (\(.headBranch))") | join("\n")')
+            if [ -n "$FALLOS" ]; then
+              RUNS_FALLIDOS="${RUNS_FALLIDOS}**${WF}**:
+          ${FALLOS}
+          "
+            fi
+          done
+          [ -z "$RUNS_FALLIDOS" ] && RUNS_FALLIDOS="Ninguno."
+
+          DESPACHADAS_HOY=$(gh run list --repo "$REPO" --workflow claude-dev.yml --created ">=${DESDE}" --json conclusion --jq 'length')
+
+          # ── Armar el cuerpo del comentario ──────────────────────────
+          {
+            echo "## Resumen — $HOY"
+            echo ""
+            echo "### Tablero (conteo por estado)"
+            echo '```'
+            echo "$CONTEO"
+            echo '```'
+            echo ""
+            echo "### Terminadas en las últimas 24h"
+            echo "${TERMINADAS_HOY:-Ninguna.}"
+            echo ""
+            echo "### En validación (esperando confirmación manual/dispositivo)"
+            echo "${EN_VALIDACION:-Ninguna.}"
+            echo ""
+            echo "### Bloqueadas (necesitan decisión humana)"
+            echo "${BLOQUEADAS:-Ninguna.}"
+            if [ -n "$MOTIVOS" ]; then
+              echo ""
+              echo "<details><summary>Motivo de cada bloqueo</summary>"
+              echo ""
+              echo "$MOTIVOS"
+              echo "</details>"
+            fi
+            echo ""
+            echo "### Corridas del desarrollador despachadas en 24h: $DESPACHADAS_HOY"
+            echo ""
+            echo "### Fallos de CI/workflow en las últimas 24h"
+            echo "$RUNS_FALLIDOS"
+            echo ""
+            echo "### Límites de gasto"
+            echo "Autenticación por suscripción (CLAUDE_CODE_OAUTH_TOKEN), no por API de pago — no hay un presupuesto en dólares que consultar aquí. Los límites realmente exigibles son estructurales: una tarea activa a la vez, máximo 3 intentos de desarrollo y 3 rondas de corrección por tarea, timeout de 30-60 min por corrida. Si el consumo de la suscripción se agota, las corridas fallarán con un error de autenticación visible en los logs de Actions, no silenciosamente."
+          } > /tmp/reporte.md
+
+          gh issue comment "$REPORT_ISSUE" --repo "$REPO" --body-file /tmp/reporte.md

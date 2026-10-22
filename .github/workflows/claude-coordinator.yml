@@ -1,0 +1,104 @@
+name: Claude Coordinator
+
+# NO ACTIVAR hasta validar el ciclo completo (dev -> review -> fix si hace
+# falta -> merge -> post-merge) al menos una vez de extremo a extremo con
+# una tarea de prueba. Este archivo se prepara con anticipacion pero se
+# fusiona a main deliberadamente despues de esa validacion, no antes.
+#
+# Rol: el "coordinador" del ciclo. Busca la siguiente tarea autorizada
+# (Abierta, etiqueta agent-ready, estado 'Lista', sin otra tarea activa, y
+# sin dependencias pendientes declaradas en su propio cuerpo) y dispara
+# claude-dev.yml para ella. No escribe codigo, no revisa, no mergea — solo
+# selecciona y despacha. No usa un modelo de lenguaje: es logica
+# deterministica (bash + gh api).
+on:
+  issues:
+    types: [labeled]
+  schedule:
+    # Red de seguridad: por si una tarea quedo lista pero nadie le puso la
+    # etiqueta despues (ej. se resolvio una dependencia manualmente). Cada
+    # 30 min es deliberadamente poco frecuente — esto es logica
+    # deterministica sin costo de modelo, pero igual consume minutos de
+    # Actions, así que no hace falta mas seguido que esto para un proyecto
+    # de este tamaño.
+    - cron: "*/30 * * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: claude-coordinator
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: read
+  actions: write
+
+env:
+  PROJECT_ID: "PVT_kwHOAxCIPc4Bn-p9"
+  ESTADO_FIELD_ID: "PVTSSF_lAHOAxCIPc4Bn-p9zhmgzMI"
+  ESTADO_LISTA: "345dfbc1"
+
+jobs:
+  coordinate:
+    name: Elegir y despachar la siguiente tarea
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Buscar una tarea Lista + agent-ready sin tarea activa ni dependencias pendientes
+        env:
+          # PROJECTS_TOKEN, no GITHUB_TOKEN: lee el tablero de Projects v2
+          # (ver nota de secretos en claude-dev.yml).
+          GH_TOKEN: ${{ secrets.PROJECTS_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # ¿Ya hay algo en 'En desarrollo' o 'En revisión'? Si si, no se
+          # despacha nada nuevo — una tarea activa a la vez.
+          ACTIVA=$(gh api graphql -f query='query($project:ID!){node(id:$project){... on ProjectV2{items(first:100){nodes{content{... on Issue{number}} fieldValueByName(name:"Estado"){... on ProjectV2ItemFieldSingleSelectValue{name}}}}}}}' -F project="$PROJECT_ID" \
+            | jq -r '[.data.node.items.nodes[] | select(.fieldValueByName.name == "En desarrollo" or .fieldValueByName.name == "En revisión") | .content.number] | .[0] // empty')
+          if [ -n "$ACTIVA" ]; then
+            echo "Ya hay una tarea activa (issue #$ACTIVA). No se despacha nada nuevo."
+            exit 0
+          fi
+
+          # Candidatas: Lista + agent-ready, abiertas.
+          CANDIDATOS=$(gh issue list --repo "$REPO" --label "agent-ready" --state open --json number,body --jq '.[].number')
+          if [ -z "$CANDIDATOS" ]; then
+            echo "No hay issues abiertos con la etiqueta agent-ready."
+            exit 0
+          fi
+
+          for NUM in $CANDIDATOS; do
+            OWNER="${REPO%/*}"; NAME="${REPO#*/}"
+            QUERY='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){issue(number:$number){body projectItems(first:10){nodes{project{id} fieldValueByName(name:"Estado"){... on ProjectV2ItemFieldSingleSelectValue{optionId}}}}}}}'
+            RESULT=$(gh api graphql -f query="$QUERY" -F owner="$OWNER" -F name="$NAME" -F number="$NUM")
+            ESTADO_ID=$(echo "$RESULT" | jq -r --arg pid "$PROJECT_ID" '.data.repository.issue.projectItems.nodes[] | select(.project.id==$pid) | .fieldValueByName.optionId')
+            if [ "$ESTADO_ID" != "$ESTADO_LISTA" ]; then
+              continue
+            fi
+
+            # Dependencias: best-effort, solo detecta el patron de texto libre
+            # "DEPENDE DE: #N" que se usa en el backlog. Si la dependencia
+            # referenciada no esta cerrada, se salta esta candidata.
+            BODY=$(echo "$RESULT" | jq -r '.data.repository.issue.body // ""')
+            DEPS=$(echo "$BODY" | grep -ioE 'DEPENDE DE:[^\n]*' | grep -oE '#[0-9]+' | grep -oE '[0-9]+' || true)
+            PENDIENTE=""
+            for DEP in $DEPS; do
+              DEP_STATE=$(gh issue view "$DEP" --repo "$REPO" --json state --jq .state 2>/dev/null || echo "UNKNOWN")
+              if [ "$DEP_STATE" != "CLOSED" ]; then
+                PENDIENTE="$DEP"
+                break
+              fi
+            done
+            if [ -n "$PENDIENTE" ]; then
+              echo "Issue #$NUM depende de #$PENDIENTE (no cerrada todavia) — se salta."
+              continue
+            fi
+
+            echo "Despachando issue #$NUM a claude-dev.yml"
+            gh workflow run claude-dev.yml --repo "$REPO" -f issue_number="$NUM"
+            exit 0
+          done
+
+          echo "Ninguna candidata esta realmente en 'Lista' sin dependencias pendientes."

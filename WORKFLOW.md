@@ -89,6 +89,79 @@ persona lo apruebe explícitamente, tarea por tarea. Ninguna tarea de este
 backlog habilita cobros reales (Stripe Live) sin que el usuario lo autorice
 de forma expresa y por separado.
 
+## Automatización del ciclo
+
+Desde el 21/10/2026 los roles de desarrollador y revisor corren de forma
+automática vía GitHub Actions. Los workflows viven en `.github/workflows/`:
+
+- `claude-dev.yml` — desarrollador. Arranca solo por `workflow_dispatch`
+  manual (número de issue). Valida que el issue esté abierto, tenga la
+  etiqueta `agent-ready`, esté en `Lista`, no haya otra tarea activa y no
+  haya superado 3 intentos (etiquetas `attempt-1/2/3` en el issue, no
+  ramas — borrar una rama no resetea el conteo). Implementa, corre
+  comprobaciones reales, abre PR, programa auto-merge nativo de GitHub.
+- `claude-review.yml` — revisor. Corre en una ejecución separada de
+  Actions (mismo modelo, Claude Sonnet 5, sin contexto compartido con el
+  desarrollador) con una identidad de GitHub distinta (`CLAUDE_REVIEWER_TOKEN`,
+  un token de solo lectura sobre código). Re-verifica el diff y las
+  comprobaciones por su cuenta, nunca confía en el texto del PR. Aprueba o
+  pide cambios con observaciones concretas, y deja una señal explícita
+  (`CRITERIOS_VERIFICABLES_EN_CI: si/no`) sobre si el criterio de
+  aceptación quedó verificado solo con checks automáticos o necesita
+  confirmación manual/dispositivo.
+- `claude-fix.yml` — corrige sobre la misma rama cuando el revisor pide
+  cambios. Límite de 3 rondas; a la cuarta, marca `Bloqueada` y se
+  detiene sin reintentar.
+- `claude-merged.yml` — tras un merge real (nunca antes), decide entre
+  `En validación` (queda abierto) o `Terminada` (se cierra) leyendo
+  exclusivamente esa señal estructurada del revisor, nunca su prosa libre.
+- `claude-coordinator.yml` — selecciona la siguiente tarea `Lista` +
+  `agent-ready` sin dependencias pendientes y sin otra tarea activa, y
+  despacha `claude-dev.yml`. Si no hay nada elegible, termina sin invocar
+  al modelo.
+- `claude-daily-report.yml` — publica un resumen diario (tablero +
+  registro de corridas) como comentario en un issue fijo. No se configuró
+  ningún canal externo (Slack/email/etc.).
+
+### Garantías de seguridad verificadas (no solo declaradas)
+
+- **Una tarea a la vez**: el `gate` de `claude-dev.yml` rechaza despachar
+  una tarea nueva si otra sigue `En desarrollo`/`En revisión`, además del
+  `concurrency` de Actions que serializa las corridas.
+- **El ciclo no puede modificar su propia configuración**: `sensitive-paths-guard`
+  (check requerido en `main`) bloquea cualquier PR de rama `agent/issue-*`
+  que toque `.github/`, `WORKFLOW.md`, `CLAUDE.md` o `AGENTS.md` — probado
+  en vivo.
+- **El desarrollador no puede aprobar ni mergear**: identidad de GitHub
+  distinta para el revisor + branch protection en `main` (1 aprobación
+  requerida) — GitHub rechaza que una PR se apruebe a sí misma.
+- **Ningún cierre automático salta la validación**: `Terminada` solo
+  ocurre si el revisor marcó explícitamente `CRITERIOS_VERIFICABLES_EN_CI: si`;
+  en cualquier otro caso queda `En validación`, abierto.
+- **Merge y despliegue a producción están desacoplados**: el auto-merge a
+  `main` no tiene ninguna credencial de Vercel/EAS/Stripe; si Vercel
+  despliega admin-web al mergear es por su propia integración de Git
+  (confirmado), no por nada de este ciclo. Ninguna Edge Function de
+  Supabase se despliega automáticamente — sigue siendo manual.
+- **Probado de extremo a extremo, dos veces, con evidencia real** (no solo
+  configurado):
+  - Ruta "criterios verificables": issue #49 → PR #50 → revisor aprobó con
+    `CRITERIOS_VERIFICABLES_EN_CI: si` → merge automático → cierre
+    automático + `Terminada`.
+  - Ruta "revisor pide cambios": issue #6 → PR #54 → revisor pidió cambios
+    concretos → `claude-fix.yml` corrigió sobre la misma rama → re-revisión
+    del último commit → aprobó → merge automático. El issue quedó en
+    `En validación` (no `Terminada`) porque el revisor marcó
+    `CRITERIOS_VERIFICABLES_EN_CI: no`.
+  - En el camino se encontraron y corrigieron en vivo varios bugs reales
+    de la primera versión de estos workflows (faltaba `--allowedTools`,
+    límites de turnos insuficientes, protección anti-bucle de la propia
+    Claude Code Action rechazando a los bots "claude" y "github-actions",
+    un error de sintaxis YAML que impedía que `claude-fix.yml` corriera
+    nunca, y que "Closes #N" cerraba el issue de forma nativa sin pasar
+    por la validación de este ciclo) — todos documentados en los mensajes
+    de commit correspondientes, no ocultados.
+
 ## Dónde vive cada cosa
 
 - **Backlog y estado de cada tarea**: tablero de GitHub Projects
