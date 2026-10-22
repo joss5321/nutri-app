@@ -109,7 +109,7 @@ jobs:
             echo "$RUNS_FALLIDOS"
             echo ""
             echo "### Límites de gasto"
-            echo "Autenticación por suscripción (CLAUDE_CODE_OAUTH_TOKEN), no por API de pago — no hay un presupuesto en dólares que consultar aquí. Los límites realmente exigibles son estructurales: una tarea activa a la vez, máximo 3 intentos de desarrollo y 3 rondas de corrección por tarea, timeout de 30-60 min por corrida. Si el consumo de la suscripción se agota, las corridas fallarán con un error de autenticación visible en los logs de Actions, no silenciosamente."
+            echo "Confirmado con el usuario (2026-10-21): autenticación por suscripción (CLAUDE_CODE_OAUTH_TOKEN), no por API de pago — no existe un importe en dólares que definir ni hacer cumplir aquí. Los límites realmente exigibles son estructurales: una tarea activa a la vez, máximo 3 intentos de desarrollo y 3 rondas de corrección por tarea, timeout de 30-60 min por corrida. Si el consumo de la suscripción se agota, las corridas fallarán con un error de autenticación visible en los logs de Actions, nunca en silencio."
           } > /tmp/reporte.md
 
           gh issue comment "$REPORT_ISSUE" --repo "$REPO" --body-file /tmp/reporte.md
