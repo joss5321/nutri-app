@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useFocusEffect } from '@react-navigation/native'
 import * as ImagePicker from 'expo-image-picker'
 import { AppHeader } from '@/components/ui/AppHeader'
+import { RetryError } from '@/components/ui/RetryError'
 import { COLORS } from '@/constants/colors'
 import { useAuthStore } from '@/store/auth'
 import { supabase } from '@/lib/supabase'
@@ -60,6 +61,7 @@ export default function PerfilScreen() {
 
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   const [payingPlan, setPayingPlan] = useState<string | null>(null)
 
@@ -108,9 +110,10 @@ export default function PerfilScreen() {
   const loadData = useCallback((isRefresh = false) => {
     if (!userId) return
     if (isRefresh) setRefreshing(true); else setLoading(true)
+    setLoadError(null)
     Promise.all([fetchMiPerfil(userId), fetchUltimaMedida(userId), fetchMisCitas(userId)])
       .then(([p, m, c]) => { setPerfil(p); setMedida(m); setCitas(c) })
-      .catch(() => {})
+      .catch(() => setLoadError('No se pudo cargar tu perfil.'))
       .finally(() => { setLoading(false); setRefreshing(false) })
   }, [userId])
 
@@ -216,6 +219,15 @@ export default function PerfilScreen() {
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <ActivityIndicator size="large" color={COLORS.primary} />
         </View>
+      </View>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <View style={s.container}>
+        <AppHeader title="Perfil" />
+        <RetryError message={loadError} onRetry={() => loadData()} />
       </View>
     )
   }

@@ -8,6 +8,7 @@ import { useFocusEffect } from '@react-navigation/native'
 import { COLORS } from '@/constants/colors'
 import { useAuthStore } from '@/store/auth'
 import { useNewsStore } from '@/store/news'
+import { RetryError } from '@/components/ui/RetryError'
 import {
   fetchMiRutina,
   fetchDiasCompletadosSemana,
@@ -546,6 +547,7 @@ export default function RutinasScreen() {
 
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [rutinaNombre, setRutinaNombre] = useState('')
   const [activeTab, setActiveTab] = useState<'rutinas' | 'progreso'>('rutinas')
   const [days, setDays] = useState<Day[]>([])
@@ -557,6 +559,7 @@ export default function RutinasScreen() {
   const loadData = useCallback((isRefresh = false) => {
     if (!userId) return
     if (isRefresh) setRefreshing(true); else setLoading(true)
+    setLoadError(null)
     Promise.all([
       fetchMiRutina(userId),
       fetchAllEjercicioLogs(userId),
@@ -575,7 +578,7 @@ export default function RutinasScreen() {
           setAllExercises([])
         }
       })
-      .catch(() => {})
+      .catch(() => setLoadError('No se pudo cargar tu rutina.'))
       .finally(() => { setLoading(false); setRefreshing(false) })
   }, [userId])
 
@@ -659,6 +662,8 @@ export default function RutinasScreen() {
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <ActivityIndicator size="large" color={COLORS.primary} />
         </View>
+      ) : loadError ? (
+        <RetryError message={loadError} onRetry={() => loadData()} />
       ) : days.length === 0 ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
           <View style={s.emptyIcon}>

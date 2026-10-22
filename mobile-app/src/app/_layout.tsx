@@ -1,5 +1,5 @@
-import { Component, useEffect, type ReactNode } from 'react'
-import { Alert, Text, View } from 'react-native'
+import { Component, useEffect, useState, type ReactNode } from 'react'
+import { Alert, StyleSheet, Text, View } from 'react-native'
 import { Stack } from 'expo-router'
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native'
 import * as SplashScreen from 'expo-splash-screen'
@@ -7,6 +7,7 @@ import { useColorScheme } from 'react-native'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/auth'
 import { COLORS } from '@/constants/colors'
+import { RetryError } from '@/components/ui/RetryError'
 import '../global.css'
 
 console.log('[APP] _layout module loaded')
@@ -51,9 +52,10 @@ export default function RootLayout() {
   console.log('[APP] RootLayout render')
   const colorScheme = useColorScheme()
   const { setSession, setInitialized, initialized, setPasswordRecovery } = useAuthStore()
+  const [sessionError, setSessionError] = useState(false)
 
-  // Inicializa sesión y escucha cambios de auth
-  useEffect(() => {
+  const loadSession = () => {
+    setSessionError(false)
     console.log('[APP] Loading Supabase session...')
     supabase.auth
       .getSession()
@@ -116,10 +118,13 @@ export default function RootLayout() {
       })
       .catch((err) => {
         console.error('[APP] Supabase getSession error:', err?.message)
-        // Inicializar sin sesión para que la app arranque de todas formas
-        setSession(null)
-        setInitialized(true)
+        setSessionError(true)
       })
+  }
+
+  // Inicializa sesión y escucha cambios de auth
+  useEffect(() => {
+    loadSession()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
@@ -141,17 +146,30 @@ export default function RootLayout() {
   }, [])
 
   useEffect(() => {
-    if (initialized) {
+    if (initialized || sessionError) {
       console.log('[APP] Initialized — hiding SplashScreen')
       SplashScreen.hideAsync()
     }
-  }, [initialized])
+  }, [initialized, sessionError])
 
   return (
     <ErrorBoundary>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <Stack screenOptions={{ headerShown: false }} />
+        {sessionError ? (
+          <View style={styles.errorContainer}>
+            <RetryError
+              message="No se pudo conectar. Verifica tu conexión a internet e intenta de nuevo."
+              onRetry={loadSession}
+            />
+          </View>
+        ) : (
+          <Stack screenOptions={{ headerShown: false }} />
+        )}
       </ThemeProvider>
     </ErrorBoundary>
   )
 }
+
+const styles = StyleSheet.create({
+  errorContainer: { flex: 1, backgroundColor: COLORS.background },
+})
