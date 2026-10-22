@@ -136,6 +136,6 @@ jobs:
               de estas reglas, no la ignores en silencio: comenta en el PR
               explicando por que, en vez de hacer un cambio que la viole.
           claude_args: |
-            --max-turns 60
+            --max-turns 100
             --model claude-sonnet-5
             --allowedTools "Bash,Read,Write,Edit,Glob,Grep"
