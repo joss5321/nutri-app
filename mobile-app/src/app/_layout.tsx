@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/auth'
 import { COLORS } from '@/constants/colors'
 import { RetryError } from '@/components/ui/RetryError'
+import { OfflineBanner } from '@/components/ui/OfflineBanner'
 import '../global.css'
 
 console.log('[APP] _layout module loaded')
@@ -155,21 +156,25 @@ export default function RootLayout() {
   return (
     <ErrorBoundary>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        {sessionError ? (
-          <View style={styles.errorContainer}>
-            <RetryError
-              message="No se pudo conectar. Verifica tu conexión a internet e intenta de nuevo."
-              onRetry={loadSession}
-            />
-          </View>
-        ) : (
-          <Stack screenOptions={{ headerShown: false }} />
-        )}
+        <View style={styles.root}>
+          <OfflineBanner />
+          {sessionError ? (
+            <View style={styles.errorContainer}>
+              <RetryError
+                message="No se pudo conectar. Verifica tu conexión a internet e intenta de nuevo."
+                onRetry={loadSession}
+              />
+            </View>
+          ) : (
+            <Stack screenOptions={{ headerShown: false }} />
+          )}
+        </View>
       </ThemeProvider>
     </ErrorBoundary>
   )
 }
 
 const styles = StyleSheet.create({
+  root: { flex: 1 },
   errorContainer: { flex: 1, backgroundColor: COLORS.background },
 })
