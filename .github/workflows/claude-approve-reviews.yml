@@ -9,8 +9,10 @@ name: Claude Approve Pending Reviews
 # claude-fix.yml hasta que alguien la aprobaba a mano.
 #
 # Este workflow aprueba automaticamente SOLO las corridas de
-# claude-review.yml y claude-merged.yml que queden en ese estado — nunca
-# nada mas. Permisos deliberadamente minimos: "actions: write" es lo unico
+# claude-review.yml, claude-merged.yml y CI (ci.yml — el mismo gate afecta
+# a los checks requeridos normales cuando el push viene de un bot, no solo
+# a la revision) que queden en ese estado — nunca nada mas. Permisos
+# deliberadamente minimos: "actions: write" es lo unico
 # que necesita el endpoint de aprobar, nada de contents/pull-requests/
 # issues. No puede escribir codigo, no puede tocar main, no puede mergear
 # nada — solo puede decir "esta corrida especifica puede empezar".
@@ -34,7 +36,7 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          for WF in claude-review.yml claude-merged.yml; do
+          for WF in claude-review.yml claude-merged.yml ci.yml; do
             IDS=$(gh run list --repo "$REPO" --workflow "$WF" --json databaseId,status --jq '.[] | select(.status=="action_required") | .databaseId')
             for ID in $IDS; do
               echo "Aprobando run $ID de $WF"
