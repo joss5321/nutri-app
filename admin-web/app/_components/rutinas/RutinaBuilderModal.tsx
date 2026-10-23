@@ -275,7 +275,17 @@ export default function RutinaBuilderModal({
       setRutinaId(saved.id);
       setFeedback({ type: "success", text: "Rutina guardada correctamente." });
     } catch (err) {
-      setFeedback({ type: "error", text: err instanceof Error ? err.message : "No se pudo guardar la rutina." });
+      // Los errores de Supabase (PostgrestError) no son instancias de Error
+      // de JS, así que "err instanceof Error" nunca los detecta — sin esto,
+      // el motivo real (RLS, constraint, etc.) queda oculto tras un mensaje
+      // genérico que no ayuda a diagnosticar nada.
+      const mensaje =
+        err instanceof Error
+          ? err.message
+          : err && typeof err === "object" && "message" in err && typeof (err as { message: unknown }).message === "string"
+          ? (err as { message: string }).message
+          : "No se pudo guardar la rutina.";
+      setFeedback({ type: "error", text: mensaje });
     } finally {
       setSaving(false);
     }

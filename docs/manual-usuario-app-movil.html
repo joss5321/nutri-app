@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>MyFitTrack — Manual de Usuario (App Móvil)</title>
+<style>
+  @page { size: A4; margin: 20mm 18mm 22mm 18mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    color: #1c2b2f;
+    font-size: 10.8pt;
+    line-height: 1.55;
+    margin: 0;
+  }
+  :root {
+    --ink: #192C31;
+    --highlight: #FFF824;
+    --primary: #2EBD8C;
+    --sidebar: #0B2B22;
+    --muted: #6b7a7d;
+    --border: #dfe6e5;
+  }
+  .cover {
+    height: 257mm;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    background: linear-gradient(160deg, var(--ink) 0%, #10201f 100%);
+    color: #fff;
+    padding: 24mm;
+    page-break-after: always;
+  }
+  .cover .logotype { font-size: 15pt; letter-spacing: .12em; text-transform: uppercase; color: var(--highlight); font-weight: 700; margin-bottom: 6mm; }
+  .cover h1 { font-size: 32pt; margin: 0 0 4mm 0; line-height: 1.15; }
+  .cover .subtitle { font-size: 13pt; color: #d7e6e3; max-width: 120mm; }
+  .cover .platforms { display: flex; gap: 4mm; margin-top: 10mm; }
+  .cover .platforms span { font-size: 9.5pt; font-weight: 700; padding: 2mm 4mm; border-radius: 20px; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.25); }
+  .cover .meta { margin-top: 18mm; font-size: 9.5pt; color: #9db3ae; border-top: 1px solid rgba(255,255,255,.18); padding-top: 5mm; }
+
+  .toc { page-break-after: always; }
+  .toc h2 { color: var(--ink); }
+  .toc ol { padding-left: 18px; }
+  .toc li { margin-bottom: 3mm; }
+  .toc .part { font-weight: 700; color: var(--ink); margin-top: 6mm; }
+
+  h1.part-title {
+    font-size: 20pt;
+    color: var(--ink);
+    border-bottom: 3px solid var(--highlight);
+    padding-bottom: 3mm;
+    margin-top: 0;
+    page-break-before: always;
+  }
+  h2 { font-size: 14pt; color: var(--ink); margin-top: 9mm; margin-bottom: 3mm; border-left: 4px solid var(--primary); padding-left: 3mm; }
+  h3 { font-size: 11.5pt; color: #234; margin-top: 6mm; margin-bottom: 2mm; }
+  p { margin: 2mm 0; }
+  ol, ul { margin: 2mm 0; padding-left: 20px; }
+  li { margin-bottom: 1.3mm; }
+
+  .callout {
+    background: #eefbf5;
+    border-left: 4px solid var(--primary);
+    padding: 3mm 4mm;
+    margin: 4mm 0;
+    border-radius: 2px;
+    font-size: 10pt;
+  }
+  .callout.warn { background: #fff7e6; border-left-color: #e0a300; }
+  .callout.danger { background: #fdeeee; border-left-color: #c0392b; }
+  .callout.role { background: #f2f5f9; border-left-color: #4a6fa5; }
+  .callout strong.tag { text-transform: uppercase; font-size: 8.5pt; letter-spacing: .05em; display: block; margin-bottom: 1mm; color: var(--muted); }
+
+  table.steps { width: 100%; border-collapse: collapse; margin: 3mm 0 5mm 0; font-size: 9.8pt; }
+  table.steps th { background: var(--ink); color: #fff; text-align: left; padding: 2mm 3mm; }
+  table.steps td { padding: 2mm 3mm; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table.steps tr:nth-child(even) td { background: #f8faf9; }
+  table.steps td.num { width: 8mm; font-weight: 700; color: var(--primary); text-align: center; }
+
+  .badge { display: inline-block; font-size: 8.3pt; font-weight: 700; padding: .8mm 2.3mm; border-radius: 3px; margin-right: 1.5mm; }
+  .badge.ios { background: #eef1fb; color: #3a4fa0; }
+  .badge.android { background: #e6f7f0; color: #14805e; }
+
+  .faq dt { font-weight: 700; margin-top: 4mm; color: var(--ink); }
+  .faq dd { margin: 1mm 0 0 0; color: #333; }
+
+  footer.pagefoot { font-size: 8pt; color: var(--muted); }
+  code.link { font-family: Consolas, monospace; font-size: 9pt; background: #f2f5f4; border: 1px solid var(--border); padding: .5mm 1.5mm; border-radius: 2px; word-break: break-all; }
+</style>
+</head>
+<body>
+
+<section class="cover">
+  <div class="logotype">MyFitTrack</div>
+  <h1>Manual de Usuario<br>App Móvil</h1>
+  <div class="subtitle">Guía completa para pacientes: desde descargar e instalar la app hasta usar cada una de sus secciones.</div>
+  <div class="platforms"><span>📱 iOS (TestFlight)</span><span>🤖 Android</span></div>
+  <div class="meta">Versión 1.0 · Documento generado a partir del estado real del producto · Septiembre 2026</div>
+</section>
+
+<section class="toc">
+  <h2>Contenido</h2>
+  <ol>
+    <li>Antes de empezar</li>
+    <li class="part">Parte 1 — Descargar e instalar la app</li>
+    <li>iPhone / iPad (TestFlight)</li>
+    <li>Android</li>
+    <li class="part">Parte 2 — Primeros pasos</li>
+    <li>Crear tu cuenta y elegir a tu nutriólogo</li>
+    <li>Iniciar sesión y qué significa "cuenta pendiente"</li>
+    <li>Recuperar tu contraseña</li>
+    <li class="part">Parte 3 — Guía de cada sección de la app</li>
+    <li>Progreso — tus medidas corporales</li>
+    <li>Rutinas — tu entrenamiento</li>
+    <li>Plan Nutricional — equivalentes, recetas y suplementación</li>
+    <li>Perfil — tus datos y tus citas</li>
+    <li>Membresía</li>
+    <li class="part">Preguntas frecuentes</li>
+  </ol>
+</section>
+
+<h1 class="part-title">Antes de empezar</h1>
+<p>MyFitTrack es la app móvil con la que sigues, día a día, el plan de nutrición y entrenamiento que te diseña tu nutriólogo: registras tu progreso, ves tus rutinas, tu plan de alimentación, tus recetas, tu suplementación y tus citas.</p>
+<p>Para instalarla necesitas:</p>
+<ul>
+  <li>Un teléfono <strong>iPhone/iPad</strong> o <strong>Android</strong>.</li>
+  <li>Conexión a internet (para la instalación y para usar la app).</li>
+  <li>Si usas iPhone: un <strong>Apple ID</strong> (el correo con el que usas tu cuenta de Apple/App Store).</li>
+</ul>
+<div class="callout role">
+  <strong class="tag">Importante</strong>
+  MyFitTrack todavía no está publicada en la App Store ni en Google Play de forma pública — se instala mediante una invitación que te envía tu nutriólogo o el administrador de la plataforma. Sin esa invitación no puedes descargarla.
+</div>
+
+<h1 class="part-title">Parte 1 — Descargar e instalar la app</h1>
+
+<h2><span class="badge ios">iOS</span> iPhone / iPad, mediante TestFlight</h2>
+<p><strong>TestFlight</strong> es la aplicación oficial de Apple para instalar apps que todavía no están publicadas en la App Store — es gratuita y la publica Apple, no MyFitTrack.</p>
+<table class="steps">
+  <tr><th class="num">#</th><th>Paso</th><th>Qué hacer</th></tr>
+  <tr><td class="num">1</td><td>Comparte tu Apple ID</td><td>Envía a tu administrador el correo que usas como tu Apple ID (el de tu cuenta de iPhone/App Store).</td></tr>
+  <tr><td class="num">2</td><td>Espera tu invitación</td><td>Tu administrador te agrega como "probador" (tester) de MyFitTrack en la plataforma de Apple. Te llegará un correo de <strong>TestFlight</strong> con el asunto de invitación a probar la app.</td></tr>
+  <tr><td class="num">3</td><td>Abre el correo desde tu iPhone</td><td>Ábrelo directamente en tu iPhone o iPad (no en una computadora) y toca el botón <strong>"Ver en TestFlight"</strong> (View in TestFlight).</td></tr>
+  <tr><td class="num">4</td><td>Instala TestFlight (si no la tienes)</td><td>Si es la primera vez, se te pedirá descargar la app <strong>TestFlight</strong> desde la App Store. Instálala y vuelve a abrir el enlace de tu correo.</td></tr>
+  <tr><td class="num">5</td><td>Acepta la invitación</td><td>Dentro de TestFlight, toca <strong>"Aceptar"</strong> (Accept) para unirte al programa de pruebas de MyFitTrack.</td></tr>
+  <tr><td class="num">6</td><td>Instala MyFitTrack</td><td>Toca el botón <strong>"Instalar"</strong> (Install). La app se descargará como cualquier otra.</td></tr>
+  <tr><td class="num">7</td><td>Ábrela</td><td>Búscala en tu pantalla de inicio con el ícono de MyFitTrack y ábrela normalmente.</td></tr>
+</table>
+<div class="callout warn">
+  <strong class="tag">Nota</strong>
+  Al estar en fase de pruebas, cada versión instalada mediante TestFlight tiene una vigencia limitada. Si un día ves el mensaje "Build ha expirado" (Build has Expired) dentro de TestFlight, avisa a tu administrador para que te envíe una nueva invitación.
+</div>
+
+<h2><span class="badge android">Android</span> Instalación directa</h2>
+<p>En Android, tu administrador te comparte un enlace de descarga directo (por WhatsApp, correo, etc.). Ejemplo del enlace actual:</p>
+<p><code class="link">https://expo.dev/accounts/joss5321/projects/mobile-app/builds/1a559113-eadd-42a6-a0a4-84c61ed28d98</code></p>
+<table class="steps">
+  <tr><th class="num">#</th><th>Paso</th><th>Qué hacer</th></tr>
+  <tr><td class="num">1</td><td>Abre el enlace desde tu Android</td><td>Toca el enlace que te compartió tu administrador <strong>directamente desde tu celular</strong> (no desde una computadora), o escanea el código QR de esa página si te la comparten desde otro dispositivo.</td></tr>
+  <tr><td class="num">2</td><td>Toca "Install"</td><td>En la página que se abre verás el proyecto MyFitTrack — toca el botón de instalación/descarga.</td></tr>
+  <tr><td class="num">3</td><td>Permite instalar desde este origen</td><td>Como la app no viene de Google Play, Android te pedirá permiso para "instalar apps de orígenes desconocidos". Actívalo solo para esta descarga cuando el sistema te lo pida.</td></tr>
+  <tr><td class="num">4</td><td>Instala el archivo</td><td>Cuando termine de descargarse el archivo .apk, tócalo y confirma la instalación.</td></tr>
+  <tr><td class="num">5</td><td>Ábrela</td><td>Búscala en tu pantalla de inicio con el ícono de MyFitTrack y ábrela normalmente.</td></tr>
+</table>
+<div class="callout danger">
+  <strong class="tag">Seguridad</strong>
+  Instala MyFitTrack únicamente desde el enlace que te comparta tu propio administrador. El enlace cambia cada vez que se publica una nueva versión de la app — si el de arriba ya no funciona, pide a tu administrador el enlace vigente en lugar de buscar la app por tu cuenta en internet.
+</div>
+
+<h1 class="part-title">Parte 2 — Primeros pasos</h1>
+
+<h2>1. Crear tu cuenta y elegir a tu nutriólogo</h2>
+<p>Al abrir la app por primera vez verás la pantalla de bienvenida. Toca <strong>"Comenzar ahora"</strong> para registrarte.</p>
+<table class="steps">
+  <tr><th class="num">#</th><th>Qué hacer</th></tr>
+  <tr><td class="num">1</td><td>Elige a tu nutriólogo de la lista disponible — esta elección es obligatoria y se hace antes de crear tu contraseña.</td></tr>
+  <tr><td class="num">2</td><td>Captura tu nombre, correo electrónico y una contraseña de al menos 8 caracteres.</td></tr>
+  <tr><td class="num">3</td><td>Confirma el registro. Recibirás un correo de confirmación de cuenta.</td></tr>
+</table>
+<div class="callout">
+  <strong class="tag">Importante</strong>
+  Crear tu cuenta no te da acceso inmediato. Tu nutriólogo debe <strong>aprobar</strong> tu registro antes de que puedas entrar a la app — ver la sección siguiente.
+</div>
+
+<h2>2. Iniciar sesión y qué significa "cuenta pendiente"</h2>
+<p>Al intentar iniciar sesión con tu correo y contraseña, la app revisa el estado de tu cuenta:</p>
+<table class="steps">
+  <tr><th>Estado de tu cuenta</th><th>Qué ves al iniciar sesión</th></tr>
+  <tr><td>Pendiente de aprobación</td><td>Mensaje "Cuenta pendiente de aprobación por tu nutriólogo" — no puedes entrar todavía.</td></tr>
+  <tr><td>Rechazada</td><td>Mensaje de solicitud rechazada — contacta a tu nutriólogo.</td></tr>
+  <tr><td>Deshabilitada</td><td>Mensaje de cuenta deshabilitada.</td></tr>
+  <tr><td>Aprobada y activa</td><td>Entras normalmente a la app.</td></tr>
+</table>
+
+<h2>3. Recuperar tu contraseña</h2>
+<p>En la pantalla de inicio de sesión toca <strong>"¿Olvidaste tu contraseña?"</strong>, captura tu correo y recibirás un enlace para crear una nueva contraseña (mínimo 8 caracteres).</p>
+
+<h1 class="part-title">Parte 3 — Guía de cada sección de la app</h1>
+<p>Una vez dentro, la app tiene 4 secciones principales, accesibles desde la barra inferior:</p>
+<table class="steps">
+  <tr><th>Sección</th><th>Para qué sirve</th></tr>
+  <tr><td><strong>Progreso</strong></td><td>Registrar y consultar tus medidas corporales a lo largo del tiempo.</td></tr>
+  <tr><td><strong>Rutinas</strong></td><td>Ver y seguir tu rutina de entrenamiento semanal.</td></tr>
+  <tr><td><strong>Plan Nutricional</strong></td><td>Ver tu plan de alimentación, tus recetas asignadas y llevar tu suplementación.</td></tr>
+  <tr><td><strong>Perfil</strong></td><td>Tus datos personales, tus próximas citas y tu membresía.</td></tr>
+</table>
+
+<h2>Progreso — tus medidas corporales</h2>
+<ul>
+  <li>La primera vez, llena el formulario inicial: sexo, edad, peso, estatura, cintura, cadera, % músculo, % grasa, brazo y pantorrilla.</li>
+  <li>Después de tu primer registro verás tu historial de medidas y una gráfica interactiva de peso, cintura, cadera e IMC a lo largo del tiempo.</li>
+  <li>Desliza hacia abajo para actualizar la pantalla.</li>
+</ul>
+
+<h2>Rutinas — tu entrenamiento</h2>
+<p>Muestra la rutina semanal que tu nutriólogo te asignó, organizada por día.</p>
+<table class="steps">
+  <tr><th>Qué puedes hacer</th><th>Cómo</th></tr>
+  <tr><td>Ver los ejercicios de un día</td><td>Toca el día para expandirlo.</td></tr>
+  <tr><td>Ver el detalle de un ejercicio</td><td>Toca el ejercicio — verás video/GIF de la técnica, descripción y el plan de series/repeticiones/peso.</td></tr>
+  <tr><td>Registrar tu peso usado</td><td>Dentro del detalle del ejercicio, captura el peso que usaste en cada serie del día. Tu historial queda agrupado por sesión.</td></tr>
+  <tr><td>Marcar un día como completado</td><td>Al terminar todos los ejercicios del día, márcalo como completado — este dato queda guardado.</td></tr>
+  <tr><td>Ver tu progreso por ejercicio</td><td>En la sub-pestaña "Progreso" verás una gráfica de tu mejor peso e historial por ejercicio.</td></tr>
+</table>
+<div class="callout">Si tu nutriólogo actualiza tu rutina, verás un aviso (punto rojo) sobre el ícono de esta sección.</div>
+
+<h2>Plan Nutricional — equivalentes, recetas y suplementación</h2>
+<p>Esta sección tiene tres partes:</p>
+<h3>Equivalentes</h3>
+<p>Muestra cuántos equivalentes de cada grupo de alimentos te corresponden por tiempo de comida (desayuno, colación 1, comida, colación 2, cena). Cada día puedes responder <strong>"¿Cómo te fue hoy con tu plan?"</strong> eligiendo <em>Seguido</em>, <em>Parcial</em> o <em>No seguido</em>, y agregar una nota opcional — esto ayuda a tu nutriólogo a dar seguimiento a tu adherencia.</p>
+<h3>Recetas</h3>
+<p>Lista de recetas que tu nutriólogo te asignó, organizadas por tiempo de comida y con buscador. Toca una receta para ver sus ingredientes y pasos de preparación.</p>
+<h3>Suplementación</h3>
+<p>Marca cada suplemento como tomado en el día, ajusta la hora y el momento del día en que lo tomas, agrega notas personales, y activa recordatorios (notificaciones del celular a la hora que configures).</p>
+
+<h2>Perfil — tus datos y tus citas</h2>
+<ul>
+  <li>Tus datos personales (nombre, fecha de nacimiento, sexo, estatura) — puedes editarlos y subir una foto.</li>
+  <li>Tus próximas citas con tu nutriólogo — puedes <strong>confirmar</strong> o <strong>cancelar</strong> una cita pendiente.</li>
+  <li>Tu plan de membresía actual.</li>
+  <li>El botón para cerrar sesión.</li>
+</ul>
+
+<h2>Membresía</h2>
+<p>Desde la pestaña Perfil puedes ver tu plan actual y tocar <strong>"Elegir plan"</strong> para cambiarlo. Esto abre el pago seguro de Stripe dentro de la app; al terminar el pago tu plan se actualiza automáticamente.</p>
+
+<h1 class="part-title">Preguntas frecuentes</h1>
+<dl class="faq">
+  <dt>No me llegó el correo de invitación de TestFlight, ¿qué hago?</dt>
+  <dd>Revisa tu carpeta de spam/correo no deseado. Si no aparece, confirma con tu administrador que le compartiste el Apple ID correcto (el mismo correo de tu cuenta de Apple).</dd>
+
+  <dt>En Android me sale una advertencia de "app no reconocida" o similar, ¿es normal?</dt>
+  <dd>Sí — es el aviso normal de Android para cualquier app instalada fuera de Google Play. Mientras el enlace provenga de tu administrador, puedes continuar con la instalación.</dd>
+
+  <dt>Me registré en la app pero no puedo entrar, ¿por qué?</dt>
+  <dd>Tu cuenta necesita ser aprobada por tu nutriólogo antes de poder usar la app. Contacta a tu nutriólogo si tu solicitud lleva varios días sin respuesta.</dd>
+
+  <dt>¿Puedo cambiar de nutriólogo después de registrarme?</dt>
+  <dd>La elección del nutriólogo se hace una sola vez durante el registro. Contacta directamente a tu nutriólogo o al soporte de la plataforma para cualquier cambio.</dd>
+
+  <dt>¿Cómo marco un día de entrenamiento como completado si me equivoqué?</dt>
+  <dd>Un día ya marcado no puede desmarcarse el mismo día — esto es intencional para mantener un historial confiable. Si necesitas corregir un registro, contacta a tu nutriólogo.</dd>
+
+  <dt>¿Dónde veo el estado de pago de mi membresía?</dt>
+  <dd>Desde la pestaña Perfil, dentro de la app.</dd>
+
+  <dt>¿La app funciona sin conexión a internet?</dt>
+  <dd>No — necesitas internet para iniciar sesión y para que tu información se sincronice con tu nutriólogo.</dd>
+</dl>
+
+<footer class="pagefoot">MyFitTrack — Manual de Usuario (App Móvil)</footer>
+
+</body>
+</html>
