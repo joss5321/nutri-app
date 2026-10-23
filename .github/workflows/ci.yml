@@ -184,6 +184,14 @@ jobs:
     name: rls-tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      # El contexto "secrets" no se puede leer directamente en un "if:" de
+      # step (GitHub Actions lo rechaza con "Unrecognized named-value:
+      # 'secrets'" al evaluar el workflow) — eso invalidaba TODO este
+      # archivo para TODOS los eventos, no solo este job. Se pasa primero
+      # por "env" a nivel de job, que si es legible desde el "if:" de un
+      # step.
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -211,7 +219,7 @@ jobs:
         # gratuita sube el limite considerablemente. Si los secrets no estan
         # configurados, este paso no falla el job (continue-on-error) — solo
         # significa que se sigue corriendo sin autenticar, como antes.
-        if: ${{ secrets.DOCKERHUB_USERNAME != '' }}
+        if: ${{ env.DOCKERHUB_USERNAME != '' }}
         continue-on-error: true
         uses: docker/login-action@v3
         with:
