@@ -202,5 +202,21 @@ jobs:
         with:
           version: latest
 
+      - name: Login a Docker Hub (evita el rate-limit anonimo)
+        # Hallazgo real en esta sesion: "supabase start" baja ~8-10 imagenes
+        # (postgres, kong, gotrue, postgrest, storage-api, etc.) por corrida;
+        # con suficiente actividad de CI en el dia, el limite anonimo de
+        # Docker Hub por IP se agota de verdad ("toomanyrequests: Rate
+        # exceeded"), bloqueando este check requerido. Login con una cuenta
+        # gratuita sube el limite considerablemente. Si los secrets no estan
+        # configurados, este paso no falla el job (continue-on-error) — solo
+        # significa que se sigue corriendo sin autenticar, como antes.
+        if: ${{ secrets.DOCKERHUB_USERNAME != '' }}
+        continue-on-error: true
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       - name: Pruebas RLS (pgTAP) — 100% local vía Docker, sin secretos
         run: npm run test:rls
