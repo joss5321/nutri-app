@@ -119,6 +119,22 @@ automática vía GitHub Actions. Los workflows viven en `.github/workflows/`:
   `agent-ready` sin dependencias pendientes y sin otra tarea activa, y
   despacha `claude-dev.yml`. Si no hay nada elegible, termina sin invocar
   al modelo.
+- `claude-triage.yml` — prepara el backlog (cada 6h): revisa los issues
+  `Pendiente`, decide si tienen criterio claro + dependencias resueltas +
+  alcance permitido, y si es asi agrega la etiqueta `agent-ready`. Si una
+  tarea es muy grande o mezcla riesgos distintos, la divide en sub-issues.
+  Si falta un dato/credencial, deja un comentario explicando que falta y
+  no la toca. Diseno de seguridad: Claude nunca mueve el tablero
+  directamente ni tiene un token con alcance de Projects — un paso
+  deterministico separado (sin modelo) es el que mueve a `Lista` cualquier
+  issue que haya quedado con la etiqueta puesta.
+- `claude-approve-reviews.yml` — aprueba automaticamente (cada 15 min) las
+  corridas de `claude-review.yml`/`claude-merged.yml`/`CI` que GitHub deja
+  en "action_required" por ser un push de bot en un repo publico (proteccion
+  anti-abuso de la plataforma, no algo que este repo pueda desactivar).
+  Permiso minimo posible: `actions: write`, nada de contents/pull-requests/
+  issues — no puede escribir codigo, no puede tocar `main`, no puede
+  mergear nada, solo autoriza que una corrida ya programada empiece.
 - `claude-daily-report.yml` — publica un resumen diario (tablero +
   registro de corridas) como comentario en un issue fijo. No se configuró
   ningún canal externo (Slack/email/etc.).
@@ -131,7 +147,15 @@ automática vía GitHub Actions. Los workflows viven en `.github/workflows/`:
 - **El ciclo no puede modificar su propia configuración**: `sensitive-paths-guard`
   (check requerido en `main`) bloquea cualquier PR de rama `agent/issue-*`
   que toque `.github/`, `WORKFLOW.md`, `CLAUDE.md` o `AGENTS.md` — probado
-  en vivo.
+  en vivo. Esto nunca se relajó.
+- **Pagos/permisos/migraciones se pueden *preparar*, nunca aplicar
+  automáticamente**: desde el 23/10/2026 el agente puede escribir código de
+  Stripe, permisos o una migración (sección nueva en `supabase_schema.sql`)
+  como propuesta — pero el mismo `sensitive-paths-guard` sigue fallando a
+  propósito para esas rutas, así que el PR nunca puede satisfacer el
+  auto-merge aunque el revisor lo apruebe. Queda para revisión y aplicación
+  manual de una persona. Ninguna clave "live" de Stripe ni credencial de
+  producción existe en ningún workflow.
 - **El desarrollador no puede aprobar ni mergear**: identidad de GitHub
   distinta para el revisor + branch protection en `main` (1 aprobación
   requerida) — GitHub rechaza que una PR se apruebe a sí misma.

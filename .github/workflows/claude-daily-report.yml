@@ -81,6 +81,27 @@ jobs:
 
           DESPACHADAS_HOY=$(gh run list --repo "$REPO" --workflow claude-dev.yml --created ">=${DESDE}" --json conclusion --jq 'length')
 
+          # ── Avance hacia produccion: conteo de "Bloqueador de lanzamiento" por estado ──
+          BLOQUEADOR_TERMINADAS=$(gh api graphql -f query='query($project:ID!){node(id:$project){... on ProjectV2{items(first:100){nodes{content{... on Issue{number state}} estado:fieldValueByName(name:"Estado"){... on ProjectV2ItemFieldSingleSelectValue{name}} categoria:fieldValueByName(name:"Categoría"){... on ProjectV2ItemFieldSingleSelectValue{name}}}}}}}' -F project="$PROJECT_ID" \
+            | jq -r '[.data.node.items.nodes[] | select(.categoria.name=="Bloqueador de lanzamiento")] | "\( [.[] | select(.estado.name=="Terminada")] | length ) de \( length ) bloqueadores de lanzamiento resueltos"')
+
+          # ── Issues Pendiente sin agent-ready = necesitan decision humana ──
+          NECESITAN_DECISION=$(gh issue list --repo "$REPO" --state open --json number,title,labels \
+            --jq '[.[] | select([.labels[].name] | index("agent-ready") | not)] | map("- #\(.number) \(.title)") | join("\n")' 2>/dev/null || echo "")
+
+          # ── Siguiente tarea: la activa ahora, o la primera en Lista ──
+          ACTIVA_NUM=$(echo "$ITEMS" | jq -r '[.data.node.items.nodes[] | select(.fieldValueByName.name=="En desarrollo" or .fieldValueByName.name=="En revisión") | .content.number] | .[0] // empty')
+          if [ -n "$ACTIVA_NUM" ]; then
+            SIGUIENTE="Activa ahora mismo: #$ACTIVA_NUM"
+          else
+            LISTA_NUM=$(echo "$ITEMS" | jq -r '[.data.node.items.nodes[] | select(.fieldValueByName.name=="Lista") | .content.number] | .[0] // empty')
+            if [ -n "$LISTA_NUM" ]; then
+              SIGUIENTE="Nada activo ahora; el coordinador despachará #$LISTA_NUM en su próximo tick."
+            else
+              SIGUIENTE="Nada en 'Lista' — el coordinador no despachará nada hasta que claude-triage.yml prepare algo nuevo, o hasta que se resuelva alguna de las decisiones pendientes de abajo."
+            fi
+          fi
+
           # ── Armar el cuerpo del comentario ──────────────────────────
           {
             echo "## Resumen — $HOY"
@@ -106,6 +127,15 @@ jobs:
               echo "</details>"
             fi
             echo ""
+            echo "### Avance hacia producción"
+            echo "$BLOQUEADOR_TERMINADAS"
+            echo ""
+            echo "### Decisiones que necesitas tomar (issues abiertos sin agent-ready)"
+            echo "${NECESITAN_DECISION:-Ninguna — todo lo abierto ya está preparado o en curso.}"
+            echo ""
+            echo "### Siguiente tarea"
+            echo "$SIGUIENTE"
+            echo ""
             echo "### Corridas del desarrollador despachadas en 24h: $DESPACHADAS_HOY"
             echo ""
             echo "### Fallos de CI/workflow en las últimas 24h"
@@ -113,6 +143,9 @@ jobs:
             echo ""
             echo "### Límites de gasto"
             echo "Confirmado con el usuario (2026-10-21): autenticación por suscripción (CLAUDE_CODE_OAUTH_TOKEN), no por API de pago — no existe un importe en dólares que definir ni hacer cumplir aquí. Los límites realmente exigibles son estructurales: una tarea activa a la vez, máximo 3 intentos de desarrollo y 3 rondas de corrección por tarea, timeout de 30-60 min por corrida. Si el consumo de la suscripción se agota, las corridas fallarán con un error de autenticación visible en los logs de Actions, nunca en silencio."
+            echo ""
+            echo "---"
+            echo "_Que el ciclo de automatización esté funcionando no significa que MyFitTrack esté listo para producción — eso lo dicen las secciones de arriba, no este pie de página._"
           } > /tmp/reporte.md
 
           gh issue comment "$REPORT_ISSUE" --repo "$REPO" --body-file /tmp/reporte.md
