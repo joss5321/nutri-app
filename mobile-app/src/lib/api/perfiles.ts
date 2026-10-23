@@ -9,6 +9,8 @@ export type Perfil = {
   avatar_url: string | null
   plan_membresia: string
   nutricionista_id: string | null
+  telefono: string | null
+  objetivo: string | null
   created_at?: string
 }
 
@@ -24,7 +26,7 @@ export async function fetchMiPerfil(userId: string): Promise<Perfil | null> {
 
 export async function updateMiPerfil(
   userId: string,
-  input: Partial<Pick<Perfil, 'sexo' | 'fecha_nacimiento' | 'altura_cm'>>
+  input: Partial<Pick<Perfil, 'sexo' | 'fecha_nacimiento' | 'altura_cm' | 'telefono' | 'objetivo'>>
 ): Promise<void> {
   const { error } = await supabase.from('perfiles').update(input).eq('id', userId)
   if (error) throw error

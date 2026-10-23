@@ -8,7 +8,9 @@ export default function AuthLayout() {
 
   useEffect(() => {
     if (initialized && session && !isPasswordRecovery) {
-      router.replace('/(app)/progreso')
+      // Rutinas, no Progreso: es la única pantalla disponible para todos los
+      // pacientes (ver mismo fix en src/app/index.tsx).
+      router.replace('/(app)/rutinas')
     }
   }, [session, initialized, isPasswordRecovery])
 

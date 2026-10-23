@@ -95,8 +95,10 @@ export async function handler(req: Request): Promise<Response> {
     }
 
     let customerId = perfil.stripe_customer_id
+    const userId = user.id
+    const userEmail = perfil.email
 
-    if (!customerId) {
+    async function crearYGuardarCustomer(): Promise<string> {
       // idempotencyKey estable por usuario: si dos requests casi simultáneas
       // (doble tap, retry de red) llegan antes de que el UPDATE de abajo
       // complete, Stripe devuelve el MISMO customer para ambas en vez de
@@ -104,35 +106,58 @@ export async function handler(req: Request): Promise<Response> {
       // (24h) — pasado ese lapso un reintento genuino crearía un customer
       // nuevo; límite conocido de Stripe, no deduplicación permanente.
       const customer = await stripe.customers.create(
-        { email: perfil.email ?? undefined, metadata: { user_id: user.id } },
-        { idempotencyKey: `checkout-customer-${user.id}` }
+        { email: userEmail ?? undefined, metadata: { user_id: userId } },
+        { idempotencyKey: `checkout-customer-${userId}-${Date.now()}` }
       )
-      customerId = customer.id
 
       const { data: updated, error: updateError } = await supabase
         .from("perfiles")
-        .update({ stripe_customer_id: customerId })
-        .eq("id", user.id)
+        .update({ stripe_customer_id: customer.id })
+        .eq("id", userId)
         .select("id")
 
       if (updateError || !updated || updated.length === 0) {
-        // El Stripe Customer ya pudo haberse creado arriba. No seguimos
-        // como si el vínculo se hubiera guardado: si el usuario reintenta,
-        // el idempotencyKey evita crear un segundo customer durante su
-        // ventana de 24h — Stripe reutilizará el mismo.
-        console.error("crear-checkout: no se pudo persistir stripe_customer_id", user.id, updateError)
-        return jsonResponse({ error: "No se pudo completar el registro de pago" }, 500)
+        console.error("crear-checkout: no se pudo persistir stripe_customer_id", userId, updateError)
+        throw new Error("No se pudo completar el registro de pago")
       }
+      return customer.id
     }
 
-    const session = await stripe.checkout.sessions.create({
-      customer: customerId,
-      mode: "subscription",
-      line_items: [{ price: priceId, quantity: 1 }],
-      success_url: "mobileapp://perfil?payment=success",
-      cancel_url:  "mobileapp://perfil?payment=cancel",
-      metadata: { user_id: user.id },
-    })
+    if (!customerId) {
+      customerId = await crearYGuardarCustomer()
+    }
+
+    let session: Stripe.Checkout.Session
+    try {
+      session = await stripe.checkout.sessions.create({
+        customer: customerId,
+        mode: "subscription",
+        line_items: [{ price: priceId, quantity: 1 }],
+        success_url: "mobileapp://perfil?payment=success",
+        cancel_url:  "mobileapp://perfil?payment=cancel",
+        metadata: { user_id: user.id },
+      })
+    } catch (err) {
+      // Autorreparación: si el stripe_customer_id guardado ya no existe en
+      // Stripe (ej. la cuenta/clave de Stripe cambió, o se borró en el
+      // dashboard), Stripe responde "No such customer" — en vez de fallar,
+      // creamos un customer nuevo y reintentamos una sola vez.
+      const esCustomerInexistente =
+        err instanceof Stripe.errors.StripeInvalidRequestError &&
+        err.param === "customer"
+      if (!esCustomerInexistente) throw err
+
+      console.log("crear-checkout: stripe_customer_id obsoleto, recreando customer", user.id, customerId)
+      customerId = await crearYGuardarCustomer()
+      session = await stripe.checkout.sessions.create({
+        customer: customerId,
+        mode: "subscription",
+        line_items: [{ price: priceId, quantity: 1 }],
+        success_url: "mobileapp://perfil?payment=success",
+        cancel_url:  "mobileapp://perfil?payment=cancel",
+        metadata: { user_id: user.id },
+      })
+    }
 
     return jsonResponse({ url: session.url })
   } catch (err) {
