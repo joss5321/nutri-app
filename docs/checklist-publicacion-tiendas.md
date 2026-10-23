@@ -15,7 +15,7 @@ explícita en vez de darlo por hecho.
 
 | # | Elemento requerido | Estado encontrado | Bloqueador para completarlo |
 |---|---|---|---|
-| 1 | Política de privacidad publicada y enlazada | **Falta.** No existe ningún archivo, ruta ni texto de política de privacidad en el repo ([ver 1](#1-política-de-privacidad-publicada-y-enlazada)). | Decisión legal/de negocio sobre el texto final y dónde hospedarlo. |
+| 1 | Política de privacidad publicada y enlazada | **Parcial.** Ya existe una ruta pública (`admin-web/app/privacidad/page.tsx`) y está enlazada desde `mobile-app` (pantalla de perfil, botón "Política de privacidad"), pero el texto conserva campos entre corchetes pendientes de revisión legal y el enlace apunta a un dominio placeholder hasta que se conozca la URL real de producción de `admin-web` ([ver 1](#1-política-de-privacidad-publicada-y-enlazada)). | Revisión legal de los campos entre corchetes + reemplazar el dominio placeholder por el dominio real de `admin-web` en `mobile-app/src/constants/legal.ts`. |
 | 2 | Descripción clara de las compras dentro de la app | **Falta el texto de tienda; el flujo de cobro real ya está identificado** ([ver 2](#2-descripción-clara-de-las-compras-dentro-de-la-app)). | Ninguno para el texto (ya se deja redactado abajo); revisar el punto de riesgo de Apple antes de enviar. |
 | 3 | Capturas de pantalla reales | **Falta.** No hay ninguna captura de la app en el repo, solo branding/iconos. | Requiere correr un build real (simulador/dispositivo) con backend conectado — no disponible en este entorno. |
 | 4 | Clasificación de edad | **Falta.** No existe configuración de clasificación de edad en `app.json`; es un dato que se llena en App Store Connect/Play Console, no en el repo. | Requiere acceso a App Store Connect y Play Console (credenciales que este flujo no tiene). |
@@ -45,30 +45,44 @@ que el texto de la política sea preciso y no genérico):
   (ver sección 2) — Stripe, no la app, es quien recibe los datos de tarjeta.
 - Autenticación: email y contraseña vía Supabase Auth.
 
-**Qué falta para cumplir el criterio completo ("publicada y enlazada")**:
+**Actualización (ronda de revisión del PR #67):** el revisor señaló
+correctamente que dejar esto solo en prosa, sin publicarlo, no cumple el
+criterio de aceptación del issue ("publicada y enlazada"). Esta ronda:
 
-1. **Redactar el texto legal definitivo.** Esta tarea no puede dejarlo como
-   "hecho" porque el texto final de una política de privacidad es una
-   decisión legal/de negocio (nombre de la entidad responsable, email de
-   contacto, jurisdicción, tiempos de retención de datos) que no está en el
-   repo y que no corresponde decidir de forma automática. Se deja más abajo
-   un **borrador** basado en los datos reales recolectados (ver arriba), para
-   que alguien con criterio legal lo revise, complete los campos entre
-   corchetes y lo apruebe — no para publicarlo tal cual.
-2. **Elegir dónde se hospeda.** `admin-web` es un panel administrativo con
-   login/registro (`admin-web/app/login`, `admin-web/app/register`), no un
-   sitio público de marketing — no es evidente que publicar ahí una ruta
-   pública sea la ubicación correcta sin que alguien del equipo lo decida.
-   Alternativas simples: una página pública nueva en `admin-web` (ej.
-   `/privacidad`, ruta estática sin auth), o un documento hospedado fuera del
-   repo (Notion público, GitHub Pages, etc.). Esta tarea no lo publica para
-   no tomar esa decisión de infraestructura por cuenta propia.
-3. **Enlazarla desde la app.** Una vez publicada, agregar el enlace en la
-   pantalla de perfil/configuración de `mobile-app` (vía `expo-web-browser`,
-   mismo patrón ya usado para abrir el checkout de Stripe) y en la ficha de
-   la app en App Store Connect / Play Console (campo "Privacy Policy URL").
+1. **Publicó la ruta.** `admin-web/app/privacidad/page.tsx` es una página
+   pública (fuera del grupo `(admin)`, que es el que exige sesión), estática,
+   sin autenticación — sí es una ubicación correcta para esto: `admin-web`
+   ya es el único frontend web del proyecto, y una ruta pública sin auth no
+   compromete el panel administrativo.
+2. **La enlazó desde la app.** `mobile-app/src/app/(app)/perfil.tsx` agrega
+   un botón "Política de privacidad" que abre la URL vía
+   `expo-web-browser` (mismo patrón que el checkout de Stripe), usando la
+   constante `PRIVACY_POLICY_URL` de `mobile-app/src/constants/legal.ts`.
 
-### Borrador de política de privacidad (para revisión legal, no para publicar tal cual)
+**Qué sigue sin estar resuelto, y por qué (no se puede resolver sin acceso o
+decisión externa, igual que antes)**:
+
+1. **Texto legal definitivo.** La página publicada conserva los mismos
+   campos entre corchetes del borrador (nombre de la entidad responsable,
+   para qué se usa cada dato, otros proveedores, retención/eliminación,
+   correo de contacto) con un aviso visible en la propia página listándolos
+   como pendientes de revisión legal. Completarlos es una decisión
+   legal/de negocio que no corresponde tomar de forma automática.
+2. **Dominio real de `admin-web`.** El enlace desde `mobile-app` usa un
+   placeholder (`PRIVACY_POLICY_URL` en `mobile-app/src/constants/legal.ts`)
+   porque **el dominio de producción de `admin-web` no está registrado en
+   ningún archivo de este repo** (no hay `vercel.json`, ni `.env`, ni
+   referencia a un dominio `.vercel.app` en ningún lado — confirmado con
+   `grep -rn "vercel.app" .`, sin resultados fuera de este mismo
+   documento). Inventar un dominio sería peor que dejarlo explícito como
+   pendiente: un enlace roto en producción. Falta que alguien con acceso al
+   dashboard de Vercel (o a donde esté desplegado `admin-web`) reemplace esa
+   constante por la URL real.
+3. Una vez resuelto lo anterior, falta además cargar la misma URL en el
+   campo "Privacy Policy URL" de App Store Connect / Play Console (fuera
+   del repo).
+
+### Borrador de política de privacidad (mismo contenido que `admin-web/app/privacidad/page.tsx`)
 
 ```
 Política de privacidad de MyFitTrack
@@ -257,8 +271,14 @@ sola).
 
 ## Qué NO cubre este documento
 
-- No redacta el texto legal final de la política de privacidad (solo un
-  borrador para revisión legal) ni la publica.
+- No redacta el texto legal final de la política de privacidad: la página
+  publicada (`admin-web/app/privacidad/page.tsx`) conserva campos entre
+  corchetes pendientes de revisión legal, marcados explícitamente en la
+  propia página.
+- No conoce ni inventa el dominio real de producción de `admin-web`: el
+  enlace desde `mobile-app` usa un placeholder en
+  `mobile-app/src/constants/legal.ts` hasta que alguien con acceso al
+  despliegue lo reemplace.
 - No modifica la lógica de cobros/Stripe ni resuelve el riesgo de revisión
   de Apple sobre compras dentro de la app descrito en la sección 2 — queda
   documentado como decisión pendiente, no como código a cambiar.
