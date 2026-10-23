@@ -15,11 +15,35 @@ explícita en vez de darlo por hecho.
 
 | # | Elemento requerido | Estado encontrado | Bloqueador para completarlo |
 |---|---|---|---|
-| 1 | Política de privacidad publicada y enlazada | **Parcial.** Ya existe una ruta pública (`admin-web/app/privacidad/page.tsx`) y está enlazada desde `mobile-app` (pantalla de perfil, botón "Política de privacidad"), pero el texto conserva campos entre corchetes pendientes de revisión legal y el enlace apunta a un dominio placeholder hasta que se conozca la URL real de producción de `admin-web` ([ver 1](#1-política-de-privacidad-publicada-y-enlazada)). | Revisión legal de los campos entre corchetes + reemplazar el dominio placeholder por el dominio real de `admin-web` en `mobile-app/src/constants/legal.ts`. |
+| 1 | Política de privacidad publicada y enlazada | **Falta** (bajo el criterio estricto del issue, aunque la infraestructura de código ya está lista). Ya existe una ruta pública (`admin-web/app/privacidad/page.tsx`) y está enlazada desde `mobile-app` (pantalla de perfil, botón "Política de privacidad"), pero el enlace apunta a un dominio placeholder que no resuelve a nada real (`mobile-app/src/constants/legal.ts:5`) y el texto conserva 5 campos entre corchetes sin rellenar. Un enlace a un dominio inexistente y un texto legal incompleto no cumplen "publicada y enlazada" de forma verificable por un revisor de Apple/Google ([ver 1](#1-política-de-privacidad-publicada-y-enlazada)). | Reemplazar el dominio placeholder por el dominio real de producción de `admin-web` + revisión legal que rellene los 5 campos entre corchetes. Ninguno de los dos es algo que este flujo automatizado pueda hacer sin inventar información. |
 | 2 | Descripción clara de las compras dentro de la app | **Falta el texto de tienda; el flujo de cobro real ya está identificado** ([ver 2](#2-descripción-clara-de-las-compras-dentro-de-la-app)). | Ninguno para el texto (ya se deja redactado abajo); revisar el punto de riesgo de Apple antes de enviar. |
 | 3 | Capturas de pantalla reales | **Falta.** No hay ninguna captura de la app en el repo, solo branding/iconos. | Requiere correr un build real (simulador/dispositivo) con backend conectado — no disponible en este entorno. |
 | 4 | Clasificación de edad | **Falta.** No existe configuración de clasificación de edad en `app.json`; es un dato que se llena en App Store Connect/Play Console, no en el repo. | Requiere acceso a App Store Connect y Play Console (credenciales que este flujo no tiene). |
 | 5 | Cuenta de prueba funcional para revisores | **Parcial.** Existe infraestructura de usuarios de prueba (`supabase_seed_test_users.sql`), pero no hay una cuenta designada específicamente como "cuenta de revisor" ni confirmación de que funcione contra producción. | Requiere acceso al proyecto de Supabase de producción para crear/confirmar la cuenta — no disponible en este flujo. |
+
+## Recomendación para el Coordinador
+
+De los 5 elementos, **0 cumplen hoy el criterio de aceptación completo**, y
+ninguno de los 5 se puede terminar de resolver con otra ronda de corrección
+de código, porque lo que falta en cada caso es una decisión o un acceso que
+este flujo automatizado no tiene y no debe inventar:
+
+- **Ítem 1**: una decisión legal/de negocio (texto final de la política) +
+  el dominio real de producción de `admin-web` (dato operativo, no de
+  código).
+- **Ítem 2**: el texto ya está redactado y listo para pegar en App Store
+  Connect/Play Console — no hay ningún campo de configuración *en este
+  repo* al que conectarlo, porque es un campo de la ficha de tienda, no de
+  la app ni de `admin-web`.
+- **Ítems 3, 4 y 5**: requieren, respectivamente, un simulador/dispositivo
+  real, sesión autenticada en App Store Connect/Play Console, y acceso al
+  proyecto de Supabase de **producción**.
+
+Según `WORKFLOW.md`, decidir si el issue #34 pasa a `Bloqueada` (total o
+parcialmente) o se divide en sub-tareas es una decisión del **Coordinador**,
+no de la ronda de corrección de un PR. Este documento deja, punto por
+punto, el detalle de qué acceso o decisión falta para cada ítem, listo para
+copiarse al issue si el Coordinador decide bloquearlo.
 
 ---
 
@@ -45,9 +69,9 @@ que el texto de la política sea preciso y no genérico):
   (ver sección 2) — Stripe, no la app, es quien recibe los datos de tarjeta.
 - Autenticación: email y contraseña vía Supabase Auth.
 
-**Actualización (ronda de revisión del PR #67):** el revisor señaló
+**Actualización (ronda 1 de revisión del PR #67):** el revisor señaló
 correctamente que dejar esto solo en prosa, sin publicarlo, no cumple el
-criterio de aceptación del issue ("publicada y enlazada"). Esta ronda:
+criterio de aceptación del issue ("publicada y enlazada"). Esa ronda:
 
 1. **Publicó la ruta.** `admin-web/app/privacidad/page.tsx` es una página
    pública (fuera del grupo `(admin)`, que es el que exige sesión), estática,
@@ -58,6 +82,16 @@ criterio de aceptación del issue ("publicada y enlazada"). Esta ronda:
    un botón "Política de privacidad" que abre la URL vía
    `expo-web-browser` (mismo patrón que el checkout de Stripe), usando la
    constante `PRIVACY_POLICY_URL` de `mobile-app/src/constants/legal.ts`.
+
+**Corrección (ronda 2 de revisión del PR #67):** la ronda anterior describió
+esto como "Parcial" en la tabla de resumen. El revisor señaló, correctamente,
+que eso sobrestima el avance: un enlace a un dominio placeholder que no
+resuelve a nada real, más un texto con 5 campos sin rellenar, no es una
+política "publicada y enlazada" verificable por un revisor de Apple/Google,
+sin importar que la ruta y el enlace ya existan en código. La tabla de
+resumen ahora marca este elemento como **"Falta"**, no "Parcial" — la
+infraestructura de código está lista, pero el criterio de aceptación en sí
+no se cumple todavía.
 
 **Qué sigue sin estar resuelto, y por qué (no se puede resolver sin acceso o
 decisión externa, igual que antes)**:
