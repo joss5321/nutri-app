@@ -15,11 +15,12 @@ explícita en vez de darlo por hecho.
 
 | # | Elemento requerido | Estado encontrado | Bloqueador para completarlo |
 |---|---|---|---|
-| 1 | Política de privacidad publicada y enlazada | **Parcial, cerca de completo.** El usuario ya dio los 5 datos legales reales (responsable, uso de datos, proveedores, retención/eliminación, contacto) y se rellenaron en `admin-web/app/privacidad/page.tsx`; `mobile-app/src/constants/legal.ts` ya apunta al dominio real de producción (confirmado en vivo: `https://nutri-app-three-ashy.vercel.app/` redirige a `/login` propio de la app, sin protección de Vercel por delante). Falta únicamente que este PR (#67) se mergee y despliegue, y re-verificar `/privacidad` en vivo después de eso — hoy da 404 porque la página todavía no existe en producción ([ver 1](#1-política-de-privacidad-publicada-y-enlazada)). | Ninguno de código. Solo falta mergear y re-verificar la URL en vivo tras el deploy. |
+| 1 | Política de privacidad publicada y enlazada | **Completo, confirmado en vivo (2026-10-30).** `https://nutri-app-three-ashy.vercel.app/privacidad` carga sin pedir sesión, con los datos legales reales. Verificado tanto por el usuario (navegador) como por `curl` ([ver 1](#1-política-de-privacidad-publicada-y-enlazada)). | Ninguno. |
 | 2 | Descripción clara de las compras dentro de la app | **Resuelto el riesgo de fondo; falta el texto de tienda.** El PR #79 (ya mergeado) migró el checkout dentro de la app de Stripe a compra nativa (RevenueCat/StoreKit/Play Billing) — el riesgo de rechazo por Guideline 3.1.1 que esta sección documentaba ya no aplica. Queda redactar el texto para el campo de descripción de App Store Connect/Play Console con el flujo nuevo ([ver 2](#2-descripción-clara-de-las-compras-dentro-de-la-app)). | Ninguno para el texto (se deja redactado abajo). |
 | 3 | Capturas de pantalla reales | **Falta.** No hay ninguna captura de la app en el repo, solo branding/iconos. | Requiere correr un build real (simulador/dispositivo) con backend conectado — no disponible en este entorno. |
 | 4 | Clasificación de edad | **Falta.** No existe configuración de clasificación de edad en `app.json`; es un dato que se llena en App Store Connect/Play Console, no en el repo. | Requiere acceso a App Store Connect y Play Console (credenciales que este flujo no tiene). |
 | 5 | Cuenta de prueba funcional para revisores | **Parcial.** Existe infraestructura de usuarios de prueba (`supabase_seed_test_users.sql`), pero no hay una cuenta designada específicamente como "cuenta de revisor" ni confirmación de que funcione contra producción. | Requiere acceso al proyecto de Supabase de producción para crear/confirmar la cuenta — no disponible en este flujo. |
+| 6 | Eliminación de cuenta desde la app (Apple Guideline 5.1.1(v)) | **Falta — código real pendiente, no solo configuración.** No es uno de los 5 elementos originales del issue #34, pero es un bloqueador de revisión igual de real: Apple rechaza cualquier app que permita crear cuenta sin permitir eliminarla desde dentro de la app. Issues #71 (UI de solicitud) y #72 (Edge Function de borrado/anonimización) siguen abiertos, sin implementar ([ver 6](#6-eliminación-de-cuenta-apple-guideline-511v)). | Ninguno externo — es trabajo de código en desarrollo activo. |
 
 ## Recomendación para el Coordinador
 
@@ -110,12 +111,12 @@ de la página contra el código antes de escribirla (nada inventado):
    en su dashboard de Vercel y verificado en vivo con `curl`: la raíz `/`
    redirige a `/login` (el login propio de `admin-web`, no una pantalla de
    Vercel Authentication) — sin protección de Vercel por delante.
-3. **Lo que sigue pendiente, honestamente:** `/privacidad` todavía devuelve
-   404 en producción porque este PR no se ha mergeado — la página no existe
-   en el deploy actual. Una vez mergeado y desplegado, falta re-verificar
-   con `curl`/navegador que `/privacidad` carga el texto sin pedir sesión,
-   y cargar esa misma URL en el campo "Privacy Policy URL" de App Store
-   Connect / Play Console (fuera del repo).
+3. **Confirmado completo (2026-10-30):** tras el merge y deploy, el usuario
+   abrió `https://nutri-app-three-ashy.vercel.app/privacidad` en su
+   navegador y confirmó que carga sin pedir sesión. Verificado también con
+   `curl` (HTTP 200, título y contenido correctos, cacheado por Vercel).
+   Queda pendiente, fuera de este repo, cargar esa misma URL en el campo
+   "Privacy Policy URL" de App Store Connect / Play Console.
 
 El contenido completo y actualizado vive únicamente en
 `admin-web/app/privacidad/page.tsx` — no se duplica aquí para evitar que
@@ -259,6 +260,33 @@ el proyecto de Supabase de **producción** requiere acceso a ese proyecto,
 que este flujo automatizado no tiene (y que, de tenerlo, implicaría escribir
 datos reales en producción — una acción que este issue no autoriza por sí
 sola).
+
+---
+
+## 6. Eliminación de cuenta (Apple Guideline 5.1.1(v))
+
+**No es uno de los 5 elementos originales del issue #34** — se agrega aquí
+porque es un bloqueador de revisión real descubierto al preparar este
+checklist, igual de capaz de causar un rechazo que cualquiera de los otros
+5.
+
+**La regla:** desde 2022, Apple exige (App Store Review Guideline 5.1.1(v))
+que cualquier app que permita a un usuario crear una cuenta también permita
+**iniciar la eliminación de esa cuenta desde dentro de la app**, sin
+necesidad de llamar o escribir a soporte. No es opcional ni específico de
+apps con datos sensibles — aplica a MyFitTrack igual que a cualquier otra.
+
+**Verificado en el repo:** no existe ningún flujo de eliminación de cuenta.
+Los issues #71 ("Eliminación de cuenta: UI de solicitud en mobile-app") y
+#72 ("Eliminación de cuenta: Edge Function de borrado/anonimización") están
+abiertos, sin ningún código asociado (confirmado por grep: no hay ningún
+endpoint ni pantalla relacionada).
+
+**A diferencia de los ítems 1-5, esto sí es trabajo de código pendiente**,
+no una configuración externa o un dato operativo — por eso no puede
+quedar simplemente documentado como bloqueador: necesita implementarse
+antes de enviar la app a revisión de iOS. En desarrollo activo (ver PR
+asociado a #71/#72).
 
 ---
 
