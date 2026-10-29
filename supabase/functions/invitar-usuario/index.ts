@@ -80,7 +80,7 @@ Deno.serve(async (req) => {
   // Completar el perfil, asignar al nutricionista y aprobarlo de inmediato:
   // este paciente puede recibir rutinas/planes/citas desde ya, aunque
   // todavía no haya usado la app móvil (movil_vinculado = false).
-  await supabaseAdmin.from("perfiles").update({
+  const { error: updateError } = await supabaseAdmin.from("perfiles").update({
     nombre_completo: nombre_completo.trim(),
     email: email.trim().toLowerCase(),
     fecha_nacimiento: fecha_nacimiento || null,
@@ -91,6 +91,14 @@ Deno.serve(async (req) => {
     is_active: true,
     movil_vinculado: false,
   }).eq("id", data.user.id)
+
+  if (updateError) {
+    console.error("invitar-usuario: error UPDATE perfiles", data.user.id, updateError)
+    return new Response(JSON.stringify({ error: "No se pudo completar el perfil del paciente invitado." }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    })
+  }
 
   return new Response(JSON.stringify({ success: true, id: data.user.id }), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
