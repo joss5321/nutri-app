@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Alert, Image, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { ActivityIndicator, Alert, Image, Linking, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useFocusEffect } from '@react-navigation/native'
 import { useLocalSearchParams } from 'expo-router'
@@ -13,8 +13,9 @@ import { fetchMiPerfil, updateMiPerfil, type Perfil } from '@/lib/api/perfiles'
 import { fetchUltimaMedida, type Medida } from '@/lib/api/medidas'
 import { fetchMisCitas, updateEstadoCita, type Cita } from '@/lib/api/citas'
 import * as WebBrowser from 'expo-web-browser'
-import { crearCheckout, crearPortalSesion } from '@/lib/api/pagos'
-import { STRIPE_PRICE_IDS, type PlanKey } from '@/constants/planes'
+import { crearPortalSesion } from '@/lib/api/pagos'
+import { getPaqueteParaPlan, comprarPaquete, getUrlGestionSuscripcion } from '@/lib/revenuecat'
+import { type PlanKey } from '@/constants/planes'
 import { hasActiveSubscription, hasNutritionist } from '@/lib/permissions'
 import { cambiarNutriologo, type Nutricionista } from '@/lib/api/nutricionistas'
 import { NutriologoPickerModal } from '@/components/ui/NutriologoPickerModal'
@@ -70,12 +71,14 @@ export default function PerfilScreen() {
   const [payingPlan, setPayingPlan] = useState<string | null>(null)
 
   const handleElegirPlan = async (planKey: PlanKey) => {
-    if (!userId) return
-    // Si ya tiene una suscripción activa en otro plan, NO abrir un Checkout
-    // nuevo (crearía una segunda suscripción en paralelo, cobrando ambas) —
-    // mandarlo al Customer Portal, que sí sabe reemplazar/cambiar el plan
-    // de una suscripción existente.
-    if (hasActiveSubscription(perfil) && perfil?.plan_membresia !== planKey) {
+    if (!userId || planKey === 'basico') return
+
+    // El guard de "no abrir un segundo checkout" solo aplica a
+    // suscriptores legados de Stripe: StoreKit/Play Billing ya manejan
+    // upgrade/downgrade con prorateo dentro del mismo grupo de
+    // suscripción, así que comprar otro plan es una compra legítima, no
+    // una segunda suscripción en paralelo.
+    if (perfil?.stripe_customer_id && hasActiveSubscription(perfil) && perfil.plan_membresia !== planKey) {
       Alert.alert(
         'Ya tienes una suscripción activa',
         'Para cambiar de plan, gestiona tu suscripción actual en vez de contratar una nueva.',
@@ -86,22 +89,23 @@ export default function PerfilScreen() {
       )
       return
     }
+
     setPayingPlan(planKey)
     try {
-      const priceId = STRIPE_PRICE_IDS[planKey]
-      const { url } = await crearCheckout(priceId)
-
-      const result = await WebBrowser.openBrowserAsync(url, {
-        dismissButtonStyle: 'cancel',
-        presentationStyle: WebBrowser.WebBrowserPresentationStyle.FORM_SHEET,
-      })
-
-      // Cuando el usuario cierra el navegador, refrescar datos
-      if (result.type === 'cancel' || result.type === 'dismiss') {
-        setTimeout(() => loadData(true), 1500)
+      const pkg = await getPaqueteParaPlan(planKey)
+      if (!pkg) {
+        Alert.alert('No disponible', 'Este plan todavía no está disponible para comprar. Intenta más tarde.')
+        return
       }
+      await comprarPaquete(pkg)
+      confirmarSuscripcion()
     } catch (err) {
-      Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo procesar el pago.')
+      // RevenueCat marca con userCancelled=true cuando el usuario cierra
+      // la hoja de compra nativa por su cuenta — no es un error real.
+      const cancelado = typeof err === 'object' && err !== null && (err as { userCancelled?: boolean }).userCancelled === true
+      if (!cancelado) {
+        Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo procesar la compra.')
+      }
     } finally {
       setPayingPlan(null)
     }
@@ -138,19 +142,16 @@ export default function PerfilScreen() {
 
   useFocusEffect(useCallback(() => { loadData() }, [loadData]))
 
-  // Regreso de Stripe Checkout (mobileapp://perfil?payment=success|cancel,
-  // configurado en crear-checkout). El query param NUNCA es la prueba de
-  // que se pagó — solo dispara una consulta real del estado (perfiles vía
-  // el webhook). Si el webhook todavía no llegó, reintenta un par de veces
-  // en corto antes de desistir; "cancel" no necesita hacer nada especial
-  // (el usuario simplemente sigue sin suscripción).
-  const { payment } = useLocalSearchParams<{ payment?: string }>()
+  // Confirma una suscripción recién iniciada (Stripe Checkout o compra
+  // nativa vía RevenueCat) consultando el perfil real — NUNCA se asume
+  // pagado solo porque el navegador se cerró o la compra nativa resolvió
+  // del lado del cliente: en ambos casos el webhook correspondiente
+  // (stripe-webhook / revenuecat-webhook) todavía puede no haber llegado,
+  // así que se reintenta un par de veces en corto antes de desistir.
   const [verificandoPago, setVerificandoPago] = useState(false)
-  const pagoVerificadoRef = useRef(false)
 
-  useEffect(() => {
-    if (payment !== 'success' || pagoVerificadoRef.current || !userId) return
-    pagoVerificadoRef.current = true
+  const confirmarSuscripcion = useCallback(() => {
+    if (!userId) return
     setVerificandoPago(true)
     let intentos = 0
     const intentar = () => {
@@ -169,20 +170,47 @@ export default function PerfilScreen() {
         .catch(() => setVerificandoPago(false))
     }
     intentar()
-  }, [payment, userId])
+  }, [userId])
+
+  // Regreso de Stripe Checkout (mobileapp://perfil?payment=success|cancel,
+  // configurado en crear-checkout — solo aplica a suscriptores legados de
+  // Stripe; la compra nativa vía RevenueCat llama confirmarSuscripcion()
+  // directo desde handleElegirPlan, sin pasar por un deep link). "cancel"
+  // no necesita hacer nada especial (el usuario simplemente sigue sin
+  // suscripción).
+  const { payment } = useLocalSearchParams<{ payment?: string }>()
+  const pagoVerificadoRef = useRef(false)
+
+  useEffect(() => {
+    if (payment !== 'success' || pagoVerificadoRef.current || !userId) return
+    pagoVerificadoRef.current = true
+    confirmarSuscripcion()
+  }, [payment, userId, confirmarSuscripcion])
 
   const [payingPortal, setPayingPortal] = useState(false)
   const handleGestionarSuscripcion = async () => {
     setPayingPortal(true)
     try {
-      const { url } = await crearPortalSesion()
-      await WebBrowser.openBrowserAsync(url, {
-        dismissButtonStyle: 'close',
-        presentationStyle: WebBrowser.WebBrowserPresentationStyle.FORM_SHEET,
-      })
+      // Suscriptores legados de Stripe: Customer Portal, como siempre.
+      // Suscriptores vía RevenueCat: no hay portal propio — se abre la
+      // pantalla nativa de gestión de suscripciones del sistema.
+      if (perfil?.stripe_customer_id) {
+        const { url } = await crearPortalSesion()
+        await WebBrowser.openBrowserAsync(url, {
+          dismissButtonStyle: 'close',
+          presentationStyle: WebBrowser.WebBrowserPresentationStyle.FORM_SHEET,
+        })
+      } else {
+        const url = await getUrlGestionSuscripcion()
+        if (!url) {
+          Alert.alert('Sin suscripción', 'No tienes una suscripción activa para gestionar.')
+          return
+        }
+        await Linking.openURL(url)
+      }
       loadData(true)
     } catch (err) {
-      Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo abrir el portal de suscripción.')
+      Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo abrir la gestión de tu suscripción.')
     } finally {
       setPayingPortal(false)
     }

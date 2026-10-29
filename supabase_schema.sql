@@ -8629,3 +8629,93 @@ revoke all on stripe_webhook_events from anon, authenticated;
 --
 -- drop table if exists stripe_webhook_events;
 -- ============================================================
+
+-- ============================================================
+-- 90. MIGRACIÓN — soporte multi-proveedor en suscripciones (RevenueCat)
+-- ============================================================
+-- Decisión de negocio: el checkout de suscripción DENTRO de la app móvil
+-- migra de Stripe Checkout a compra nativa (StoreKit/Google Play Billing
+-- vía RevenueCat) — exigido por la Guideline 3.1.1 de Apple y la política
+-- de pagos de Google Play para contenido digital desbloqueado dentro de
+-- la app. Stripe se queda para cobros que no pasen por el checkout de la
+-- app móvil (issue #34).
+--
+-- "suscripciones" se define en supabase_stripe_schema.sql, pero esta
+-- sección vive aquí (no ahí) porque todo cambio de esquema nuevo se
+-- agrega al final de supabase_schema.sql, sin excepción por tema.
+--
+-- stripe_subscription_id/stripe_price_id eran NOT NULL porque solo
+-- existían filas de Stripe. Las filas nuevas de RevenueCat no los tienen
+-- — mismo patrón ya usado para stripe_customer_id (Sección 57 de
+-- supabase_stripe_schema.sql): UNIQUE sobre una columna nullable sigue
+-- bloqueando duplicados reales sin impedir múltiples NULL.
+alter table public.suscripciones alter column stripe_subscription_id drop not null;
+alter table public.suscripciones alter column stripe_price_id drop not null;
+
+alter table public.suscripciones
+  add column if not exists provider text not null default 'stripe'
+    check (provider in ('stripe', 'revenuecat'));
+
+-- Identificador estable de la suscripción en el store (originalTransactionId
+-- de RevenueCat) — el equivalente de stripe_subscription_id para este
+-- proveedor.
+alter table public.suscripciones
+  add column if not exists revenuecat_subscription_id text;
+
+create unique index if not exists suscripciones_revenuecat_subscription_id_key
+  on public.suscripciones (revenuecat_subscription_id)
+  where provider = 'revenuecat';
+
+-- plan_key guarda el plan ya resuelto para filas de RevenueCat (su
+-- entitlement se define 1:1 con 'pro'/'premium', sin necesitar una tabla
+-- de mapeo como PRICE_ID_TO_PLAN de Stripe).
+alter table public.suscripciones
+  add column if not exists plan_key text check (plan_key in ('pro', 'premium'));
+
+alter table public.suscripciones drop constraint if exists suscripciones_provider_fields_check;
+alter table public.suscripciones add constraint suscripciones_provider_fields_check
+  check (
+    (provider = 'stripe' and stripe_subscription_id is not null)
+    or
+    (provider = 'revenuecat' and revenuecat_subscription_id is not null and plan_key is not null)
+  );
+
+-- No se toca el RLS de "suscripciones" (habilitado, cero policies, grants
+-- revocados — Sección 62 de supabase_stripe_schema.sql): ya cubre las
+-- columnas nuevas sin trabajo adicional, mismo acceso exclusivo por
+-- service_role.
+
+-- ============================================================
+-- ROLLBACK Sección 90 (referencia — NO ejecutar salvo que se decida
+-- revertir esta sección; volvería a dejar "suscripciones" solo-Stripe):
+--
+-- alter table public.suscripciones drop constraint if exists suscripciones_provider_fields_check;
+-- drop index if exists suscripciones_revenuecat_subscription_id_key;
+-- alter table public.suscripciones drop column if exists plan_key;
+-- alter table public.suscripciones drop column if exists revenuecat_subscription_id;
+-- alter table public.suscripciones drop column if exists provider;
+-- alter table public.suscripciones alter column stripe_price_id set not null;
+-- alter table public.suscripciones alter column stripe_subscription_id set not null;
+-- ============================================================
+
+-- ============================================================
+-- 91. MIGRACIÓN — idempotencia de revenuecat-webhook
+-- ============================================================
+-- Mismo patrón que stripe_webhook_events (Sección 89): RevenueCat puede
+-- reenviar el mismo webhook más de una vez. RLS deny-by-default, cero
+-- policies, solo accesible por service_role desde revenuecat-webhook.
+create table if not exists revenuecat_webhook_events (
+  event_id   text primary key,
+  event_type text not null,
+  created_at timestamptz not null default now()
+);
+
+alter table revenuecat_webhook_events enable row level security;
+revoke all on revenuecat_webhook_events from anon, authenticated;
+
+-- ============================================================
+-- ROLLBACK Sección 91 (referencia — NO ejecutar salvo que se decida
+-- revertir esta sección):
+--
+-- drop table if exists revenuecat_webhook_events;
+-- ============================================================
