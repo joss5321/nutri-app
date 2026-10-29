@@ -441,6 +441,11 @@ enabled = true
 verify_jwt = true
 entrypoint = "./functions/cambiar-nutriologo/index.ts"
 
+[functions.eliminar-cuenta]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/eliminar-cuenta/index.ts"
+
 # Las siguientes 4 son herramientas manuales/internas (superadmin-only, ver
 # supabase/functions/_shared/auth.ts). verify_jwt=true ya era el default,
 # se deja explícito para no depender de un default implícito.
