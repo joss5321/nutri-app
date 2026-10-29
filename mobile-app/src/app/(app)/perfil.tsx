@@ -19,6 +19,7 @@ import { type PlanKey } from '@/constants/planes'
 import { hasActiveSubscription, hasNutritionist } from '@/lib/permissions'
 import { cambiarNutriologo, type Nutricionista } from '@/lib/api/nutricionistas'
 import { NutriologoPickerModal } from '@/components/ui/NutriologoPickerModal'
+import { EliminarCuentaModal } from '@/components/ui/EliminarCuentaModal'
 import { PRIVACY_POLICY_URL } from '@/constants/legal'
 
 const MONTH_SHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
@@ -219,6 +220,7 @@ export default function PerfilScreen() {
 
   const [showNutriologoPicker, setShowNutriologoPicker] = useState(false)
   const [cambiandoNutriologo, setCambiandoNutriologo] = useState(false)
+  const [showEliminarCuenta, setShowEliminarCuenta] = useState(false)
 
   const handleSeleccionarNutriologo = async (n: Nutricionista) => {
     setCambiandoNutriologo(true)
@@ -639,6 +641,13 @@ export default function PerfilScreen() {
             <Text style={s.signOutText}>Cerrar sesión</Text>
           </TouchableOpacity>
 
+          {/* Eliminar cuenta — deliberadamente discreto (texto simple, sin
+              tarjeta), para no competir visualmente con "Cerrar sesión":
+              es una acción mucho más severa. */}
+          <TouchableOpacity style={s.deleteAccountBtn} onPress={() => setShowEliminarCuenta(true)}>
+            <Text style={s.deleteAccountText}>Eliminar mi cuenta</Text>
+          </TouchableOpacity>
+
         </View>
       </ScrollView>
 
@@ -648,6 +657,14 @@ export default function PerfilScreen() {
         onSeleccionar={handleSeleccionarNutriologo}
         currentNutricionistaId={perfil?.nutricionista_id}
         guardando={cambiandoNutriologo}
+      />
+
+      <EliminarCuentaModal
+        visible={showEliminarCuenta}
+        onClose={() => setShowEliminarCuenta(false)}
+        userEmail={email}
+        tieneSuscripcionStripe={!!perfil?.stripe_customer_id && hasActiveSubscription(perfil)}
+        tieneSuscripcionNativa={!perfil?.stripe_customer_id && hasActiveSubscription(perfil)}
       />
     </View>
   )
@@ -785,6 +802,8 @@ const s = StyleSheet.create({
     borderRadius: 16, padding: 14, marginTop: 8,
   },
   signOutText: { color: '#EF4444', fontWeight: '600', fontSize: 15 },
+  deleteAccountBtn: { alignItems: 'center', paddingVertical: 10 },
+  deleteAccountText: { color: COLORS.muted, fontWeight: '500', fontSize: 13, textDecorationLine: 'underline' },
 
   // ── Edit mode ──
   editToggle: {
