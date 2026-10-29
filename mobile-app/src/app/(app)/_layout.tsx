@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { AppState, Platform, StyleSheet, View } from 'react-native'
 import { Tabs, useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
@@ -6,6 +6,9 @@ import { useAuthStore } from '@/store/auth'
 import { useNewsStore } from '@/store/news'
 import { COLORS } from '@/constants/colors'
 import { registrarActividadSiCorresponde } from '@/lib/activity'
+import { fetchMiPerfil, type Perfil } from '@/lib/api/perfiles'
+import { fetchUltimaMedida, createMedida } from '@/lib/api/medidas'
+import { isIndependentPatient, canAccessPremiumFeatures } from '@/lib/permissions'
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name']
 
@@ -48,6 +51,54 @@ export default function AppLayout() {
   const { session, initialized, user, isPasswordRecovery } = useAuthStore()
   const router = useRouter()
   const { hasNewRutinas, hasNewNutricion, checkAll } = useNewsStore()
+  const [perfil, setPerfil] = useState<Perfil | null>(null)
+  const independiente = isIndependentPatient(perfil)
+  // Progreso/Plan Nutricional se ocultan solo si el paciente NO tiene
+  // nutriólogo Y NO tiene una suscripción activa (ver permissions.ts) —
+  // un paciente independiente que se suscribe recupera el acceso sin
+  // necesitar cerrar sesión, apenas se vuelva a cargar su perfil.
+  const puedeAccederPremium = canAccessPremiumFeatures(perfil)
+
+  // Carga el perfil para decidir permisos (nutriólogo + suscripción).
+  // Mientras no cargue, puedeAccederPremium queda en false por defecto
+  // (hasNutritionist/hasActiveSubscription son false con perfil=null) —
+  // esto NO afecta a pacientes con nutriólogo en cuanto el fetch resuelve.
+  useEffect(() => {
+    if (!user?.id) return
+    fetchMiPerfil(user.id).then(setPerfil).catch(() => {})
+  }, [user?.id])
+
+  // Al volver a foreground, refrescar el perfil — cubre el caso de que el
+  // usuario pague en Stripe Checkout y vuelva a la app ya abierta, sin
+  // tener que cerrar sesión para que se desbloqueen los módulos premium.
+  useEffect(() => {
+    if (!user?.id) return
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') fetchMiPerfil(user.id).then(setPerfil).catch(() => {})
+    })
+    return () => sub.remove()
+  }, [user?.id])
+
+  // Red de seguridad: si el registro "sin nutriólogo" no pudo guardar el
+  // peso inicial en el momento del signUp (confirmación de email activada,
+  // sin sesión todavía), se guarda aquí una sola vez en el primer login
+  // real. Nunca se ejecuta para pacientes con nutriólogo.
+  useEffect(() => {
+    if (!user?.id || !independiente) return
+    const pesoInicial = (user.user_metadata as Record<string, unknown> | undefined)?.peso_inicial_kg
+    if (typeof pesoInicial !== 'number') return
+    fetchUltimaMedida(user.id)
+      .then((ultima) => {
+        if (ultima) return
+        return createMedida(user.id, {
+          fecha: new Date().toISOString().slice(0, 10),
+          peso_kg: pesoInicial,
+          cintura_cm: null, cadera_cm: null, masa_muscular_pct: null,
+          grasa_pct: null, brazo_cm: null, pantorrilla_cm: null, imc: null,
+        })
+      })
+      .catch(() => {})
+  }, [user?.id, independiente])
 
   useEffect(() => {
     // Defensa adicional: una sesión de recuperación nunca debe quedar
@@ -94,6 +145,7 @@ export default function AppLayout() {
         name="progreso"
         options={{
           title: 'Progreso',
+          href: puedeAccederPremium ? undefined : null,
           tabBarIcon: ({ color, size, focused }) => (
             <TabIcon name="trending-up" color={color} size={size} focused={focused} />
           ),
@@ -112,6 +164,7 @@ export default function AppLayout() {
         name="nutricion"
         options={{
           title: 'Plan Nutricional',
+          href: puedeAccederPremium ? undefined : null,
           tabBarIcon: ({ color, size, focused }) => (
             <TabIcon name="restaurant" color={color} size={size} focused={focused} badge={hasNewNutricion} />
           ),

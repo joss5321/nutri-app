@@ -1,7 +1,8 @@
-import { useCallback, useState } from 'react'
-import { ActivityIndicator, Alert, Image, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { ActivityIndicator, Alert, Image, Linking, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useFocusEffect } from '@react-navigation/native'
+import { useLocalSearchParams } from 'expo-router'
 import * as ImagePicker from 'expo-image-picker'
 import { AppHeader } from '@/components/ui/AppHeader'
 import { RetryError } from '@/components/ui/RetryError'
@@ -12,8 +13,12 @@ import { fetchMiPerfil, updateMiPerfil, type Perfil } from '@/lib/api/perfiles'
 import { fetchUltimaMedida, type Medida } from '@/lib/api/medidas'
 import { fetchMisCitas, updateEstadoCita, type Cita } from '@/lib/api/citas'
 import * as WebBrowser from 'expo-web-browser'
-import { crearCheckout } from '@/lib/api/pagos'
-import { STRIPE_PRICE_IDS, type PlanKey } from '@/constants/planes'
+import { crearPortalSesion } from '@/lib/api/pagos'
+import { getPaqueteParaPlan, comprarPaquete, getUrlGestionSuscripcion } from '@/lib/revenuecat'
+import { type PlanKey } from '@/constants/planes'
+import { hasActiveSubscription, hasNutritionist } from '@/lib/permissions'
+import { cambiarNutriologo, type Nutricionista } from '@/lib/api/nutricionistas'
+import { NutriologoPickerModal } from '@/components/ui/NutriologoPickerModal'
 import { PRIVACY_POLICY_URL } from '@/constants/legal'
 
 const MONTH_SHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
@@ -67,23 +72,41 @@ export default function PerfilScreen() {
   const [payingPlan, setPayingPlan] = useState<string | null>(null)
 
   const handleElegirPlan = async (planKey: PlanKey) => {
-    if (!userId) return
+    if (!userId || planKey === 'basico') return
+
+    // El guard de "no abrir un segundo checkout" solo aplica a
+    // suscriptores legados de Stripe: StoreKit/Play Billing ya manejan
+    // upgrade/downgrade con prorateo dentro del mismo grupo de
+    // suscripción, así que comprar otro plan es una compra legítima, no
+    // una segunda suscripción en paralelo.
+    if (perfil?.stripe_customer_id && hasActiveSubscription(perfil) && perfil.plan_membresia !== planKey) {
+      Alert.alert(
+        'Ya tienes una suscripción activa',
+        'Para cambiar de plan, gestiona tu suscripción actual en vez de contratar una nueva.',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Gestionar suscripción', onPress: handleGestionarSuscripcion },
+        ],
+      )
+      return
+    }
+
     setPayingPlan(planKey)
     try {
-      const priceId = STRIPE_PRICE_IDS[planKey]
-      const { url } = await crearCheckout(priceId)
-
-      const result = await WebBrowser.openBrowserAsync(url, {
-        dismissButtonStyle: 'cancel',
-        presentationStyle: WebBrowser.WebBrowserPresentationStyle.FORM_SHEET,
-      })
-
-      // Cuando el usuario cierra el navegador, refrescar datos
-      if (result.type === 'cancel' || result.type === 'dismiss') {
-        setTimeout(() => loadData(true), 1500)
+      const pkg = await getPaqueteParaPlan(planKey)
+      if (!pkg) {
+        Alert.alert('No disponible', 'Este plan todavía no está disponible para comprar. Intenta más tarde.')
+        return
       }
+      await comprarPaquete(pkg)
+      confirmarSuscripcion()
     } catch (err) {
-      Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo procesar el pago.')
+      // RevenueCat marca con userCancelled=true cuando el usuario cierra
+      // la hoja de compra nativa por su cuenta — no es un error real.
+      const cancelado = typeof err === 'object' && err !== null && (err as { userCancelled?: boolean }).userCancelled === true
+      if (!cancelado) {
+        Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo procesar la compra.')
+      }
     } finally {
       setPayingPlan(null)
     }
@@ -119,6 +142,97 @@ export default function PerfilScreen() {
   }, [userId])
 
   useFocusEffect(useCallback(() => { loadData() }, [loadData]))
+
+  // Confirma una suscripción recién iniciada (Stripe Checkout o compra
+  // nativa vía RevenueCat) consultando el perfil real — NUNCA se asume
+  // pagado solo porque el navegador se cerró o la compra nativa resolvió
+  // del lado del cliente: en ambos casos el webhook correspondiente
+  // (stripe-webhook / revenuecat-webhook) todavía puede no haber llegado,
+  // así que se reintenta un par de veces en corto antes de desistir.
+  const [verificandoPago, setVerificandoPago] = useState(false)
+
+  const confirmarSuscripcion = useCallback(() => {
+    if (!userId) return
+    setVerificandoPago(true)
+    let intentos = 0
+    const intentar = () => {
+      intentos++
+      fetchMiPerfil(userId)
+        .then((p) => {
+          if (p) setPerfil(p)
+          if (p && hasActiveSubscription(p)) {
+            setVerificandoPago(false)
+          } else if (intentos < 3) {
+            setTimeout(intentar, intentos === 1 ? 2000 : 3000)
+          } else {
+            setVerificandoPago(false)
+          }
+        })
+        .catch(() => setVerificandoPago(false))
+    }
+    intentar()
+  }, [userId])
+
+  // Regreso de Stripe Checkout (mobileapp://perfil?payment=success|cancel,
+  // configurado en crear-checkout — solo aplica a suscriptores legados de
+  // Stripe; la compra nativa vía RevenueCat llama confirmarSuscripcion()
+  // directo desde handleElegirPlan, sin pasar por un deep link). "cancel"
+  // no necesita hacer nada especial (el usuario simplemente sigue sin
+  // suscripción).
+  const { payment } = useLocalSearchParams<{ payment?: string }>()
+  const pagoVerificadoRef = useRef(false)
+
+  useEffect(() => {
+    if (payment !== 'success' || pagoVerificadoRef.current || !userId) return
+    pagoVerificadoRef.current = true
+    confirmarSuscripcion()
+  }, [payment, userId, confirmarSuscripcion])
+
+  const [payingPortal, setPayingPortal] = useState(false)
+  const handleGestionarSuscripcion = async () => {
+    setPayingPortal(true)
+    try {
+      // Suscriptores legados de Stripe: Customer Portal, como siempre.
+      // Suscriptores vía RevenueCat: no hay portal propio — se abre la
+      // pantalla nativa de gestión de suscripciones del sistema.
+      if (perfil?.stripe_customer_id) {
+        const { url } = await crearPortalSesion()
+        await WebBrowser.openBrowserAsync(url, {
+          dismissButtonStyle: 'close',
+          presentationStyle: WebBrowser.WebBrowserPresentationStyle.FORM_SHEET,
+        })
+      } else {
+        const url = await getUrlGestionSuscripcion()
+        if (!url) {
+          Alert.alert('Sin suscripción', 'No tienes una suscripción activa para gestionar.')
+          return
+        }
+        await Linking.openURL(url)
+      }
+      loadData(true)
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo abrir la gestión de tu suscripción.')
+    } finally {
+      setPayingPortal(false)
+    }
+  }
+
+  const [showNutriologoPicker, setShowNutriologoPicker] = useState(false)
+  const [cambiandoNutriologo, setCambiandoNutriologo] = useState(false)
+
+  const handleSeleccionarNutriologo = async (n: Nutricionista) => {
+    setCambiandoNutriologo(true)
+    try {
+      await cambiarNutriologo(n.id)
+      setShowNutriologoPicker(false)
+      await loadData(true)
+      Alert.alert('Listo', `Ahora tu nutriólogo es ${n.nombre_completo ?? 'el seleccionado'}.`)
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo cambiar de nutriólogo.')
+    } finally {
+      setCambiandoNutriologo(false)
+    }
+  }
 
   const handleSignOut = async () => { await supabase.auth.signOut() }
 
@@ -168,7 +282,7 @@ export default function PerfilScreen() {
   }
 
   const nombre = perfil?.nombre_completo ?? user?.user_metadata?.full_name ?? 'Usuario'
-  const isPremium = perfil?.plan_membresia === 'premium'
+  const planActual = PLANS.find((p) => p.key === perfil?.plan_membresia) ?? PLANS[0]
 
   // Edit mode
   const [editing, setEditing] = useState(false)
@@ -345,6 +459,16 @@ export default function PerfilScreen() {
             </View>
           )}
 
+          {/* Mi nutriólogo */}
+          <Text style={s.sectionTitle}>Mi nutriólogo</Text>
+          <TouchableOpacity style={s.nutriologoBtn} onPress={() => setShowNutriologoPicker(true)} activeOpacity={0.8}>
+            <Ionicons name="people-outline" size={18} color={COLORS.primary} />
+            <Text style={s.nutriologoBtnText}>
+              {hasNutritionist(perfil) ? 'Cambiar nutriólogo' : 'Elegir nutriólogo'}
+            </Text>
+            <Ionicons name="chevron-forward" size={16} color={COLORS.muted} />
+          </TouchableOpacity>
+
           {/* Próximas citas */}
           <Text style={s.sectionTitle}>Próximas citas</Text>
           {citas.length === 0 ? (
@@ -434,17 +558,36 @@ export default function PerfilScreen() {
 
           {/* Membresía actual */}
           <Text style={s.sectionTitle}>Mi membresía actual</Text>
+          {verificandoPago && (
+            <View style={s.verifyingBanner}>
+              <ActivityIndicator size="small" color={COLORS.primary} />
+              <Text style={s.verifyingText}>Confirmando tu pago…</Text>
+            </View>
+          )}
           <View style={s.premiumCard}>
             <View style={s.premiumIcon}>
-              <Ionicons name={isPremium ? 'diamond-outline' : 'leaf-outline'} size={22} color={COLORS.primary} />
+              <Ionicons name={planActual.icon} size={22} color={COLORS.primary} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={s.premiumName}>{isPremium ? 'Plan Premium' : 'Plan Básico'}</Text>
+              <Text style={s.premiumName}>{planActual.name}</Text>
               <View style={s.currentBadge}>
                 <Text style={s.currentBadgeText}>Plan actual</Text>
               </View>
             </View>
           </View>
+
+          {hasActiveSubscription(perfil) && (
+            <TouchableOpacity style={s.portalBtn} onPress={handleGestionarSuscripcion} disabled={payingPortal} activeOpacity={0.8}>
+              {payingPortal ? (
+                <ActivityIndicator size="small" color={COLORS.primary} />
+              ) : (
+                <>
+                  <Ionicons name="card-outline" size={16} color={COLORS.primary} />
+                  <Text style={s.portalBtnText}>Gestionar suscripción</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
 
           {/* Otros planes */}
           <Text style={s.sectionTitle}>Otros planes disponibles</Text>
@@ -474,7 +617,9 @@ export default function PerfilScreen() {
                     <ActivityIndicator size="small" color={COLORS.text} />
                   ) : (
                     <Text style={s.planBtnText}>
-                      {perfil?.plan_membresia === plan.key ? 'Plan actual' : 'Elegir plan'}
+                      {perfil?.plan_membresia === plan.key
+                        ? 'Plan actual'
+                        : hasActiveSubscription(perfil) ? 'Cambiar a este plan' : 'Elegir plan'}
                     </Text>
                   )}
                 </TouchableOpacity>
@@ -496,6 +641,14 @@ export default function PerfilScreen() {
 
         </View>
       </ScrollView>
+
+      <NutriologoPickerModal
+        visible={showNutriologoPicker}
+        onClose={() => setShowNutriologoPicker(false)}
+        onSeleccionar={handleSeleccionarNutriologo}
+        currentNutricionistaId={perfil?.nutricionista_id}
+        guardando={cambiandoNutriologo}
+      />
     </View>
   )
 }
@@ -504,6 +657,15 @@ const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   wideScroll: { flex: 1, width: '100%', maxWidth: 720, alignSelf: 'center' },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text, letterSpacing: -0.2 },
+
+  nutriologoBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: COLORS.white, borderRadius: 16, padding: 14,
+    borderWidth: 1, borderColor: COLORS.border,
+    shadowColor: '#0F172A', shadowOpacity: 0.05, shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 }, elevation: 2,
+  },
+  nutriologoBtnText: { flex: 1, fontSize: 14, fontWeight: '600', color: COLORS.text },
 
   // ── Avatar / profile card ──
   profileCard: {
@@ -563,6 +725,17 @@ const s = StyleSheet.create({
   },
 
   // ── Membresía ──
+  verifyingBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: COLORS.primaryLight, borderRadius: 12, padding: 10,
+  },
+  verifyingText: { fontSize: 12, color: COLORS.primary, fontWeight: '600' },
+  portalBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    borderWidth: 1.5, borderColor: COLORS.border, borderRadius: 14, height: 46,
+    backgroundColor: COLORS.white,
+  },
+  portalBtnText: { fontSize: 13, fontWeight: '700', color: COLORS.primary },
   premiumCard: {
     flexDirection: 'row', gap: 14, alignItems: 'flex-start',
     backgroundColor: COLORS.white, borderRadius: 18, padding: 16,

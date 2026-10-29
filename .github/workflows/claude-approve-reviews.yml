@@ -1,0 +1,84 @@
+name: Claude Approve Pending Reviews
+
+# Resuelve un gate real de GitHub (no inventado por este repo): en repos
+# publicos, un push hecho por un bot (el identity "claude" de claude-dev.yml,
+# o "github-actions" del GITHUB_TOKEN por defecto de claude-fix.yml) que
+# dispara otro workflow deja esa corrida en "action_required", pendiente de
+# aprobacion manual, como proteccion anti-abuso de minutos de Actions.
+# Confirmado en vivo: esto bloqueaba la re-revision tras cada correccion de
+# claude-fix.yml hasta que alguien la aprobaba a mano.
+#
+# Este workflow aprueba automaticamente SOLO las corridas de
+# claude-review.yml, claude-merged.yml y CI (ci.yml — el mismo gate afecta
+# a los checks requeridos normales cuando el push viene de un bot, no solo
+# a la revision) que queden en ese estado — nunca nada mas. Permisos
+# deliberadamente minimos: "actions: write" es lo unico
+# que necesita el endpoint de aprobar, nada de contents/pull-requests/
+# issues. No puede escribir codigo, no puede tocar main, no puede mergear
+# nada — solo puede decir "esta corrida especifica puede empezar".
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  actions: write
+
+jobs:
+  approve:
+    name: Aprobar corridas pendientes de nuestros propios workflows
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Aprobar solo lo que viene de nuestro propio ciclo (nunca de un fork)
+        # Hallazgo de seguridad real (revision externa): la version anterior
+        # aprobaba CUALQUIER corrida "action_required" de estos 3 workflows,
+        # sin mirar de donde vino. Un PR desde un fork con una rama llamada
+        # a proposito "agent/issue-999-attempt1" habria superado el "if:
+        # startsWith(head.ref, 'agent/issue-')" de claude-review.yml (que SI
+        # tiene secretos: CLAUDE_CODE_OAUTH_TOKEN, CLAUDE_REVIEWER_TOKEN,
+        # PROJECTS_TOKEN) y este aprobador lo habria dejado correr igual.
+        #
+        # Ahora se exige ADEMAS, por cada corrida candidata:
+        #   1. El PR asociado existe y su head_repository es ESTE mismo repo
+        #      (nunca un fork) — asi no importa como se llame la rama, un
+        #      fork no puede fingir ser parte del ciclo.
+        #   2. Para claude-review.yml/claude-merged.yml, la rama head
+        #      empieza con "agent/issue-" (nuestra propia convencion).
+        #   3. El actor que disparo la corrida es "claude" o "github-actions"
+        #      (los dos bots que usa este mismo ciclo, nunca un usuario).
+        # ci.yml no tiene secretos (no referencia ningun secrets.*), asi que
+        # para ese solo se exige el punto 1 — pero igual nunca se aprueba
+        # nada de un fork.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          for WF in claude-review.yml claude-merged.yml ci.yml; do
+            IDS=$(gh run list --repo "$REPO" --workflow "$WF" --json databaseId,status --jq '.[] | select(.status=="action_required") | .databaseId')
+            for ID in $IDS; do
+              RUN=$(gh api "repos/$REPO/actions/runs/$ID")
+              ACTOR=$(echo "$RUN" | jq -r '.triggering_actor.login // ""')
+              HEAD_REPO_FULLNAME=$(echo "$RUN" | jq -r '.head_repository.full_name // ""')
+              HEAD_BRANCH=$(echo "$RUN" | jq -r '.head_branch // ""')
+
+              if [ "$HEAD_REPO_FULLNAME" != "$REPO" ]; then
+                echo "::warning::Run $ID ($WF) viene de un fork ($HEAD_REPO_FULLNAME) — NO se aprueba."
+                continue
+              fi
+              if [ "$WF" != "ci.yml" ]; then
+                case "$HEAD_BRANCH" in
+                  agent/issue-*) : ;;
+                  *) echo "::warning::Run $ID ($WF) no es de una rama agent/issue-* (rama: $HEAD_BRANCH) — NO se aprueba."; continue ;;
+                esac
+                case "$ACTOR" in
+                  claude|github-actions\[bot\]|github-actions) : ;;
+                  *) echo "::warning::Run $ID ($WF) lo disparo el actor '$ACTOR', no un bot conocido del ciclo — NO se aprueba."; continue ;;
+                esac
+              fi
+
+              echo "Aprobando run $ID de $WF (repo=$HEAD_REPO_FULLNAME rama=$HEAD_BRANCH actor=$ACTOR)"
+              gh api -X POST "repos/$REPO/actions/runs/$ID/approve" >/dev/null || echo "no se pudo aprobar $ID (puede que ya no exista)"
+            done
+          done

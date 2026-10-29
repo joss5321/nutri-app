@@ -16,3 +16,16 @@ export async function fetchNutricionistas(): Promise<Nutricionista[]> {
   if (error) throw error
   return data as Nutricionista[]
 }
+
+/**
+ * Reasigna el nutriólogo del paciente autenticado. nutricionista_id está
+ * protegido por trigger (ver supabase_schema.sql) — ni el propio paciente
+ * puede escribirlo con un update directo, por eso pasa por esta Edge
+ * Function (valida identidad + que el destino sea un nutriólogo real).
+ */
+export async function cambiarNutriologo(nutricionistaId: string): Promise<void> {
+  const { error } = await supabase.functions.invoke('cambiar-nutriologo', {
+    body: { nutricionistaId },
+  })
+  if (error) throw error
+}
