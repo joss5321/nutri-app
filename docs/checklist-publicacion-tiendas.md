@@ -15,26 +15,27 @@ explícita en vez de darlo por hecho.
 
 | # | Elemento requerido | Estado encontrado | Bloqueador para completarlo |
 |---|---|---|---|
-| 1 | Política de privacidad publicada y enlazada | **Falta** (bajo el criterio estricto del issue, aunque la infraestructura de código ya está lista). Ya existe una ruta pública (`admin-web/app/privacidad/page.tsx`) y está enlazada desde `mobile-app` (pantalla de perfil, botón "Política de privacidad"), pero el enlace apunta a un dominio placeholder que no resuelve a nada real (`mobile-app/src/constants/legal.ts:5`) y el texto conserva 5 campos entre corchetes sin rellenar. Un enlace a un dominio inexistente y un texto legal incompleto no cumplen "publicada y enlazada" de forma verificable por un revisor de Apple/Google ([ver 1](#1-política-de-privacidad-publicada-y-enlazada)). | Reemplazar el dominio placeholder por el dominio real de producción de `admin-web` + revisión legal que rellene los 5 campos entre corchetes. Ninguno de los dos es algo que este flujo automatizado pueda hacer sin inventar información. |
-| 2 | Descripción clara de las compras dentro de la app | **Falta el texto de tienda; el flujo de cobro real ya está identificado** ([ver 2](#2-descripción-clara-de-las-compras-dentro-de-la-app)). | Ninguno para el texto (ya se deja redactado abajo); revisar el punto de riesgo de Apple antes de enviar. |
+| 1 | Política de privacidad publicada y enlazada | **Parcial, cerca de completo.** El usuario ya dio los 5 datos legales reales (responsable, uso de datos, proveedores, retención/eliminación, contacto) y se rellenaron en `admin-web/app/privacidad/page.tsx`; `mobile-app/src/constants/legal.ts` ya apunta al dominio real de producción (confirmado en vivo: `https://nutri-app-three-ashy.vercel.app/` redirige a `/login` propio de la app, sin protección de Vercel por delante). Falta únicamente que este PR (#67) se mergee y despliegue, y re-verificar `/privacidad` en vivo después de eso — hoy da 404 porque la página todavía no existe en producción ([ver 1](#1-política-de-privacidad-publicada-y-enlazada)). | Ninguno de código. Solo falta mergear y re-verificar la URL en vivo tras el deploy. |
+| 2 | Descripción clara de las compras dentro de la app | **Resuelto el riesgo de fondo; falta el texto de tienda.** El PR #79 (ya mergeado) migró el checkout dentro de la app de Stripe a compra nativa (RevenueCat/StoreKit/Play Billing) — el riesgo de rechazo por Guideline 3.1.1 que esta sección documentaba ya no aplica. Queda redactar el texto para el campo de descripción de App Store Connect/Play Console con el flujo nuevo ([ver 2](#2-descripción-clara-de-las-compras-dentro-de-la-app)). | Ninguno para el texto (se deja redactado abajo). |
 | 3 | Capturas de pantalla reales | **Falta.** No hay ninguna captura de la app en el repo, solo branding/iconos. | Requiere correr un build real (simulador/dispositivo) con backend conectado — no disponible en este entorno. |
 | 4 | Clasificación de edad | **Falta.** No existe configuración de clasificación de edad en `app.json`; es un dato que se llena en App Store Connect/Play Console, no en el repo. | Requiere acceso a App Store Connect y Play Console (credenciales que este flujo no tiene). |
 | 5 | Cuenta de prueba funcional para revisores | **Parcial.** Existe infraestructura de usuarios de prueba (`supabase_seed_test_users.sql`), pero no hay una cuenta designada específicamente como "cuenta de revisor" ni confirmación de que funcione contra producción. | Requiere acceso al proyecto de Supabase de producción para crear/confirmar la cuenta — no disponible en este flujo. |
 
 ## Recomendación para el Coordinador
 
-De los 5 elementos, **0 cumplen hoy el criterio de aceptación completo**, y
-ninguno de los 5 se puede terminar de resolver con otra ronda de corrección
-de código, porque lo que falta en cada caso es una decisión o un acceso que
-este flujo automatizado no tiene y no debe inventar:
+De los 5 elementos, **0 cumplen hoy el criterio de aceptación completo**,
+pero los ítems 1 y 2 ya resolvieron su parte de decisión/código — lo que
+queda es mergear, desplegar y verificar en vivo, no una decisión pendiente.
+Los ítems 3, 4 y 5 siguen necesitando accesos que este flujo automatizado
+no tiene y no debe inventar:
 
-- **Ítem 1**: una decisión legal/de negocio (texto final de la política) +
-  el dominio real de producción de `admin-web` (dato operativo, no de
-  código).
-- **Ítem 2**: el texto ya está redactado y listo para pegar en App Store
-  Connect/Play Console — no hay ningún campo de configuración *en este
-  repo* al que conectarlo, porque es un campo de la ficha de tienda, no de
-  la app ni de `admin-web`.
+- **Ítem 1**: decisión legal/de negocio y dominio real, ambos ya resueltos
+  por el usuario — falta mergear este PR y re-verificar `/privacidad` en
+  vivo tras el deploy.
+- **Ítem 2**: decisión de arquitectura (Stripe → compra nativa) ya tomada
+  y ya implementada vía PR #79 — falta redactar el texto final para la
+  ficha de tienda (se deja listo abajo) y pegarlo en App Store
+  Connect/Play Console, fuera de este repo.
 - **Ítems 3, 4 y 5**: requieren, respectivamente, un simulador/dispositivo
   real, sesión autenticada en App Store Connect/Play Console, y acceso al
   proyecto de Supabase de **producción**.
@@ -61,12 +62,16 @@ que el texto de la política sea preciso y no genérico):
   tabla `perfiles`).
 - Fotos: la app pide permiso de acceso a fotos para elegir imagen de perfil
   (`expo-image-picker`, permiso declarado en `mobile-app/app.json`).
-- Notificaciones push (`expo-notifications`, solicitadas en
-  `mobile-app/src/app/(app)/nutricion.tsx`).
+- Recordatorios (`expo-notifications`, en `mobile-app/src/app/(app)/nutricion.tsx`)
+  — confirmado por grep que son notificaciones LOCALES (`scheduleNotificationAsync`),
+  nunca se registra un push token con el servicio de Expo; no sale ningún
+  dato a un servidor externo por esto.
 - Datos de progreso físico y nutrición (medidas, rutinas, citas — ver
   `mobile-app/src/lib/api/`).
 - Datos de pago: el cobro de suscripciones se procesa vía Stripe Checkout
-  (ver sección 2) — Stripe, no la app, es quien recibe los datos de tarjeta.
+  (suscriptores legados) o vía compra nativa con RevenueCat/App Store/Google
+  Play (ver sección 2, tras el PR #79) — ninguno de los dos, ni la app,
+  almacena datos de tarjeta.
 - Autenticación: email y contraseña vía Supabase Auth.
 
 **Actualización (ronda 1 de revisión del PR #67):** el revisor señaló
@@ -85,119 +90,73 @@ criterio de aceptación del issue ("publicada y enlazada"). Esa ronda:
 
 **Corrección (ronda 2 de revisión del PR #67):** la ronda anterior describió
 esto como "Parcial" en la tabla de resumen. El revisor señaló, correctamente,
-que eso sobrestima el avance: un enlace a un dominio placeholder que no
-resuelve a nada real, más un texto con 5 campos sin rellenar, no es una
-política "publicada y enlazada" verificable por un revisor de Apple/Google,
-sin importar que la ruta y el enlace ya existan en código. La tabla de
-resumen ahora marca este elemento como **"Falta"**, no "Parcial" — la
-infraestructura de código está lista, pero el criterio de aceptación en sí
-no se cumple todavía.
+que eso sobrestimaba el avance: un enlace a un dominio placeholder que no
+resolvía a nada real, más un texto con 5 campos sin rellenar, no era una
+política "publicada y enlazada" verificable por un revisor de Apple/Google.
 
-**Qué sigue sin estar resuelto, y por qué (no se puede resolver sin acceso o
-decisión externa, igual que antes)**:
+**Actualización (ronda 3 — datos reales del usuario, 2026-10-29):** el
+usuario proporcionó los 5 datos que faltaban y se verificó cada afirmación
+de la página contra el código antes de escribirla (nada inventado):
 
-1. **Texto legal definitivo.** La página publicada conserva los mismos
-   campos entre corchetes del borrador (nombre de la entidad responsable,
-   para qué se usa cada dato, otros proveedores, retención/eliminación,
-   correo de contacto) con un aviso visible en la propia página listándolos
-   como pendientes de revisión legal. Completarlos es una decisión
-   legal/de negocio que no corresponde tomar de forma automática.
-2. **Dominio real de `admin-web`.** El enlace desde `mobile-app` usa un
-   placeholder (`PRIVACY_POLICY_URL` en `mobile-app/src/constants/legal.ts`)
-   porque **el dominio de producción de `admin-web` no está registrado en
-   ningún archivo de este repo** (no hay `vercel.json`, ni `.env`, ni
-   referencia a un dominio `.vercel.app` en ningún lado — confirmado con
-   `grep -rn "vercel.app" .`, sin resultados fuera de este mismo
-   documento). Inventar un dominio sería peor que dejarlo explícito como
-   pendiente: un enlace roto en producción. Falta que alguien con acceso al
-   dashboard de Vercel (o a donde esté desplegado `admin-web`) reemplace esa
-   constante por la URL real.
-3. Una vez resuelto lo anterior, falta además cargar la misma URL en el
-   campo "Privacy Policy URL" de App Store Connect / Play Console (fuera
-   del repo).
+1. **Texto legal definitivo.** `admin-web/app/privacidad/page.tsx` ya tiene:
+   responsable ("Josue Ricardo Yañez Martinez"), uso de datos, proveedores
+   reales (Supabase, Stripe, RevenueCat/Apple/Google — confirmado por grep,
+   sin incluir Expo porque la app solo programa notificaciones locales, no
+   registra push tokens), retención/eliminación (honesto: la eliminación de
+   cuenta todavía no está implementada, issues #71/#72 abiertos; se atiende
+   manualmente por correo mientras tanto), y el correo de contacto real.
+2. **Dominio real de `admin-web`.** `mobile-app/src/constants/legal.ts`
+   usa `https://nutri-app-three-ashy.vercel.app`, confirmado por el usuario
+   en su dashboard de Vercel y verificado en vivo con `curl`: la raíz `/`
+   redirige a `/login` (el login propio de `admin-web`, no una pantalla de
+   Vercel Authentication) — sin protección de Vercel por delante.
+3. **Lo que sigue pendiente, honestamente:** `/privacidad` todavía devuelve
+   404 en producción porque este PR no se ha mergeado — la página no existe
+   en el deploy actual. Una vez mergeado y desplegado, falta re-verificar
+   con `curl`/navegador que `/privacidad` carga el texto sin pedir sesión,
+   y cargar esa misma URL en el campo "Privacy Policy URL" de App Store
+   Connect / Play Console (fuera del repo).
 
-### Borrador de política de privacidad (mismo contenido que `admin-web/app/privacidad/page.tsx`)
-
-```
-Política de privacidad de MyFitTrack
-
-Última actualización: [fecha]
-
-[Nombre de la entidad/desarrollador responsable] ("nosotros") opera la
-aplicación móvil MyFitTrack. Esta política describe qué datos recolectamos
-y cómo los usamos.
-
-1. Datos que recolectamos
-   - Datos de cuenta: correo electrónico y contraseña (gestionados por
-     nuestro proveedor de autenticación, Supabase).
-   - Datos de perfil: sexo, fecha de nacimiento, estatura.
-   - Datos de progreso físico: medidas corporales que el usuario registra.
-   - Datos de nutrición y entrenamiento: alimentos, rutinas y citas que el
-     usuario registra o agenda dentro de la app.
-   - Foto de perfil, si el usuario decide subir una (requiere permiso de
-     acceso a fotos).
-   - Notificaciones push, si el usuario las habilita.
-   - Datos de pago: al suscribirse a un plan, el cobro se procesa a través
-     de Stripe. MyFitTrack no almacena números de tarjeta; Stripe los
-     procesa bajo su propia política de privacidad
-     (https://stripe.com/privacy).
-
-2. Cómo usamos los datos
-   [Completar: para qué se usa cada dato — personalización de planes de
-   nutrición/entrenamiento, comunicación con el usuario, etc.]
-
-3. Con quién compartimos datos
-   - Supabase (base de datos y autenticación).
-   - Stripe (procesamiento de pagos de suscripciones).
-   [Completar: cualquier otro proveedor que aplique.]
-
-4. Retención y eliminación de datos
-   [Completar: cuánto tiempo se conservan los datos y cómo puede un usuario
-   solicitar la eliminación de su cuenta y sus datos.]
-
-5. Contacto
-   Para preguntas sobre esta política o para solicitar la eliminación de
-   tus datos, escribe a [email de contacto].
-```
+El contenido completo y actualizado vive únicamente en
+`admin-web/app/privacidad/page.tsx` — no se duplica aquí para evitar que
+este documento quede desactualizado otra vez la próxima vez que cambie.
 
 ---
 
 ## 2. Descripción clara de las compras dentro de la app
 
-**Verificado en el repo:** las suscripciones **no usan Apple In-App Purchase
-ni Google Play Billing nativos**. El flujo real (`mobile-app/src/app/(app)/perfil.tsx`)
-abre un checkout de **Stripe** en un navegador embebido
-(`expo-web-browser`, función `crearCheckout` de `mobile-app/src/lib/api/pagos.ts`)
-cuando el usuario elige un plan. Los planes disponibles están en
-`mobile-app/src/constants/planes.ts`: `basico`, `pro`, `premium`.
+**Resuelto (PR #79, ya mergeado a `main`):** la ronda anterior de este
+documento identificó que las suscripciones usaban un checkout web de
+Stripe dentro de la app, y documentó esto como riesgo real de rechazo bajo
+la Guideline 3.1.1 de Apple ("In-App Purchase") y la política de pagos de
+Google Play. El usuario decidió la Opción A (migrar a compra nativa) y esa
+migración ya está implementada: `mobile-app/src/app/(app)/perfil.tsx`
+ahora compra vía `react-native-purchases` (RevenueCat), que orquesta
+StoreKit en iOS y Google Play Billing en Android — ya no abre ningún
+navegador para cobrar. Stripe se conserva únicamente para suscriptores
+legados (`handleGestionarSuscripcion` distingue ambos casos) y para
+cualquier cobro que no pase por el checkout de la app móvil.
+
+**Pendiente, y de quién depende (no es código):** la migración de código
+está lista, pero los productos de suscripción todavía no existen en App
+Store Connect ni en Google Play Console, y el proyecto de RevenueCat
+tampoco está configurado — ver el plan de migración guardado para el
+detalle exacto (productos, entitlements, Offering, secret del webhook).
+Sin eso, no hay nada que comprar todavía en ningún ambiente real.
 
 **Texto propuesto para el campo de descripción de compras/suscripciones en
-App Store Connect / Play Console** (listo para usar, no requiere datos que
-no estén ya en el repo):
+App Store Connect / Play Console** (listo para usar una vez que existan los
+productos):
 
 ```
-MyFitTrack ofrece planes de suscripción opcionales (Básico, Pro y Premium)
-que desbloquean funciones adicionales de seguimiento nutricional y de
-entrenamiento. El pago se procesa de forma segura a través de Stripe dentro
-de un navegador integrado en la app; MyFitTrack no almacena los datos de la
-tarjeta. El usuario puede usar la app sin suscribirse; las funciones básicas
-de registro de progreso están disponibles sin pago.
+MyFitTrack ofrece planes de suscripción opcionales (Pro y Premium) que
+desbloquean funciones adicionales de seguimiento nutricional y de
+entrenamiento. El pago se procesa de forma segura a través del sistema de
+compras de tu dispositivo (App Store o Google Play); MyFitTrack no
+almacena los datos de tu tarjeta. El usuario puede usar la app sin
+suscribirse; las funciones básicas de registro de progreso están
+disponibles sin pago.
 ```
-
-**Punto de riesgo que debe quedar registrado (no corregido en esta tarea):**
-las directrices de revisión de Apple (App Store Review Guideline 3.1.1,
-"In-App Purchase") generalmente exigen que el contenido/servicios digitales
-consumidos dentro de la app usen el sistema de compras de Apple, con
-excepciones limitadas. Un checkout web (Stripe) para desbloquear funciones
-dentro de la app **puede ser motivo de rechazo en iOS** si Apple lo
-considera un servicio digital sujeto a esa regla. Esto es una decisión de
-negocio/arquitectura (migrar a `react-native-iap`/`expo-in-app-purchases`
-para iOS, o argumentar una excepción aplicable) que está explícitamente fuera
-del alcance de este issue: tocar la lógica de Stripe/cobros no está permitido
-en esta tarea. Se deja documentado como riesgo a resolver antes de enviar a
-revisión de Apple — Google Play es menos estricto con este punto para
-servicios de suscripción fuera de contenido digital consumible en la app,
-pero conviene confirmarlo también.
 
 ---
 
@@ -305,17 +264,12 @@ sola).
 
 ## Qué NO cubre este documento
 
-- No redacta el texto legal final de la política de privacidad: la página
-  publicada (`admin-web/app/privacidad/page.tsx`) conserva campos entre
-  corchetes pendientes de revisión legal, marcados explícitamente en la
-  propia página.
-- No conoce ni inventa el dominio real de producción de `admin-web`: el
-  enlace desde `mobile-app` usa un placeholder en
-  `mobile-app/src/constants/legal.ts` hasta que alguien con acceso al
-  despliegue lo reemplace.
-- No modifica la lógica de cobros/Stripe ni resuelve el riesgo de revisión
-  de Apple sobre compras dentro de la app descrito en la sección 2 — queda
-  documentado como decisión pendiente, no como código a cambiar.
+- No verifica en vivo que `/privacidad` cargue sin sesión en producción:
+  eso requiere que este PR esté mergeado y desplegado primero (hoy da 404
+  porque la página no existe todavía en el deploy actual).
+- No crea los productos de suscripción en App Store Connect/Play Console
+  ni el proyecto de RevenueCat — ver el plan de migración guardado para el
+  detalle exacto de qué falta configurar ahí.
 - No genera capturas de pantalla reales (requiere un build corrido por una
   persona con simulador/dispositivo disponible).
 - No completa los cuestionarios de clasificación de edad en App Store

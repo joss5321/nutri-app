@@ -28,7 +28,7 @@ export default function PrivacidadPage() {
 
       <section className="mt-8 space-y-6 text-sm leading-relaxed text-text-primary">
         <p>
-          Josue Ricardo Yañez Martine (&quot;nosotros&quot;) opera la
+          Josue Ricardo Yañez Martinez (&quot;nosotros&quot;) opera la
           aplicación móvil MyFitTrack. Esta política describe qué datos
           recolectamos y cómo los usamos.
         </p>
