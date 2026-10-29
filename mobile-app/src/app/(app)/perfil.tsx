@@ -19,6 +19,7 @@ import { type PlanKey } from '@/constants/planes'
 import { hasActiveSubscription, hasNutritionist } from '@/lib/permissions'
 import { cambiarNutriologo, type Nutricionista } from '@/lib/api/nutricionistas'
 import { NutriologoPickerModal } from '@/components/ui/NutriologoPickerModal'
+import { PRIVACY_POLICY_URL } from '@/constants/legal'
 
 const MONTH_SHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 
@@ -234,6 +235,13 @@ export default function PerfilScreen() {
   }
 
   const handleSignOut = async () => { await supabase.auth.signOut() }
+
+  const handleAbrirPoliticaPrivacidad = async () => {
+    await WebBrowser.openBrowserAsync(PRIVACY_POLICY_URL, {
+      dismissButtonStyle: 'close',
+      presentationStyle: WebBrowser.WebBrowserPresentationStyle.FORM_SHEET,
+    })
+  }
 
   const handlePickAvatar = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -619,6 +627,12 @@ export default function PerfilScreen() {
             ))}
           </View>
 
+          {/* Política de privacidad */}
+          <TouchableOpacity style={s.privacyBtn} onPress={handleAbrirPoliticaPrivacidad}>
+            <Ionicons name="shield-checkmark-outline" size={18} color={COLORS.muted} />
+            <Text style={s.privacyText}>Política de privacidad</Text>
+          </TouchableOpacity>
+
           {/* Cerrar sesión */}
           <TouchableOpacity style={s.signOutBtn} onPress={handleSignOut}>
             <Ionicons name="log-out-outline" size={18} color="#EF4444" />
@@ -755,6 +769,14 @@ const s = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   planBtnText: { fontSize: 12, fontWeight: '700', color: COLORS.text },
+
+  // ── Política de privacidad ──
+  privacyBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.white,
+    borderRadius: 16, padding: 14, marginTop: 8,
+  },
+  privacyText: { color: COLORS.muted, fontWeight: '600', fontSize: 15 },
 
   // ── Sign out ──
   signOutBtn: {
