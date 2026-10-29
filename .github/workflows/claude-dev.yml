@@ -173,18 +173,31 @@ jobs:
               agent/issue-${{ inputs.issue_number }}-attempt${{ needs.gate.outputs.attempt }}
             - No toques nada fuera del alcance de este issue puntual. No "mejores"
               cosas que el issue no pidio.
-            - No modifiques migraciones de base de datos, logica de
-              permisos/autorizacion, nada relacionado con Stripe o cobros, ni
-              nada dentro de .github/ (estos mismos workflows) o
-              WORKFLOW.md/CLAUDE.md/AGENTS.md — un check tecnico separado
-              (sensitive-paths-guard) rechaza esto de todas formas, pero no
-              lo intentes siquiera. Si resolver este issue requiriera algo de
-              esto, detente y explica por que en el PR en vez de hacerlo.
+            - Nunca toques nada dentro de .github/ (estos mismos workflows) o
+              WORKFLOW.md/CLAUDE.md/AGENTS.md, pase lo que pase — un check
+              tecnico separado (sensitive-paths-guard) lo rechaza de todas
+              formas, pero no lo intentes siquiera, ni aunque el issue
+              pareciera pedirlo.
+            - Si el issue pide codigo de pagos (Stripe), permisos/autorizacion,
+              o una migracion de base de datos: SI puedes escribirlo, como
+              propuesta. Para una migracion, agregala como una seccion nueva
+              numerada al final de supabase_schema.sql (nunca modifiques
+              secciones anteriores), siguiendo el patron ya establecido en
+              ese archivo. Para Stripe, nunca agregues ni uses claves "live"
+              (no las tienes de todas formas), nunca cambies nada a modo
+              live, y deja explicito en el PR que es codigo de prueba/
+              propuesta. Tu PR en estos casos NO podra fusionarse
+              automaticamente — sensitive-paths-guard lo bloquea a proposito
+              para que una persona lo revise y aplique manualmente; esto es
+              intencional, no un error tuyo.
             - No hagas merge de ningun PR, no apruebes ningun PR (ni el tuyo ni
               de nadie), no despliegues a produccion, no habilites cobros
-              reales. No tienes ninguna credencial de Stripe, Vercel ni EAS en
-              este workflow — si algo pidiera una, es señal de que este issue
-              no es apto para este flujo automatico: detente y dilo.
+              reales, no ejecutes ninguna migracion contra una base de datos
+              real (no tienes credenciales de produccion de todas formas). No
+              tienes ninguna credencial de Stripe live, Vercel ni EAS en este
+              workflow — si algo pidiera una credencial real, es señal de que
+              ese paso puntual no es apto para este flujo automatico: detente
+              y dilo, pero sigue con el resto de lo que si puedas preparar.
             - Corre los comandos reales de verificacion que correspondan a lo
               que toques (por ejemplo "npx tsc --noEmit" dentro de mobile-app o
               admin-web si tocas ese proyecto). Pega la salida real de esos
