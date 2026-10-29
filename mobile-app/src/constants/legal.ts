@@ -1,7 +1,10 @@
-// TODO(issue #34): reemplazar por el dominio real donde quede publicado admin-web
-// (Vercel u otro). Este repo no registra ese dominio en ningún archivo (ni .env ni
-// vercel.json), así que no se puede inferir con seguridad desde el código — hay que
-// pegarlo aquí a mano una vez que se conozca, antes de enviar la app a revisión.
-const ADMIN_WEB_URL = 'https://PENDIENTE-dominio-admin-web.example.com'
+// No hay dominio propio comprado todavía (issue #34) — se usa el alias
+// estable de producción de Vercel para el proyecto "nutri-app" (equipo
+// "my-fit-track"), confirmado contra la API de GitHub Deployments como el
+// que corresponde al último deploy de main. No es la URL con hash por
+// despliegue (esa cambia en cada deploy); verificar en el dashboard de
+// Vercel (Settings → Domains) que este sea el dominio marcado como
+// producción antes de enviar la app a revisión.
+const ADMIN_WEB_URL = 'https://nutri-app-my-fit-track.vercel.app'
 
 export const PRIVACY_POLICY_URL = `${ADMIN_WEB_URL}/privacidad`
