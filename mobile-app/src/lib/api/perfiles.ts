@@ -9,6 +9,7 @@ export type Perfil = {
   avatar_url: string | null
   plan_membresia: string
   nutricionista_id: string | null
+  stripe_customer_id: string | null
   telefono: string | null
   objetivo: string | null
   created_at?: string

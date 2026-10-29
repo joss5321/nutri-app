@@ -473,3 +473,13 @@ entrypoint = "./functions/translate-exercises/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/stripe-webhook/index.ts"
+
+# RevenueCat tampoco envia un JWT de Supabase — autentica via un header
+# Authorization estatico configurado en su dashboard, comparado dentro
+# del propio codigo contra REVENUECAT_WEBHOOK_AUTH_HEADER. Mismo
+# razonamiento que stripe-webhook: verify_jwt=true rechazaria el 100% de
+# las llamadas reales de RevenueCat antes de llegar al codigo.
+[functions.revenuecat-webhook]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/revenuecat-webhook/index.ts"

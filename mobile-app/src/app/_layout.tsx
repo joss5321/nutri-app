@@ -5,6 +5,7 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import * as SplashScreen from 'expo-splash-screen'
 import { useColorScheme } from 'react-native'
 import { supabase } from '@/lib/supabase'
+import { configureRevenueCat, cerrarSesionRevenueCat } from '@/lib/revenuecat'
 import { useAuthStore } from '@/store/auth'
 import { COLORS } from '@/constants/colors'
 import { RetryError } from '@/components/ui/RetryError'
@@ -55,6 +56,22 @@ export default function RootLayout() {
   const { setSession, setInitialized, initialized, setPasswordRecovery } = useAuthStore()
   const [sessionError, setSessionError] = useState(false)
 
+  // Mantiene el appUserID de RevenueCat sincronizado con auth.uid() —
+  // necesario para que revenuecat-webhook pueda mapear compras al perfil
+  // correcto sin indirección (ver plan de migración a compra nativa).
+  // Llamarla con el mismo usuario ya configurado es seguro (Purchases.logIn
+  // es idempotente para el usuario actual).
+  const syncSession = (session: Parameters<typeof setSession>[0]) => {
+    setSession(session)
+    if (session) {
+      configureRevenueCat(session.user.id).catch((err) =>
+        console.error('[APP] No se pudo configurar RevenueCat:', err?.message),
+      )
+    } else {
+      cerrarSesionRevenueCat().catch(() => {})
+    }
+  }
+
   // Valida estatus/is_active de un perfil recién autenticado y cierra la
   // sesión si no corresponde dejarlo entrar. Devuelve true si la sesión
   // sigue siendo válida (hay que llamar setSession/setInitialized con
@@ -79,7 +96,7 @@ export default function RootLayout() {
       console.log('[APP] User is pending — signing out')
       await supabase.auth.signOut()
       Alert.alert('Cuenta pendiente', 'Tu cuenta está pendiente de aprobación por tu nutriólogo.')
-      setSession(null)
+      syncSession(null)
       setInitialized(true)
       return false
     }
@@ -87,7 +104,7 @@ export default function RootLayout() {
       console.log('[APP] User is rejected — signing out')
       await supabase.auth.signOut()
       Alert.alert('Solicitud rechazada', 'Tu solicitud de registro fue rechazada. Contacta a tu nutriólogo para más información.')
-      setSession(null)
+      syncSession(null)
       setInitialized(true)
       return false
     }
@@ -95,7 +112,7 @@ export default function RootLayout() {
       console.log('[APP] User is disabled — signing out')
       await supabase.auth.signOut()
       Alert.alert('Cuenta deshabilitada', 'Tu cuenta se encuentra deshabilitada. Comunícate con tu administrador o nutriólogo para obtener más información.')
-      setSession(null)
+      syncSession(null)
       setInitialized(true)
       return false
     }
@@ -122,7 +139,7 @@ export default function RootLayout() {
           const sigueValida = await validarPerfilOCerrarSesion(session)
           if (!sigueValida) return
         }
-        setSession(session)
+        syncSession(session)
         setInitialized(true)
       })
       .catch((err) => {
@@ -154,11 +171,11 @@ export default function RootLayout() {
         // ya está aprobado, validarPerfilOCerrarSesion no hace nada extra).
         if (_event === 'SIGNED_IN' && session) {
           validarPerfilOCerrarSesion(session).then((sigueValida) => {
-            if (sigueValida) setSession(session)
+            if (sigueValida) syncSession(session)
           })
           return
         }
-        setSession(session)
+        syncSession(session)
       },
     )
 
