@@ -6,8 +6,11 @@ import { AppHeader } from '@/components/ui/AppHeader'
 import { RetryError } from '@/components/ui/RetryError'
 import { COLORS } from '@/constants/colors'
 import { useAuthStore } from '@/store/auth'
-import { fetchMiPerfil, updateMiPerfil } from '@/lib/api/perfiles'
+import { fetchMiPerfil, updateMiPerfil, type Perfil } from '@/lib/api/perfiles'
 import { fetchUltimaMedida, fetchMedidasHistorial, createMedida, type Medida } from '@/lib/api/medidas'
+import { canAccessPremiumFeatures } from '@/lib/permissions'
+import { LockedModal } from '@/components/ui/LockedModal'
+import { useRouter } from 'expo-router'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 type MetricKey = 'peso' | 'cintura' | 'cadera' | 'imc'
@@ -162,6 +165,7 @@ function FormField({
 export default function ProgresoScreen() {
   const { user } = useAuthStore()
   const userId = user?.id ?? ''
+  const router = useRouter()
 
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -169,6 +173,7 @@ export default function ProgresoScreen() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [miPerfil, setMiPerfil] = useState<Perfil | null>(null)
 
   const [historial, setHistorial] = useState<Medida[]>([])
   const [alturaCm, setAlturaCm] = useState<number | null>(null)
@@ -197,6 +202,7 @@ export default function ProgresoScreen() {
     Promise.all([fetchUltimaMedida(userId), fetchMiPerfil(userId)])
       .then(([medida, perfil]) => {
         setAlturaCm(perfil?.altura_cm ?? null)
+        setMiPerfil(perfil)
         if (medida) {
           setHasData(true)
           return fetchMedidasHistorial(userId).then(setHistorial)
@@ -267,6 +273,25 @@ export default function ProgresoScreen() {
       <View style={s.container}>
         <AppHeader title="Mi Progreso" />
         <RetryError message={loadError} onRetry={() => loadData()} />
+      </View>
+    )
+  }
+
+  // Defensa en profundidad: el tab ya está oculto para pacientes
+  // independientes en (app)/_layout.tsx, pero esto protege contra
+  // navegación directa (deep link, back button, etc.). Se evalúa DESPUÉS
+  // de "loading" — mientras el perfil real no ha cargado, miPerfil es
+  // null y canAccessPremiumFeatures(null) da false, lo que mostraría el
+  // modal de bloqueo un instante incluso a quien sí tiene acceso.
+  if (!canAccessPremiumFeatures(miPerfil)) {
+    return (
+      <View style={s.container}>
+        <AppHeader title="Progreso" />
+        <LockedModal
+          visible
+          onDismiss={() => router.replace('/(app)/rutinas')}
+          onSuscribirme={() => router.replace('/(app)/perfil')}
+        />
       </View>
     )
   }
