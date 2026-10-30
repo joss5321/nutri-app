@@ -20,7 +20,7 @@ explícita en vez de darlo por hecho.
 | 3 | Capturas de pantalla reales | **Falta.** No hay ninguna captura de la app en el repo, solo branding/iconos. | Requiere correr un build real (simulador/dispositivo) con backend conectado — no disponible en este entorno. |
 | 4 | Clasificación de edad | **Falta.** No existe configuración de clasificación de edad en `app.json`; es un dato que se llena en App Store Connect/Play Console, no en el repo. | Requiere acceso a App Store Connect y Play Console (credenciales que este flujo no tiene). |
 | 5 | Cuenta de prueba funcional para revisores | **Parcial.** Existe infraestructura de usuarios de prueba (`supabase_seed_test_users.sql`), pero no hay una cuenta designada específicamente como "cuenta de revisor" ni confirmación de que funcione contra producción. | Requiere acceso al proyecto de Supabase de producción para crear/confirmar la cuenta — no disponible en este flujo. |
-| 6 | Eliminación de cuenta desde la app (Apple Guideline 5.1.1(v)) | **Falta — código real pendiente, no solo configuración.** No es uno de los 5 elementos originales del issue #34, pero es un bloqueador de revisión igual de real: Apple rechaza cualquier app que permita crear cuenta sin permitir eliminarla desde dentro de la app. Issues #71 (UI de solicitud) y #72 (Edge Function de borrado/anonimización) siguen abiertos, sin implementar ([ver 6](#6-eliminación-de-cuenta-apple-guideline-511v)). | Ninguno externo — es trabajo de código en desarrollo activo. |
+| 6 | Eliminación de cuenta desde la app (Apple Guideline 5.1.1(v)) | **Completo, verificado de extremo a extremo (2026-10-30).** No es uno de los 5 elementos originales del issue #34, pero era un bloqueador de revisión igual de real. PR #82 (cierra #71+#72) implementa el flujo completo y se probó contra el proyecto real con cuentas descartables ([ver 6](#6-eliminación-de-cuenta-apple-guideline-511v)). | Ninguno. |
 
 ## Recomendación para el Coordinador
 
@@ -103,9 +103,12 @@ de la página contra el código antes de escribirla (nada inventado):
    responsable ("Josue Ricardo Yañez Martinez"), uso de datos, proveedores
    reales (Supabase, Stripe, RevenueCat/Apple/Google — confirmado por grep,
    sin incluir Expo porque la app solo programa notificaciones locales, no
-   registra push tokens), retención/eliminación (honesto: la eliminación de
-   cuenta todavía no está implementada, issues #71/#72 abiertos; se atiende
-   manualmente por correo mientras tanto), y el correo de contacto real.
+   registra push tokens), retención/eliminación, y el correo de contacto
+   real. **Actualización (2026-10-30):** la eliminación de cuenta ya está
+   implementada desde la app (ver ítem 6) — si el texto de
+   `admin-web/app/privacidad/page.tsx` todavía describe esto como "se
+   atiende manualmente por correo", hay que revisarlo y actualizarlo para
+   que mencione el flujo real dentro de la app.
 2. **Dominio real de `admin-web`.** `mobile-app/src/constants/legal.ts`
    usa `https://nutri-app-three-ashy.vercel.app`, confirmado por el usuario
    en su dashboard de Vercel y verificado en vivo con `curl`: la raíz `/`
@@ -265,8 +268,8 @@ sola).
 
 ## 6. Eliminación de cuenta (Apple Guideline 5.1.1(v))
 
-**No es uno de los 5 elementos originales del issue #34** — se agrega aquí
-porque es un bloqueador de revisión real descubierto al preparar este
+**No es uno de los 5 elementos originales del issue #34** — se agregó aquí
+porque era un bloqueador de revisión real descubierto al preparar este
 checklist, igual de capaz de causar un rechazo que cualquiera de los otros
 5.
 
@@ -276,17 +279,35 @@ que cualquier app que permita a un usuario crear una cuenta también permita
 necesidad de llamar o escribir a soporte. No es opcional ni específico de
 apps con datos sensibles — aplica a MyFitTrack igual que a cualquier otra.
 
-**Verificado en el repo:** no existe ningún flujo de eliminación de cuenta.
-Los issues #71 ("Eliminación de cuenta: UI de solicitud en mobile-app") y
-#72 ("Eliminación de cuenta: Edge Function de borrado/anonimización") están
-abiertos, sin ningún código asociado (confirmado por grep: no hay ningún
-endpoint ni pantalla relacionada).
+**Completo, verificado de extremo a extremo (2026-10-30).** PR #82 (merge
+de #71+#72) implementa el flujo completo:
+`mobile-app/src/components/ui/EliminarCuentaModal.tsx` (aviso de
+consecuencias → aviso de suscripción activa si aplica → confirmación de
+identidad con contraseña → confirmación final irreversible) +
+`mobile-app/src/lib/api/cuenta.ts` + la Edge Function
+`supabase/functions/eliminar-cuenta`.
 
-**A diferencia de los ítems 1-5, esto sí es trabajo de código pendiente**,
-no una configuración externa o un dato operativo — por eso no puede
-quedar simplemente documentado como bloqueador: necesita implementarse
-antes de enviar la app a revisión de iOS. En desarrollo activo (ver PR
-asociado a #71/#72).
+Probado contra el proyecto real de Supabase con cuentas descartables
+creadas por el flujo público de registro (no simulado, no solo revisión de
+código), limpiadas por completo al terminar:
+
+- **Cuenta normal:** `eliminar-cuenta` devolvió `{"success":true}` y se
+  confirmó por SQL que `auth.users`/`perfiles` desaparecieron.
+- **Nutriólogo con un paciente asignado:** bloqueado correctamente con 409
+  (`"Tienes 1 paciente asignado. Reasígnalos antes de eliminar tu
+  cuenta."`), sin tocar ningún dato — evita tanto huérfanos silenciosos en
+  `perfiles.nutricionista_id` como el borrado real de
+  `pacientes_manuales` que habría ocurrido sin este guardia.
+- Una suscripción Stripe activa se cancela de forma sincrónica dentro de
+  la misma función (no depende del webhook async); una suscripción
+  RevenueCat (App Store/Google Play) no se puede cancelar por API —  el
+  modal avisa de esto y ofrece el link nativo de gestión antes de
+  continuar.
+
+Evidencia completa en los comentarios de cierre de
+[#71](https://github.com/joss5321/nutri-app/issues/71) y
+[#72](https://github.com/joss5321/nutri-app/issues/72). Ya no es un
+bloqueador para enviar a revisión.
 
 ---
 
