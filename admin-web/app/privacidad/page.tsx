@@ -6,7 +6,6 @@ export const metadata: Metadata = {
 };
 
 const AVISOS_PENDIENTES = [
-  "La eliminación de cuenta todavía no está implementada en la app (issues #71/#72 en desarrollo) — hoy se atiende manualmente escribiendo al correo de contacto.",
   "Confirmar con un abogado si este texto cumple los requisitos específicos de privacidad de tu mercado de lanzamiento antes de enviar la app a revisión.",
 ];
 
@@ -113,19 +112,18 @@ export default function PrivacidadPage() {
           <p className="mt-2">
             Conservamos tus datos mientras tu cuenta esté activa. Esto
             incluye los registros de pagos y suscripciones, que conservamos
-            por motivos operativos y de auditoría. Puedes solicitar la
-            eliminación de tu cuenta y tus datos escribiéndonos al correo de
-            contacto que aparece abajo. Hoy esa solicitud se atiende
-            manualmente, mientras terminamos de construir la eliminación
-            automática dentro de la app.
+            de forma anonimizada por motivos operativos y de auditoría,
+            incluso después de eliminar tu cuenta. Puedes eliminar tu cuenta
+            y el resto de tus datos directamente desde la app, en la sección
+            de perfil (&quot;Eliminar mi cuenta&quot;). Esta acción es
+            inmediata y no se puede deshacer.
           </p>
         </div>
 
         <div>
           <h2 className="text-lg font-bold text-primary">5. Contacto</h2>
           <p className="mt-2">
-            Para preguntas sobre esta política o para solicitar la
-            eliminación de tus datos, escribe a{" "}
+            Para preguntas sobre esta política, escribe a{" "}
             <a href="mailto:j.rym5311@gmail.com" className="text-primary underline">
               j.rym5311@gmail.com
             </a>
