@@ -180,6 +180,56 @@ jobs:
         # a la base de datos real.
         run: npm run test:e2e
 
+  edge-functions:
+    name: edge-functions
+    # Hallazgo real (ver PR que agrega este job): hasta ahora ningun check de
+    # CI corria "deno test"/"deno check" sobre supabase/functions/ — los
+    # *.test.ts existian pero nunca se ejecutaban automaticamente, y un
+    # mock desactualizado (stripe-webhook/index.test.ts, tras agregarse la
+    # idempotencia de la Seccion 89 y resolverPlanVigente) llevaba tiempo
+    # roto sin que nada lo marcara. No corre contra Supabase ni Stripe
+    # reales — todo se mockea via globalThis.fetch.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: supabase/functions
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Verificar tipos de cada Edge Function y modulo compartido
+        run: |
+          set -euo pipefail
+          for f in $(find . -maxdepth 2 -name "index.ts" -not -path "*/node_modules/*"); do
+            echo "Check $f"
+            deno check "$f"
+          done
+          for f in _shared/*.ts; do
+            case "$f" in *.test.ts) continue;; esac
+            echo "Check $f"
+            deno check "$f"
+          done
+
+      # Un "deno test" por archivo, no todos juntos: algunos test files
+      # hacen Deno.env.set(...) a nivel de modulo (cold start), y eso
+      # persiste dentro del mismo proceso si varios *.test.ts corren
+      # juntos — confirmado en vivo que esto hace fallar crear-checkout
+      # cuando corre en el mismo proceso que stripe-webhook, aunque cada
+      # uno pasa limpio por separado.
+      - name: Tests de Edge Functions (un archivo por invocacion)
+        run: |
+          set -euo pipefail
+          for f in $(find . -name "*.test.ts" -not -path "*/node_modules/*"); do
+            echo "=== $f ==="
+            deno test --allow-env --allow-net "$f"
+          done
+
   rls-tests:
     name: rls-tests
     runs-on: ubuntu-latest
