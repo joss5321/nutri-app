@@ -3,6 +3,11 @@ node_modules/
 dist/
 web-build/
 
+# Lockfile que Deno genera en la raíz si se corre `deno check`/`deno test`
+# desde ahí en vez de supabase/functions/ (que sí tiene su propio
+# deno.lock versionado) — nunca es intencional, solo ruido local.
+/deno.lock
+
 .env
 .env.local
 .env.*.local
