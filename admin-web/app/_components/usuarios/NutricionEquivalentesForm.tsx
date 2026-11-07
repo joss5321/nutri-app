@@ -254,28 +254,30 @@ export default function NutricionEquivalentesForm({ userId }: { userId: string }
   );
 
   // HCO/Prot/Líp/Kcal se calculan desde racList (columna # Raciones)
-  let totalHCO = 0, totalProt = 0, totalLip = 0, totalKcal = 0;
-  const mealTotals: Record<string, number> = { desayuno: 0, colacion_1: 0, comida: 0, colacion_2: 0, cena: 0 };
-  // Kcal por tiempo de comida = suma, por grupo, de las raciones asignadas a ESE tiempo × kcal por ración
-  const mealKcalTotals: Record<string, number> = { desayuno: 0, colacion_1: 0, comida: 0, colacion_2: 0, cena: 0 };
-
   const rowCalcs = rows.map((row, gi) => {
     const raciones = racList[gi];
     const nutri = NUTRICION_POR_EQUIV[row.grupo] ?? { hco: 0, prot: 0, lip: 0, kcal: 0 };
-    const hco = raciones * nutri.hco;
-    const prot = raciones * nutri.prot;
-    const lip = raciones * nutri.lip;
-    const kcal = raciones * nutri.kcal;
-    totalHCO += hco;
-    totalProt += prot;
-    totalLip += lip;
-    totalKcal += kcal;
-    MEAL_KEYS.forEach((k) => {
-      mealTotals[k] += row[k];
-      mealKcalTotals[k] += row[k] * nutri.kcal;
-    });
-    return { raciones, hco, prot, lip, kcal };
+    return {
+      raciones,
+      hco: raciones * nutri.hco,
+      prot: raciones * nutri.prot,
+      lip: raciones * nutri.lip,
+      kcal: raciones * nutri.kcal,
+      mealKcalPorTiempo: Object.fromEntries(MEAL_KEYS.map((k) => [k, row[k] * nutri.kcal])) as Record<string, number>,
+    };
   });
+
+  const totalHCO = rowCalcs.reduce((acc, r) => acc + r.hco, 0);
+  const totalProt = rowCalcs.reduce((acc, r) => acc + r.prot, 0);
+  const totalLip = rowCalcs.reduce((acc, r) => acc + r.lip, 0);
+  const totalKcal = rowCalcs.reduce((acc, r) => acc + r.kcal, 0);
+
+  const mealTotals = Object.fromEntries(
+    MEAL_KEYS.map((k) => [k, rows.reduce((acc, row) => acc + row[k], 0)]),
+  ) as Record<string, number>;
+  const mealKcalTotals = Object.fromEntries(
+    MEAL_KEYS.map((k) => [k, rowCalcs.reduce((acc, r) => acc + r.mealKcalPorTiempo[k], 0)]),
+  ) as Record<string, number>;
   const totalMealKcal = MEAL_KEYS.reduce((acc, k) => acc + mealKcalTotals[k], 0);
 
   const totalRacList = racList.reduce((a, b) => a + b, 0);

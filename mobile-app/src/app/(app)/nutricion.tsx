@@ -680,7 +680,7 @@ function RecetasTab() {
             <View style={{ alignItems: 'center', paddingVertical: 32 }}>
               <Ionicons name="search-outline" size={30} color={COLORS.muted} />
               <Text style={{ color: COLORS.muted, marginTop: 8 }}>
-                Sin resultados para "{search}"
+                Sin resultados para &quot;{search}&quot;
               </Text>
             </View>
           )}

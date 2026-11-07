@@ -7773,6 +7773,14 @@ on conflict (nombre) do nothing;
 
 alter table especialidades enable row level security;
 
+-- Decisión documentada (issue #21): se mantiene using(true), sin
+-- restringir más. especialidades es un catálogo fijo y curado solo por
+-- admin/superadmin (ver insert/update/delete abajo) de 12 etiquetas
+-- públicas ("Nutrición clínica", "Diabetes", etc.) — no contiene datos de
+-- pacientes ni de negocio sensible, y cualquier usuario autenticado
+-- necesita leerlo completo para elegir especialidad al buscar nutriólogo.
+-- Ya no es anon: solo authenticated puede leerlo, que es el límite real
+-- que corresponde a este dato.
 create policy "especialidades_select" on especialidades
 for select to authenticated using (true);
 
@@ -8657,4 +8665,30 @@ revoke all on revenuecat_webhook_events from anon, authenticated;
 -- revertir esta sección):
 --
 -- drop table if exists revenuecat_webhook_events;
+-- ============================================================
+
+-- ============================================================
+-- 92. MIGRACIÓN — revocar EXECUTE excesivo (issues #11, #20)
+-- ============================================================
+-- Confirmado en vivo contra producción (2026-11-06, pg_proc +
+-- has_function_privilege): anon y authenticated podían ejecutar
+-- directamente estas 3 funciones, aunque solo se usan internamente desde
+-- policies de RLS (nunca se llaman desde el cliente vía RPC). No es que
+-- hoy filtren datos — devuelven solo lo que el propio caller ya puede ver
+-- por su auth.uid() — pero ejecutar funciones internas directamente desde
+-- el cliente no tiene ningún uso legítimo y es defensa en profundidad
+-- barata: si alguna de las tres cambiara a futuro para aceptar un
+-- parámetro arbitrario, esta revocación ya existente evita que anon la
+-- llame directo.
+revoke execute on function get_current_user_is_active() from public, anon;
+revoke execute on function get_perfil_activo_aprobado(uuid) from public, anon;
+revoke execute on function get_user_rol() from public, anon;
+
+-- ============================================================
+-- ROLLBACK Sección 92 (referencia — NO ejecutar salvo que se decida
+-- revertir esta sección; esto restauraría el permiso excesivo original):
+--
+-- grant execute on function get_current_user_is_active() to public;
+-- grant execute on function get_perfil_activo_aprobado(uuid) to public;
+-- grant execute on function get_user_rol() to public;
 -- ============================================================
