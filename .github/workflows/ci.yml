@@ -159,7 +159,6 @@ jobs:
         # que ya esta resuelto.
         run: npm run lint
         continue-on-error: true
-        continue-on-error: true
 
       - name: Build (next build — incluye el type-check de Next.js)
         run: npm run build
