@@ -1,9 +1,10 @@
 name: CI
 
 # Corre en cada PR hacia main. No usa secretos de produccion: las claves de
-# Supabase que usan admin-web y mobile-app en runtime son el "publishable key"
-# publico (ya hardcodeado en el codigo, ver issue #12 del backlog), y las
-# pruebas de RLS levantan su propio Supabase local via Docker.
+# Supabase que usa admin-web en runtime son el "publishable key" publico
+# (issue #12 — movido de hardcodeado en el codigo a NEXT_PUBLIC_SUPABASE_URL/
+# _ANON_KEY via env, con el mismo valor publico repetido aqui porque no es un
+# secreto), y las pruebas de RLS levantan su propio Supabase local via Docker.
 on:
   pull_request:
     branches: [main]
@@ -77,25 +78,29 @@ jobs:
         run: npx tsc --noEmit
 
       - name: Lint
-        # Hallazgo de esta configuracion inicial: el script "lint" (expo lint)
-        # falla hoy en main con "Cannot find module 'eslint'" porque eslint
-        # nunca quedo instalado como devDependency. Es un fallo preexistente,
-        # no causado por ningun cambio de PR — se deja visible en el log pero
-        # no bloquea el check mientras no se resuelva (ver issue nuevo en el
-        # backlog). No lo oculto: el paso corre y su salida queda en el log.
+        # eslint ya esta instalado (PR #68) y hoy pasa limpio (0 errores,
+        # solo warnings de react-hooks/exhaustive-deps preexistentes que no
+        # se "arreglan" a ciegas agregando dependencias sin revisar cada
+        # caso — podria crear loops infinitos). Confirmado en vivo
+        # (2026-11-06) y corregidos los 2 errores reales que quedaban
+        # (react/no-unescaped-entities en nutricion.tsx) antes de quitar
+        # este continue-on-error.
         run: npm run lint
-        continue-on-error: true
 
-      - name: Build check (expo export --platform web)
-        # No requiere cuenta ni credenciales de EAS. Hallazgo real de esta
-        # configuracion inicial (no cosmetico): falla hoy en main con
-        # "ReferenceError: window is not defined" durante el prerenderizado
-        # estatico, porque src/lib/supabase.ts usa AsyncStorage sin guardar
-        # contra ese entorno. Preexistente, no causado por ningun cambio de
-        # PR — se deja visible, no bloqueante, hasta que se resuelva (ver
-        # issue nuevo en el backlog).
-        run: npx expo export --platform web
-        continue-on-error: true
+      - name: Build check (expo export --platform ios)
+        # El target real de esta app es iOS/Android (eas.json no tiene
+        # ningun perfil "web"; app.json trae "web" solo porque Expo Router
+        # lo agrega por defecto, nunca se despliega). Antes este paso
+        # corria "--platform web", que falla con "window is not defined"
+        # durante el prerenderizado estatico (src/lib/supabase.ts usa
+        # AsyncStorage) — un bug real, pero de un target que la app nunca
+        # usa, probando nada relevante. Confirmado en vivo (2026-11-06):
+        # "--platform ios" y "--platform android" exportan limpio los dos,
+        # sin ese error, porque ninguno pasa por el prerenderizado web.
+        run: npx expo export --platform ios
+
+      - name: Build check (expo export --platform android)
+        run: npx expo export --platform android
 
       - name: Verificar texto en español del permiso de fotos (iOS)
         # Issue #17. "expo config" resuelve la config efectiva incluyendo
@@ -122,6 +127,11 @@ jobs:
     defaults:
       run:
         working-directory: admin-web
+    env:
+      # Publishable key, no es secreto (issue #12) — ver comentario de
+      # cabecera de este archivo.
+      NEXT_PUBLIC_SUPABASE_URL: https://uvfdbvzydbogfkntfuix.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: sb_publishable_E-hr1YBueC-gkt_w2c_AAg_JOcDMAsl
     steps:
       - uses: actions/checkout@v6
         with:
@@ -137,11 +147,18 @@ jobs:
         run: npm ci
 
       - name: Lint
-        # Hallazgo de esta configuracion inicial: ya existen 12 errores y 14
-        # warnings de ESLint en main (ver detalle en el PR que agrega este
-        # workflow). Son preexistentes, no introducidos por este cambio. Se
-        # deja visible, no bloqueante, hasta que se resuelvan deliberadamente.
+        # Quedan 10 errores reales (2026-11-06), todos de las reglas nuevas
+        # de React Compiler (react-hooks/set-state-in-effect, purity,
+        # static-components) sobre el patron clasico "cargar datos en
+        # useEffect" — no son bugs confirmados, pero arreglarlos bien
+        # requiere revisar cada componente por separado, no un cambio
+        # mecanico masivo sobre forms que ya maneja datos reales de
+        # pacientes. Bajaron de 11 a 10 (mas 2 warnings de unused-vars
+        # resueltos) en esta pasada. Ver issue de seguimiento. Mientras
+        # tanto se deja visible, no bloqueante — no se enmascara pretendiendo
+        # que ya esta resuelto.
         run: npm run lint
+        continue-on-error: true
         continue-on-error: true
 
       - name: Build (next build — incluye el type-check de Next.js)
@@ -154,6 +171,9 @@ jobs:
     defaults:
       run:
         working-directory: admin-web
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://uvfdbvzydbogfkntfuix.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: sb_publishable_E-hr1YBueC-gkt_w2c_AAg_JOcDMAsl
     steps:
       - uses: actions/checkout@v6
         with:
