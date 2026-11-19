@@ -72,6 +72,10 @@ function mockFetch(opts: {
   upsertError?: boolean
   updatePerfilError?: boolean
   updateSuscripcionError?: boolean
+  eventoDuplicado?: boolean
+  eventInsertError?: boolean
+  suscripcionesVigentes?: { stripe_price_id: string }[]
+  resolverPlanError?: boolean
 }) {
   const capturedBodies: { url: string; method: string; body: unknown }[] = []
 
@@ -80,6 +84,33 @@ function mockFetch(opts: {
     const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase()
     if (init?.body) {
       try { capturedBodies.push({ url, method, body: JSON.parse(init.body as string) }) } catch { /* noop */ }
+    }
+
+    if (url.includes("/rest/v1/stripe_webhook_events") && method === "POST") {
+      // Idempotencia (ver index.ts) — se reclama ANTES del switch de
+      // negocio, así que esta rama tiene que existir para que CUALQUIER
+      // test de un evento real llegue a mockear perfiles/suscripciones.
+      if (opts.eventoDuplicado) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ code: "23505", message: "duplicate key value violates unique constraint \"stripe_webhook_events_event_id_key\"" }),
+            { status: 409 },
+          ),
+        )
+      }
+      if (opts.eventInsertError) {
+        return Promise.resolve(new Response(JSON.stringify({ message: "db error" }), { status: 500 }))
+      }
+      return Promise.resolve(new Response(JSON.stringify([{ event_id: "evt-mock" }]), { status: 201 }))
+    }
+
+    if (url.includes("/rest/v1/suscripciones") && method === "GET") {
+      // resolverPlanVigente(): recalcula el plan desde TODAS las
+      // suscripciones active/trialing guardadas, no desde el evento en sí.
+      if (opts.resolverPlanError) {
+        return Promise.resolve(new Response(JSON.stringify({ message: "db error" }), { status: 500 }))
+      }
+      return Promise.resolve(new Response(JSON.stringify(opts.suscripcionesVigentes ?? []), { status: 200 }))
     }
 
     if (url.includes("/rest/v1/perfiles") && method === "GET") {
@@ -147,7 +178,7 @@ Deno.test("FIRMA: Stripe-Signature inválida = 400", async () => {
 
 // ── EVENTOS VÁLIDOS ──────────────────────────────────────────────────────
 Deno.test("EVENTO: customer.subscription.created válido — escribe suscripción + perfil", async () => {
-  mockFetch({ perfil: { kind: "found" } })
+  mockFetch({ perfil: { kind: "found" }, suscripcionesVigentes: [{ stripe_price_id: "price_basico_test" }] })
   const payload = stripeEvent("evt_2", "customer.subscription.created", subscriptionObject())
   const signature = await signStripePayload(payload, WEBHOOK_SECRET)
   const res = await postEvent(payload, signature)
@@ -157,7 +188,7 @@ Deno.test("EVENTO: customer.subscription.created válido — escribe suscripció
 })
 
 Deno.test("EVENTO: customer.subscription.updated válido — actualiza correctamente", async () => {
-  mockFetch({ perfil: { kind: "found" } })
+  mockFetch({ perfil: { kind: "found" }, suscripcionesVigentes: [{ stripe_price_id: "price_basico_test" }] })
   const payload = stripeEvent("evt_3", "customer.subscription.updated", subscriptionObject({ status: "past_due" }))
   const signature = await signStripePayload(payload, WEBHOOK_SECRET)
   const res = await postEvent(payload, signature)
@@ -194,14 +225,37 @@ Deno.test("EVENTO: perfil no encontrado — 200, ignorado explícitamente (no es
   assertEquals(res.status, 200)
 })
 
-Deno.test("EVENTO: no manejado (ej. invoice.paid) — 200 sin escrituras", async () => {
-  globalThis.fetch = (() => {
-    throw new Error("no debería llamar a fetch para un evento no manejado")
-  }) as typeof fetch
+Deno.test("EVENTO: no manejado (ej. invoice.paid) — 200, sin escrituras a perfiles/suscripciones", async () => {
+  // La idempotencia (POST a stripe_webhook_events) SÍ se registra para
+  // todo evento, incluso uno que el switch de negocio no maneja — lo que
+  // este test verifica es que ningún evento no manejado llega a escribir
+  // en perfiles/suscripciones.
+  const { capturedBodies } = mockFetch({})
   const payload = stripeEvent("evt_6", "invoice.paid", { id: "in_test" })
   const signature = await signStripePayload(payload, WEBHOOK_SECRET)
   const res = await postEvent(payload, signature)
   assertEquals(res.status, 200)
+  assertEquals(capturedBodies.some((b) => b.url.includes("/perfiles") || b.url.includes("/suscripciones")), false)
+})
+
+// ── IDEMPOTENCIA ─────────────────────────────────────────────────────────
+Deno.test("IDEMPOTENCIA: evento ya procesado (23505) = 200 duplicate, sin reprocesar", async () => {
+  const { capturedBodies } = mockFetch({ eventoDuplicado: true })
+  const payload = stripeEvent("evt_dup", "customer.subscription.created", subscriptionObject())
+  const signature = await signStripePayload(payload, WEBHOOK_SECRET)
+  const res = await postEvent(payload, signature)
+  assertEquals(res.status, 200)
+  const body = await res.json()
+  assertEquals(body.duplicate, true)
+  assertEquals(capturedBodies.some((b) => b.url.includes("/perfiles") || b.url.includes("/suscripciones")), false)
+})
+
+Deno.test("IDEMPOTENCIA: error real de BD al registrar el evento (no 23505) = 500, deja reintentar", async () => {
+  mockFetch({ eventInsertError: true })
+  const payload = stripeEvent("evt_err", "customer.subscription.created", subscriptionObject())
+  const signature = await signStripePayload(payload, WEBHOOK_SECRET)
+  const res = await postEvent(payload, signature)
+  assertEquals(res.status, 500)
 })
 
 // ── ERRORES DE BD ────────────────────────────────────────────────────────
