@@ -37,6 +37,29 @@
 //                        Si se omite, el script crea un customer
 //                        descartable solo para probar el mecanismo de
 //                        Test Clocks en sí (no toca ningún perfil real).
+//   --declinada          (opcional, caso 7) simula una renovación fallida:
+//                        el pago inicial se hace con una tarjeta normal
+//                        (pm_card_visa, para que la suscripción quede
+//                        activa igual que en el caso de éxito), pero justo
+//                        ANTES de avanzar el Test Clock se cambia el método
+//                        de pago predeterminado del customer a
+//                        pm_card_chargeDeclined (tarjeta de prueba de
+//                        Stripe que siempre es rechazada). Así se simula
+//                        específicamente que la tarjeta deja de funcionar
+//                        AL RENOVAR, no al momento de suscribirse — el
+//                        mismo escenario real que motiva el caso 7. El
+//                        script entonces espera que la factura de
+//                        renovación quede en 'open'/'uncollectible', nunca
+//                        'paid', y lo reporta con un mensaje distinto del
+//                        de éxito.
+//   --metodo-pago=pm_xxx (opcional) sobreescribe qué tarjeta de prueba de
+//                        Stripe usar para la renovación declinada en vez
+//                        de pm_card_chargeDeclined (ej.
+//                        pm_card_chargeDeclinedInsufficientFunds, para
+//                        distinguir el motivo del rechazo). Implica
+//                        --declinada; no cambia el comportamiento por
+//                        defecto del script si no se pasa ninguno de los
+//                        dos flags.
 
 const API = "https://api.stripe.com/v1"
 
@@ -96,6 +119,23 @@ async function esperarFacturaPagada(key, subscriptionId, intentos = 10) {
   return null
 }
 
+// Caso 7 (renovación fallida): a diferencia de esperarFacturaPagada, acá SÍ
+// es un éxito de la prueba que la factura quede sin pagar — 'open' o
+// 'uncollectible' son los estados en los que Stripe deja una factura cuyo
+// intento de cobro automático fue rechazado.
+async function esperarFacturaFallida(key, subscriptionId, intentos = 10) {
+  for (let i = 0; i < intentos; i++) {
+    const invoices = await stripe(key, "GET", `/invoices?subscription=${subscriptionId}&limit=3`)
+    const fallida = invoices.data.find((inv) => inv.status === "open" || inv.status === "uncollectible")
+    if (fallida) return fallida
+    const pagadaDeMas = invoices.data.find((inv) => inv.status === "paid" && inv.billing_reason === "subscription_cycle")
+    if (pagadaDeMas) return { ...pagadaDeMas, _inesperadamentePagada: true }
+    console.log(`  (esperando factura de renovación rechazada, intento ${i + 1}/${intentos}...)`)
+    await sleep(3000)
+  }
+  return null
+}
+
 async function main() {
   const args = parseArgs()
   const key = process.env.STRIPE_SECRET_KEY
@@ -105,6 +145,9 @@ async function main() {
     console.error("Falta --price=price_xxx (un Price ID de modo test). Ver comentario de cabecera del script.")
     process.exit(1)
   }
+
+  const metodoPagoDeclinado = args["metodo-pago"] || (args.declinada ? "pm_card_chargeDeclined" : null)
+  const simulaRenovacionFallida = Boolean(metodoPagoDeclinado)
 
   console.log("1) Creando Test Clock...")
   const ahora = Math.floor(Date.now() / 1000)
@@ -145,28 +188,59 @@ async function main() {
   })
   console.log(`   subscription=${sub.id} status=${sub.status}`)
 
+  if (simulaRenovacionFallida) {
+    console.log(`3.5) Simulando caso 7 (renovación fallida): adjuntando ${metodoPagoDeclinado} a ${customerId} y fijándolo como método de pago predeterminado ANTES de avanzar el reloj...`)
+    await stripe(key, "POST", `/payment_methods/${metodoPagoDeclinado}/attach`, { customer: customerId })
+    await stripe(key, "POST", `/customers/${customerId}`, {
+      "invoice_settings[default_payment_method]": metodoPagoDeclinado,
+    })
+    console.log("   Listo — el pago inicial ya se procesó con una tarjeta válida; solo la renovación usará la tarjeta rechazada.")
+  }
+
   console.log("4) Adelantando el Test Clock al siguiente periodo de facturación...")
   const siguientePeriodo = sub.current_period_end ?? ahora + 31 * 24 * 60 * 60
   await stripe(key, "POST", `/test_helpers/test_clocks/${clock.id}/advance`, {
     frozen_time: String(siguientePeriodo + 3600),
   })
 
-  console.log("5) Esperando a que Stripe procese la renovación y emita factura...")
-  await sleep(5000)
-  const factura = await esperarFacturaPagada(key, sub.id)
-  if (factura) {
-    console.log(`\n✔ Renovación confirmada: factura ${factura.id} pagada (${factura.amount_paid / 100} ${factura.currency}).`)
-    if (args.customer) {
-      console.log(
-        "  Como usaste un customer real, revisa ahora en Supabase que " +
-          "perfiles.plan_membresia siga correcto para ese perfil (el " +
-          "webhook stripe-webhook debió procesar el evento invoice.paid / " +
-          "customer.subscription.updated) y que el registro en " +
-          "stripe_webhook_events (Sección 89) tenga una fila nueva.",
-      )
+  if (simulaRenovacionFallida) {
+    console.log("5) Esperando a que Stripe intente cobrar la renovación y la factura quede rechazada...")
+    await sleep(5000)
+    const factura = await esperarFacturaFallida(key, sub.id)
+    if (factura && factura._inesperadamentePagada) {
+      console.log(`\n✘ FALLO DE LA PRUEBA: la factura de renovación ${factura.id} quedó 'paid' — se esperaba que ${metodoPagoDeclinado} la rechazara. Revisa si el payment method realmente quedó como predeterminado antes de avanzar el clock.`)
+    } else if (factura) {
+      console.log(`\n✔ Renovación fallida confirmada correctamente: factura ${factura.id} en estado '${factura.status}' (no pagada), como se esperaba con ${metodoPagoDeclinado}.`)
+      if (args.customer) {
+        console.log(
+          "  Como usaste un customer real, revisa ahora en Supabase que " +
+            "perfiles.plan_membresia se haya degradado para ese perfil (el " +
+            "webhook stripe-webhook debió procesar invoice.payment_failed / " +
+            "customer.subscription.updated) y que el registro en " +
+            "stripe_webhook_events (Sección 89) tenga una fila nueva.",
+        )
+      }
+    } else {
+      console.log("\n✘ No se detectó ninguna factura tras varios intentos — revisa el Dashboard de Stripe (Test mode → Customers → el customer de prueba) para ver qué pasó.")
     }
   } else {
-    console.log("\n✘ No se detectó una factura pagada tras varios intentos — revisa el Dashboard de Stripe (Test mode → Customers → el customer de prueba) para ver qué pasó.")
+    console.log("5) Esperando a que Stripe procese la renovación y emita factura...")
+    await sleep(5000)
+    const factura = await esperarFacturaPagada(key, sub.id)
+    if (factura) {
+      console.log(`\n✔ Renovación confirmada: factura ${factura.id} pagada (${factura.amount_paid / 100} ${factura.currency}).`)
+      if (args.customer) {
+        console.log(
+          "  Como usaste un customer real, revisa ahora en Supabase que " +
+            "perfiles.plan_membresia siga correcto para ese perfil (el " +
+            "webhook stripe-webhook debió procesar el evento invoice.paid / " +
+            "customer.subscription.updated) y que el registro en " +
+            "stripe_webhook_events (Sección 89) tenga una fila nueva.",
+        )
+      }
+    } else {
+      console.log("\n✘ No se detectó una factura pagada tras varios intentos — revisa el Dashboard de Stripe (Test mode → Customers → el customer de prueba) para ver qué pasó.")
+    }
   }
 
   console.log("\n6) Limpieza...")
