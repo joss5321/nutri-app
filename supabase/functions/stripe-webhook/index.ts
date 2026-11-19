@@ -1,7 +1,9 @@
 import Stripe from "npm:stripe@17"
 import { createClient } from "npm:@supabase/supabase-js@2"
+import { logModoStripeAlArrancar } from "../_shared/stripe-mode.ts"
 
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!)
+logModoStripeAlArrancar("stripe-webhook", Deno.env.get("STRIPE_SECRET_KEY"))
 const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET")!
 
 const supabase = createClient(

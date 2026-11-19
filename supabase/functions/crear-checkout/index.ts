@@ -1,7 +1,9 @@
 import Stripe from "npm:stripe@17"
 import { createClient } from "npm:@supabase/supabase-js@2"
+import { logModoStripeAlArrancar } from "../_shared/stripe-mode.ts"
 
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!)
+logModoStripeAlArrancar("crear-checkout", Deno.env.get("STRIPE_SECRET_KEY"))
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
