@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { fetchAdmins, updatePerfil, type AdminListItem } from "@/app/_data/perfiles";
+import { crearAdmin } from "@/app/_data/crear_admin";
 import ConfirmModal from "@/app/_components/ConfirmModal";
 import PerfilProfesionalModal from "@/app/_components/usuarios/perfil-profesional/PerfilProfesionalModal";
 import { X, ShieldCheck, Check, Pencil, Trash2, Camera, IdCard } from "lucide-react";
@@ -79,29 +80,7 @@ export default function AdministradoresPage() {
     setSaving(true);
     setFeedback(null);
     try {
-      const { data: { session: adminSession } } = await supabase.auth.getSession();
-
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-        email: email.trim().toLowerCase(),
-        password,
-        options: { data: { full_name: nombre.trim() } },
-      });
-      if (signUpError) throw signUpError;
-
-      if (adminSession) {
-        await supabase.auth.setSession({
-          access_token: adminSession.access_token,
-          refresh_token: adminSession.refresh_token,
-        });
-      }
-
-      if (signUpData.user) {
-        const { error: rolError } = await supabase
-          .from("perfiles")
-          .update({ rol: "admin" })
-          .eq("id", signUpData.user.id);
-        if (rolError) throw rolError;
-      }
+      await crearAdmin({ nombre_completo: nombre, email, password });
 
       setNombre("");
       setEmail("");

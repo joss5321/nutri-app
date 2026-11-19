@@ -10,7 +10,7 @@ import {
   uploadEjercicioGif,
   uploadEjercicioVideo,
 } from "@/app/_data/ejercicios";
-import { getYouTubeEmbedId, isYouTubeShort, VideoPlayer } from "@/app/_components/ejercicios/VideoPlayer";
+import { isYouTubeShort, VideoPlayer } from "@/app/_components/ejercicios/VideoPlayer";
 import GifCatalogModal from "@/app/_components/ejercicios/GifCatalogModal";
 import type { CatalogGifItem } from "@/app/_data/exercise-gifs-catalog";
 
