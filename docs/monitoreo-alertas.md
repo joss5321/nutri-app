@@ -127,15 +127,26 @@ Esto se separa en dos superficies con naturaleza distinta:
 
 ### 3.1 admin-web (Next.js en Vercel)
 
-**Servicio recomendado: Vercel Monitoring (nativo) + Vercel Log Drains.**
+**Servicio recomendado: notificaciones nativas de Vercel (ya vienen
+activadas por defecto).**
 
-- Dashboard de Vercel → proyecto `admin-web` → pestaña **Observability /
-  Monitoring**: Vercel ya reporta automáticamente errores 5xx de rutas y
-  fallos de build/runtime del proyecto desplegado, sin configuración
-  adicional de código.
-- Activar notificaciones: **Project Settings → Notifications**, habilitar
-  alertas de "Deployment failed" y, si el plan del proyecto lo incluye,
-  las alertas de errores en runtime.
+- Dashboard de Vercel → proyecto `admin-web` → pestaña **Observability**:
+  Vercel ya reporta automáticamente errores 5xx de rutas y fallos de
+  build/runtime del proyecto desplegado, sin configuración adicional de
+  código.
+- Corrección sobre dónde está el ajuste (verificado contra
+  [vercel.com/docs/notifications](https://vercel.com/docs/notifications)):
+  **no es "Project Settings"**, es a nivel de cuenta personal —
+  **Account Settings → My Notifications → Deployment Failures**. Por
+  defecto ya está activada para quien hace el deploy (web + email), así
+  que confirmar que el usuario correcto la tiene encendida es
+  normalmente suficiente, no hace falta "crear" nada.
+- Límite real a tener en cuenta: las alertas configurables por regla
+  (tasa de error, Slack/webhook, no solo email) son la función **Alerts**
+  de Vercel, disponible solo en planes **Pro/Enterprise con Observability
+  Plus** — no viene incluida en el plan base. Si el proyecto no tiene ese
+  add-on, la notificación de "deployment failed" por email/web es la única
+  alerta nativa real disponible hoy.
 - Motivo: el deploy ya está gobernado por la integración Git de Vercel
   (confirmado en `docs/plan-rollback.md`, Sección 1), así que usar su
   monitoreo nativo no agrega ninguna pieza nueva a mantener.
@@ -170,7 +181,7 @@ Expo.**
 | Webhook de Stripe sin procesar | Alertas nativas de Stripe Dashboard | Incluido | No |
 | Webhook de Stripe — fallo silencioso | `pg_cron` + Database Webhook de Supabase | Incluido | No (usa logging ya existente) |
 | Edge Functions 5xx | Sentry (Supabase NO tiene alertas nativas para esto — verificado) | Plan gratuito disponible | Sí (fuera de alcance de este issue) |
-| admin-web caídas | Vercel Monitoring nativo | Incluido | No |
+| admin-web caídas | Notificación de deploy fallido de Vercel (ya activa por defecto) | Incluido; reglas por tasa de error requieren Pro+Observability Plus | No |
 | mobile-app crashes | Sentry vía SDK de Expo | Plan gratuito disponible | Sí (fuera de alcance de este issue, ver issue de seguimiento) |
 
 ## Qué falta para cerrar el criterio de aceptación completo
