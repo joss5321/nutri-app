@@ -76,6 +76,7 @@ const supabase = createClient(requireEnv('SUPABASE_URL'), requireEnv('SUPABASE_S
 const CAMPOS_PRESERVADOS = [
   'categoria_nutricional', 'tags', 'tiempo_prep_min', 'tiempo_coccion_min',
   'tiempo_min', 'calorias', 'proteinas_g', 'carbohidratos_g', 'grasas_g',
+  'foto_url', 'foto_storage_path',
 ];
 
 function clave(nombre, tipo) {
@@ -232,6 +233,8 @@ async function main() {
       p_grasas_g: existente.grasas_g,
       p_ingredientes: r.ingredientes,
       p_pasos: r.pasos,
+      p_foto_url: existente.foto_url,
+      p_foto_storage_path: existente.foto_storage_path,
     });
     if (error) {
       console.error(`✗ Error actualizando "${r.nombre}" (${r.tipo}) [id=${existente.id}]:`, error.message);

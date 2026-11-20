@@ -223,59 +223,37 @@ export async function updateRecetaMacros(id: string, macros: MacrosCalculados): 
   if (error) throw error;
 }
 
-async function replaceIngredientes(recetaId: string, ingredientes: RecetaIngredienteInput[]): Promise<void> {
-  const { error: deleteError } = await supabase.from("receta_ingredientes").delete().eq("receta_id", recetaId);
-  if (deleteError) throw deleteError;
-
-  const rows = ingredientes
-    .map((ing) => ({ ...ing, descripcion: ing.descripcion.trim() }))
-    .filter((ing) => ing.descripcion.length > 0)
-    .map((ing, i) => ({
-      receta_id: recetaId,
-      orden: i + 1,
-      descripcion: ing.descripcion,
-      alimento_id: ing.alimento_id ?? null,
-      cantidad: ing.cantidad ?? null,
-      unidad: ing.unidad ?? null,
-    }));
-
-  if (rows.length > 0) {
-    const { error } = await supabase.from("receta_ingredientes").insert(rows);
-    if (error) throw error;
-  }
-}
-
-async function replacePasos(recetaId: string, descripciones: string[]): Promise<void> {
-  const { error: deleteError } = await supabase.from("receta_pasos").delete().eq("receta_id", recetaId);
-  if (deleteError) throw deleteError;
-
-  const rows = descripciones
-    .map((d) => d.trim())
-    .filter((d) => d.length > 0)
-    .map((descripcion, i) => ({ receta_id: recetaId, numero: i + 1, descripcion }));
-
-  if (rows.length > 0) {
-    const { error } = await supabase.from("receta_pasos").insert(rows);
-    if (error) throw error;
-  }
-}
-
+// Delega en la RPC atómica crear_receta_completa (supabase_schema.sql,
+// Sección 93): padre + ingredientes + pasos en una sola transacción de
+// servidor, en vez de un INSERT seguido de un Promise.all de dos
+// operaciones separadas que podía dejar ingredientes o pasos a medias.
 export async function createReceta(input: RecetaInput): Promise<Receta> {
   const { ingredientes, pasos, ...recetaData } = input;
 
-  const { data: receta, error } = await supabase
-    .from("recetas")
-    .insert(recetaData)
-    .select()
-    .single();
+  const { data: recetaId, error } = await supabase.rpc("crear_receta_completa", {
+    p_user_id: null,
+    p_nombre: recetaData.nombre,
+    p_emoji: recetaData.emoji,
+    p_tipo: recetaData.tipo,
+    p_categoria_nutricional: recetaData.categoria_nutricional,
+    p_tags: recetaData.tags,
+    p_tiempo_prep_min: recetaData.tiempo_prep_min,
+    p_tiempo_coccion_min: recetaData.tiempo_coccion_min,
+    p_tiempo_min: recetaData.tiempo_min,
+    p_nivel: recetaData.nivel,
+    p_calorias: recetaData.calorias,
+    p_porciones: recetaData.porciones,
+    p_proteinas_g: recetaData.proteinas_g,
+    p_carbohidratos_g: recetaData.carbohidratos_g,
+    p_grasas_g: recetaData.grasas_g,
+    p_ingredientes: ingredientes,
+    p_pasos: pasos,
+    p_foto_url: recetaData.foto_url,
+    p_foto_storage_path: recetaData.foto_storage_path,
+  });
   if (error) throw error;
 
-  await Promise.all([
-    replaceIngredientes(receta.id, ingredientes),
-    replacePasos(receta.id, pasos),
-  ]);
-
-  return fetchRecetaById(receta.id);
+  return fetchRecetaById(recetaId as string);
 }
 
 // Delega en la RPC atómica actualizar_receta_completa (supabase_schema.sql,
@@ -376,20 +354,34 @@ export async function saveRecetaPersonalizada(
     return { receta, newId: null };
   }
 
-  // Create a brand-new personal copy — omit created_by so DB uses DEFAULT auth.uid()
+  // Create a brand-new personal copy via the atomic RPC — created_by is
+  // set by DEFAULT auth.uid() inside crear_receta_completa's INSERT, same
+  // as the direct-insert path it replaces.
   const { ingredientes, pasos, ...recetaData } = input;
-  const { data: clone, error } = await supabase
-    .from("recetas")
-    .insert({ ...recetaData, user_id: userId, receta_base_id: baseRecetaId })
-    .select()
-    .single();
+  const { data: cloneId, error } = await supabase.rpc("crear_receta_completa", {
+    p_user_id: userId,
+    p_nombre: recetaData.nombre,
+    p_emoji: recetaData.emoji,
+    p_tipo: recetaData.tipo,
+    p_categoria_nutricional: recetaData.categoria_nutricional,
+    p_tags: recetaData.tags,
+    p_tiempo_prep_min: recetaData.tiempo_prep_min,
+    p_tiempo_coccion_min: recetaData.tiempo_coccion_min,
+    p_tiempo_min: recetaData.tiempo_min,
+    p_nivel: recetaData.nivel,
+    p_calorias: recetaData.calorias,
+    p_porciones: recetaData.porciones,
+    p_proteinas_g: recetaData.proteinas_g,
+    p_carbohidratos_g: recetaData.carbohidratos_g,
+    p_grasas_g: recetaData.grasas_g,
+    p_ingredientes: ingredientes,
+    p_pasos: pasos,
+    p_receta_base_id: baseRecetaId,
+    p_foto_url: recetaData.foto_url,
+    p_foto_storage_path: recetaData.foto_storage_path,
+  });
   if (error) throw error;
 
-  await Promise.all([
-    replaceIngredientes(clone.id, ingredientes),
-    replacePasos(clone.id, pasos),
-  ]);
-
-  const receta = await fetchRecetaById(clone.id);
-  return { receta, newId: clone.id as string };
+  const receta = await fetchRecetaById(cloneId as string);
+  return { receta, newId: cloneId as string };
 }

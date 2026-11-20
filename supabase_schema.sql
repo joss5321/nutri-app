@@ -8692,3 +8692,173 @@ revoke execute on function get_user_rol() from public, anon;
 -- grant execute on function get_perfil_activo_aprobado(uuid) to public;
 -- grant execute on function get_user_rol() to public;
 -- ============================================================
+
+-- ============================================================
+-- 93. MIGRACIÓN — RPCs atómicas: guardar_equivalentes_plan,
+--     crear_receta_completa extendida a createReceta/clonado
+-- ============================================================
+-- Issue #8: saveEquivalentes() (admin-web/app/_data/nutricion.ts) hacía
+-- DELETE de todos los plan_equivalentes del plan seguido de un INSERT
+-- separado — si el INSERT fallaba, el plan de equivalentes del paciente
+-- quedaba completamente vacío en vez de conservar el anterior. Mismo
+-- patrón y misma corrección que guardar_plan_suplementacion (Sección 61).
+create or replace function public.guardar_equivalentes_plan(
+  p_plan_id uuid,
+  p_rows jsonb
+) returns void
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_row jsonb;
+begin
+  delete from public.plan_equivalentes where plan_id = p_plan_id;
+
+  for v_row in select * from jsonb_array_elements(coalesce(p_rows, '[]'::jsonb))
+  loop
+    insert into public.plan_equivalentes (plan_id, grupo, icono, desayuno, colacion_1, comida, colacion_2, cena)
+    values (
+      p_plan_id,
+      v_row->>'grupo',
+      v_row->>'icono',
+      coalesce((v_row->>'desayuno')::int, 0),
+      coalesce((v_row->>'colacion_1')::int, 0),
+      coalesce((v_row->>'comida')::int, 0),
+      coalesce((v_row->>'colacion_2')::int, 0),
+      coalesce((v_row->>'cena')::int, 0)
+    );
+  end loop;
+end;
+$$;
+
+revoke execute on function public.guardar_equivalentes_plan(uuid, jsonb) from public, anon;
+grant execute on function public.guardar_equivalentes_plan(uuid, jsonb) to authenticated;
+
+-- Issue #10: createReceta() y el clonado dentro de saveRecetaPersonalizada()
+-- (admin-web/app/_data/recetas.ts) hacían un INSERT del padre "recetas"
+-- seguido de un Promise.all([replaceIngredientes, replacePasos]) — si uno
+-- de los dos fallaba a mitad de camino, la receta quedaba con ingredientes
+-- o pasos incompletos. crear_receta_completa (Sección 63) ya resolvía esto
+-- para el seed script, pero nunca tenía grant para "authenticated" (su
+-- único consumidor era scripts/seed-recetas.mjs vía service_role) y le
+-- faltaban receta_base_id/foto_url/foto_storage_path, necesarios para
+-- cubrir ambos call sites reales de createReceta. Cambiar la firma crea un
+-- overload en vez de reemplazarla — se tira la versión vieja explícita
+-- antes de crear la nueva (mismo criterio que la Sección 66).
+drop function if exists public.crear_receta_completa(
+  uuid, text, text, text, text, text, int, int, int, text, int, text, numeric, numeric, numeric, jsonb, jsonb
+);
+
+create or replace function public.crear_receta_completa(
+  p_user_id uuid,
+  p_nombre text,
+  p_emoji text,
+  p_tipo text,
+  p_categoria_nutricional text,
+  p_tags text,
+  p_tiempo_prep_min int,
+  p_tiempo_coccion_min int,
+  p_tiempo_min int,
+  p_nivel text,
+  p_calorias int,
+  p_porciones text,
+  p_proteinas_g numeric,
+  p_carbohidratos_g numeric,
+  p_grasas_g numeric,
+  p_ingredientes jsonb,
+  p_pasos jsonb,
+  p_receta_base_id uuid default null,
+  p_foto_url text default null,
+  p_foto_storage_path text default null
+) returns uuid
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_receta_id uuid;
+  v_ing jsonb;
+  v_paso jsonb;
+  v_descripcion text;
+  v_orden int := 0;
+  v_numero int := 0;
+begin
+  insert into public.recetas (
+    user_id, nombre, emoji, tipo, categoria_nutricional, tags,
+    tiempo_prep_min, tiempo_coccion_min, tiempo_min, nivel, calorias,
+    porciones, proteinas_g, carbohidratos_g, grasas_g,
+    receta_base_id, foto_url, foto_storage_path
+  ) values (
+    p_user_id, p_nombre, p_emoji, p_tipo, p_categoria_nutricional, p_tags,
+    p_tiempo_prep_min, p_tiempo_coccion_min, p_tiempo_min, p_nivel, p_calorias,
+    p_porciones, p_proteinas_g, p_carbohidratos_g, p_grasas_g,
+    p_receta_base_id, p_foto_url, p_foto_storage_path
+  )
+  returning id into v_receta_id;
+
+  for v_ing in select * from jsonb_array_elements(coalesce(p_ingredientes, '[]'::jsonb))
+  loop
+    if coalesce(trim(v_ing->>'descripcion'), '') = '' then
+      continue;
+    end if;
+    v_orden := v_orden + 1;
+    insert into public.receta_ingredientes (receta_id, orden, descripcion, alimento_id, cantidad, unidad)
+    values (
+      v_receta_id,
+      v_orden,
+      trim(v_ing->>'descripcion'),
+      (v_ing->>'alimento_id')::uuid,
+      (v_ing->>'cantidad')::numeric,
+      v_ing->>'unidad'
+    );
+  end loop;
+
+  for v_paso in select * from jsonb_array_elements(coalesce(p_pasos, '[]'::jsonb))
+  loop
+    v_descripcion := trim(v_paso #>> '{}');
+    if coalesce(v_descripcion, '') = '' then
+      continue;
+    end if;
+    v_numero := v_numero + 1;
+    insert into public.receta_pasos (receta_id, numero, descripcion)
+    values (v_receta_id, v_numero, v_descripcion);
+  end loop;
+
+  return v_receta_id;
+end;
+$$;
+
+-- A diferencia de la Sección 63 original (revoke all, incluido
+-- authenticated — su único consumidor era el seed script vía
+-- service_role), ahora createReceta/saveRecetaPersonalizada en admin-web
+-- la llaman directo como usuarios autenticados reales, mismo criterio que
+-- actualizar_receta_completa.
+revoke execute on function public.crear_receta_completa(
+  uuid, text, text, text, text, text, int, int, int, text, int, text, numeric, numeric, numeric, jsonb, jsonb, uuid, text, text
+) from public, anon;
+grant execute on function public.crear_receta_completa(
+  uuid, text, text, text, text, text, int, int, int, text, int, text, numeric, numeric, numeric, jsonb, jsonb, uuid, text, text
+) to authenticated;
+
+-- ============================================================
+-- ROLLBACK Sección 93 (referencia — NO ejecutar salvo que se decida
+-- revertir esta sección):
+--
+-- drop function if exists public.guardar_equivalentes_plan(uuid, jsonb);
+--
+-- drop function if exists public.crear_receta_completa(
+--   uuid, text, text, text, text, text, int, int, int, text, int, text, numeric, numeric, numeric, jsonb, jsonb, uuid, text, text
+-- );
+-- create or replace function public.crear_receta_completa(
+--   p_user_id uuid, p_nombre text, p_emoji text, p_tipo text,
+--   p_categoria_nutricional text, p_tags text, p_tiempo_prep_min int,
+--   p_tiempo_coccion_min int, p_tiempo_min int, p_nivel text, p_calorias int,
+--   p_porciones text, p_proteinas_g numeric, p_carbohidratos_g numeric,
+--   p_grasas_g numeric, p_ingredientes jsonb, p_pasos jsonb
+-- ) returns uuid language plpgsql security invoker set search_path = public
+-- as $$ ... $$; -- ver Sección 63 para el cuerpo original completo
+-- revoke all on function public.crear_receta_completa(
+--   uuid, text, text, text, text, text, int, int, int, text, int, text, numeric, numeric, numeric, jsonb, jsonb
+-- ) from public, anon, authenticated;
+-- ============================================================
