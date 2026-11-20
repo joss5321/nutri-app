@@ -41,25 +41,20 @@
 //                        el pago inicial se hace con una tarjeta normal
 //                        (pm_card_visa, para que la suscripción quede
 //                        activa igual que en el caso de éxito), pero justo
-//                        ANTES de avanzar el Test Clock se cambia el método
-//                        de pago predeterminado del customer a
-//                        pm_card_chargeDeclined (tarjeta de prueba de
-//                        Stripe que siempre es rechazada). Así se simula
-//                        específicamente que la tarjeta deja de funcionar
-//                        AL RENOVAR, no al momento de suscribirse — el
-//                        mismo escenario real que motiva el caso 7. El
-//                        script entonces espera que la factura de
-//                        renovación quede en 'open'/'uncollectible', nunca
-//                        'paid', y lo reporta con un mensaje distinto del
-//                        de éxito.
-//   --metodo-pago=pm_xxx (opcional) sobreescribe qué tarjeta de prueba de
-//                        Stripe usar para la renovación declinada en vez
-//                        de pm_card_chargeDeclined (ej.
-//                        pm_card_chargeDeclinedInsufficientFunds, para
-//                        distinguir el motivo del rechazo). Implica
-//                        --declinada; no cambia el comportamiento por
-//                        defecto del script si no se pasa ninguno de los
-//                        dos flags.
+//                        ANTES de avanzar el Test Clock se desvincula ese
+//                        método de pago del customer (sin dejar ninguno
+//                        predeterminado). Así, al intentar cobrar la
+//                        renovación, Stripe no tiene con qué cobrar y la
+//                        factura queda 'open' — el mismo efecto observable
+//                        que una tarjeta rechazada, sin depender de las
+//                        tarjetas de prueba pm_card_chargeDeclined* (esas
+//                        tarjetas rechazan también la verificación de $0
+//                        que Stripe hace al adjuntarlas a un customer, así
+//                        que fallan antes de siquiera llegar a la
+//                        renovación — confirmado en esta cuenta). El script
+//                        entonces espera que la factura de renovación quede
+//                        en 'open'/'uncollectible', nunca 'paid', y lo
+//                        reporta con un mensaje distinto del de éxito.
 
 const API = "https://api.stripe.com/v1"
 
@@ -108,6 +103,17 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms))
 }
 
+// Avanzar un Test Clock es async del lado de Stripe — hasta que status
+// vuelve a 'ready', cualquier intento de borrar el customer/clock falla con
+// "Test clock advancement underway".
+async function esperarClockListo(key, clockId, intentos = 15) {
+  for (let i = 0; i < intentos; i++) {
+    const c = await stripe(key, "GET", `/test_helpers/test_clocks/${clockId}`)
+    if (c.status === "ready") return
+    await sleep(2000)
+  }
+}
+
 async function esperarFacturaPagada(key, subscriptionId, intentos = 10) {
   for (let i = 0; i < intentos; i++) {
     const invoices = await stripe(key, "GET", `/invoices?subscription=${subscriptionId}&limit=3`)
@@ -146,8 +152,7 @@ async function main() {
     process.exit(1)
   }
 
-  const metodoPagoDeclinado = args["metodo-pago"] || (args.declinada ? "pm_card_chargeDeclined" : null)
-  const simulaRenovacionFallida = Boolean(metodoPagoDeclinado)
+  const simulaRenovacionFallida = Boolean(args.declinada)
 
   console.log("1) Creando Test Clock...")
   const ahora = Math.floor(Date.now() / 1000)
@@ -178,23 +183,35 @@ async function main() {
   }
 
   console.log("3) Creando suscripción de prueba...")
+  // Sin payment_behavior: el customer ya tiene pm_card_visa como método de
+  // pago predeterminado (paso 2), así que Stripe cobra automáticamente
+  // off-session al crear la suscripción y esta queda 'active' de inmediato.
+  // (payment_behavior: "default_incomplete" deja el PaymentIntent inicial
+  // sin confirmar — eso lo haría normalmente el frontend con Stripe.js — y
+  // en esta versión de la API de Stripe el invoice ya ni siquiera expone
+  // un campo payment_intent para confirmarlo manualmente desde un script;
+  // la suscripción se queda 'incomplete' para siempre y Stripe la cancela
+  // al adelantar el Test Clock, en vez de renovarla.)
   const sub = await stripe(key, "POST", "/subscriptions", {
     customer: customerId,
     "items[0][price]": args.price,
-    "payment_behavior": "default_incomplete",
     "payment_settings[payment_method_types][0]": "card",
     "payment_settings[save_default_payment_method]": "on_subscription",
-    "expand[0]": "latest_invoice.payment_intent",
   })
   console.log(`   subscription=${sub.id} status=${sub.status}`)
 
+  if (sub.status !== "active" && sub.status !== "trialing") {
+    console.log(`\n✘ La suscripción quedó en status='${sub.status}', no 'active' — revisa el Dashboard de Stripe (Test mode → Customers → ${customerId}) antes de continuar.`)
+    process.exit(1)
+  }
+
   if (simulaRenovacionFallida) {
-    console.log(`3.5) Simulando caso 7 (renovación fallida): adjuntando ${metodoPagoDeclinado} a ${customerId} y fijándolo como método de pago predeterminado ANTES de avanzar el reloj...`)
-    await stripe(key, "POST", `/payment_methods/${metodoPagoDeclinado}/attach`, { customer: customerId })
-    await stripe(key, "POST", `/customers/${customerId}`, {
-      "invoice_settings[default_payment_method]": metodoPagoDeclinado,
-    })
-    console.log("   Listo — el pago inicial ya se procesó con una tarjeta válida; solo la renovación usará la tarjeta rechazada.")
+    console.log(`3.5) Simulando caso 7 (renovación fallida): desvinculando el método de pago de ${customerId} ANTES de avanzar el reloj...`)
+    const pms = await stripe(key, "GET", `/customers/${customerId}/payment_methods`)
+    for (const pm of pms.data) {
+      await stripe(key, "POST", `/payment_methods/${pm.id}/detach`, {})
+    }
+    console.log(`   Listo — el pago inicial ya se procesó con una tarjeta válida; ${pms.data.length} método(s) de pago desvinculado(s), así que la renovación no tendrá con qué cobrarse.`)
   }
 
   console.log("4) Adelantando el Test Clock al siguiente periodo de facturación...")
@@ -202,15 +219,16 @@ async function main() {
   await stripe(key, "POST", `/test_helpers/test_clocks/${clock.id}/advance`, {
     frozen_time: String(siguientePeriodo + 3600),
   })
+  await esperarClockListo(key, clock.id)
 
   if (simulaRenovacionFallida) {
     console.log("5) Esperando a que Stripe intente cobrar la renovación y la factura quede rechazada...")
     await sleep(5000)
     const factura = await esperarFacturaFallida(key, sub.id)
     if (factura && factura._inesperadamentePagada) {
-      console.log(`\n✘ FALLO DE LA PRUEBA: la factura de renovación ${factura.id} quedó 'paid' — se esperaba que ${metodoPagoDeclinado} la rechazara. Revisa si el payment method realmente quedó como predeterminado antes de avanzar el clock.`)
+      console.log(`\n✘ FALLO DE LA PRUEBA: la factura de renovación ${factura.id} quedó 'paid' — se esperaba que, sin método de pago, Stripe no pudiera cobrarla. Revisa si quedó algún método de pago vinculado al customer antes de avanzar el clock.`)
     } else if (factura) {
-      console.log(`\n✔ Renovación fallida confirmada correctamente: factura ${factura.id} en estado '${factura.status}' (no pagada), como se esperaba con ${metodoPagoDeclinado}.`)
+      console.log(`\n✔ Renovación fallida confirmada correctamente: factura ${factura.id} en estado '${factura.status}' (no pagada), como se esperaba sin método de pago vinculado.`)
       if (args.customer) {
         console.log(
           "  Como usaste un customer real, revisa ahora en Supabase que " +
