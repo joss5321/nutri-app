@@ -10,9 +10,10 @@ verificada contra el proyecto de Supabase vinculado (`fitness-app`,
 **Verificado en el repo:** ningún archivo de código contiene una clave de
 Stripe hardcodeada (`grep` de `sk_test_`/`sk_live_`/`whsec_` en todo el
 repo, sin resultados fuera de comentarios de documentación que explican el
-formato). Las 4 Edge Functions que usan Stripe
-(`crear-checkout`, `crear-portal-sesion`, `stripe-webhook`,
-`eliminar-cuenta`) leen un único secreto, `STRIPE_SECRET_KEY`, solo desde
+formato). Las 3 Edge Functions que usan Stripe
+(`crear-portal-sesion`, `stripe-webhook`, `eliminar-cuenta` — `crear-checkout`
+se retiró en el issue #26, sin ningún caller real desde la migración a
+RevenueCat) leen un único secreto, `STRIPE_SECRET_KEY`, solo desde
 `Deno.env.get(...)` — nunca hay una variante `_TEST`/`_LIVE` separada que
 pueda quedar desincronizada o mezclada en el mismo deploy.
 
@@ -31,11 +32,11 @@ sección 1 — y agregar una sería una segunda fuente de verdad que podría
 desincronizarse de la clave real), se agregó
 `supabase/functions/_shared/stripe-mode.ts`, que deriva el modo
 directamente del prefijo de la clave activa (`sk_test_` / `sk_live_`) y lo
-imprime una vez al arrancar (cold start) en las 4 Edge Functions que usan
+imprime una vez al arrancar (cold start) en las 3 Edge Functions que usan
 Stripe:
 
 ```
-[stripe-mode] crear-checkout: modo TEST
+[stripe-mode] crear-portal-sesion: modo TEST
 [stripe-mode] stripe-webhook: modo LIVE
 ```
 
@@ -56,7 +57,7 @@ corriendo en producción.
 **Hallazgo verificado (`supabase projects list`): existe un único proyecto
 de Supabase**, `fitness-app` (`uvfdbvzydbogfkntfuix`, región us-east-2),
 marcado como `production`. **No existe un proyecto separado para modo
-test/staging.** Las 10 Edge Functions del proyecto (incluidas las 4 que
+test/staging.** Las 11 Edge Functions del proyecto (incluidas las 3 que
 tocan Stripe) corren todas sobre este mismo proyecto, sirviendo tanto el
 desarrollo/pruebas actuales como lo que eventualmente sea tráfico real.
 
@@ -91,7 +92,7 @@ de renovación) haya pasado:
    `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` (el webhook live tiene su
    propio secreto de firma, distinto del de test) y los 3
    `STRIPE_PRICE_*`.
-3. Redesplegar las 4 Edge Functions afectadas y confirmar en sus logs de
+3. Redesplegar las 3 Edge Functions afectadas y confirmar en sus logs de
    arranque que ahora dicen `modo LIVE` (la confirmación visible que pide
    este issue).
 4. Hacer una compra real de prueba de bajo monto y confirmar en el

@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { ActivityIndicator, Alert, Image, Linking, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useFocusEffect } from '@react-navigation/native'
-import { useLocalSearchParams } from 'expo-router'
 import * as ImagePicker from 'expo-image-picker'
 import { AppHeader } from '@/components/ui/AppHeader'
 import { RetryError } from '@/components/ui/RetryError'
@@ -173,21 +172,6 @@ export default function PerfilScreen() {
     }
     intentar()
   }, [userId])
-
-  // Regreso de Stripe Checkout (mobileapp://perfil?payment=success|cancel,
-  // configurado en crear-checkout — solo aplica a suscriptores legados de
-  // Stripe; la compra nativa vía RevenueCat llama confirmarSuscripcion()
-  // directo desde handleElegirPlan, sin pasar por un deep link). "cancel"
-  // no necesita hacer nada especial (el usuario simplemente sigue sin
-  // suscripción).
-  const { payment } = useLocalSearchParams<{ payment?: string }>()
-  const pagoVerificadoRef = useRef(false)
-
-  useEffect(() => {
-    if (payment !== 'success' || pagoVerificadoRef.current || !userId) return
-    pagoVerificadoRef.current = true
-    confirmarSuscripcion()
-  }, [payment, userId, confirmarSuscripcion])
 
   const [payingPortal, setPayingPortal] = useState(false)
   const handleGestionarSuscripcion = async () => {

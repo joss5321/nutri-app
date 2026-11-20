@@ -11,8 +11,9 @@ const supabase = createClient(
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
 )
 
-// Misma fuente que crear-checkout (Sección P0) — evita que los 3 price IDs
-// vivan duplicados en dos archivos. Si falta algún secret, ese price
+// Mismos secrets que ya usa el resto del proyecto para los 3 planes
+// (issue #26 retiró crear-checkout, único otro consumidor — ver Stripe
+// Dashboard para los Price IDs reales). Si falta algún secret, ese price
 // simplemente no aparece en el mapa y cualquier evento con ese priceId cae
 // en la rama "desconocido" de manejarActualizacionSuscripcion (mismo
 // tratamiento que un priceId genuinamente no reconocido: error explícito,
