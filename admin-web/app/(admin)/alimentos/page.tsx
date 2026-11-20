@@ -40,8 +40,6 @@ export default function AlimentosPage() {
   };
 
   const load = () => {
-    setLoading(true);
-    setError(null);
     fetchAlimentos()
       .then(setAlimentos)
       .catch((err) =>

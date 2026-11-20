@@ -268,17 +268,24 @@ export default function RecetaModal({
     return { faltantes, excedentes };
   }, [userId, mealKey, planEquivalentes, equivalentesAportados]);
 
-  // Auto-calculate Kcal + macros from linked ingredients
+  // Auto-calculate Kcal + macros from linked ingredients. calorias/proteinas/
+  // grasas/carbohidratos stay independently editable state (disabled only
+  // while hasLinked, see the inputs below) rather than pure derived values,
+  // so this sync can't just move into render — deferred to a microtask so
+  // the setState calls land outside the effect's synchronous pass
+  // (react-hooks/set-state-in-effect).
   useEffect(() => {
-    const macros = calcularMacrosDesdeIngredientes(
-      ingredientes.map((i) => ({ alimento_id: i.alimento_id, cantidad: parseFloat(i.cantidad) || 0 })),
-      alimentosById
-    );
-    if (!macros) return;
-    setCalorias(macros.calorias.toString());
-    setProteinas(macros.proteinas_g.toFixed(1));
-    setGrasas(macros.grasas_g.toFixed(1));
-    setCarbohidratos(macros.carbohidratos_g.toFixed(1));
+    queueMicrotask(() => {
+      const macros = calcularMacrosDesdeIngredientes(
+        ingredientes.map((i) => ({ alimento_id: i.alimento_id, cantidad: parseFloat(i.cantidad) || 0 })),
+        alimentosById
+      );
+      if (!macros) return;
+      setCalorias(macros.calorias.toString());
+      setProteinas(macros.proteinas_g.toFixed(1));
+      setGrasas(macros.grasas_g.toFixed(1));
+      setCarbohidratos(macros.carbohidratos_g.toFixed(1));
+    });
   }, [ingredientes, alimentosById]);
 
   const hasLinked = ingredientes.some((i) => !!i.alimento_id);

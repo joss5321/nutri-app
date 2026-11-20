@@ -69,8 +69,15 @@ export default function RutinaBuilderModal({
 
   useEffect(() => {
     let cancelled = false;
-    setLoadingRutina(true);
-    setError(null);
+    // Deferido a un microtask: retryLoadRutina() vuelve a disparar este
+    // efecto (depende de retryCount), así que setLoadingRutina(true)/
+    // setError(null) deben resetearse en cada intento, no solo al montar —
+    // se sacan del paso síncrono del efecto (react-hooks/set-state-in-effect).
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setLoadingRutina(true);
+      setError(null);
+    });
     fetchRutinaActiva(patient.id)
       .then((rutina) => {
         if (cancelled) return;

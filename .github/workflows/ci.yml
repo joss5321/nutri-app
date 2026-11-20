@@ -147,18 +147,13 @@ jobs:
         run: npm ci
 
       - name: Lint
-        # Quedan 10 errores reales (2026-11-06), todos de las reglas nuevas
-        # de React Compiler (react-hooks/set-state-in-effect, purity,
-        # static-components) sobre el patron clasico "cargar datos en
-        # useEffect" — no son bugs confirmados, pero arreglarlos bien
-        # requiere revisar cada componente por separado, no un cambio
-        # mecanico masivo sobre forms que ya maneja datos reales de
-        # pacientes. Bajaron de 11 a 10 (mas 2 warnings de unused-vars
-        # resueltos) en esta pasada. Ver issue de seguimiento. Mientras
-        # tanto se deja visible, no bloqueante — no se enmascara pretendiendo
-        # que ya esta resuelto.
+        # Los 10 errores reales de las reglas nuevas de React Compiler
+        # (react-hooks/set-state-in-effect, purity, static-components,
+        # issue #91) se revisaron caso por caso y se corrigieron
+        # (2026-11-20) — 0 errores, solo quedan warnings de
+        # exhaustive-deps/unused-vars conocidos. Ya no hace falta
+        # continue-on-error aqui.
         run: npm run lint
-        continue-on-error: true
 
       - name: Build (next build — incluye el type-check de Next.js)
         run: npm run build

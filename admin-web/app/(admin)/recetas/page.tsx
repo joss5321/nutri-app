@@ -291,6 +291,7 @@ export default function RecetasPage() {
   const [page, setPage]                   = useState(1);
 
   const [selected, setSelected]           = useState<Receta | null>(null);
+  const [selectedFilters, setSelectedFilters] = useState([debouncedSearch, tipo]);
   const [showCreate, setShowCreate]       = useState(false);
   const [editing, setEditing]             = useState<Receta | null>(null);
   const [deletingId, setDeletingId]       = useState<string | null>(null);
@@ -344,15 +345,22 @@ export default function RecetasPage() {
     return () => clearTimeout(t);
   }, [search]);
 
-  // Load data whenever page, debounced search, or tipo changes
+  // Load data whenever page, debounced search, or tipo changes. Deferred to
+  // a microtask so the fetch's setState calls land outside the effect's own
+  // synchronous pass (react-hooks/set-state-in-effect) — loadPage still
+  // needs to set loading=true on every call since it's re-triggered by
+  // pagination/filters, not just on mount.
   useEffect(() => {
-    loadPage(page, debouncedSearch, tipo);
+    queueMicrotask(() => loadPage(page, debouncedSearch, tipo));
   }, [page, debouncedSearch, tipo, loadPage]);
 
-  // Clear detail panel when filters change (not on page change)
-  useEffect(() => {
+  // Clear detail panel when filters change (not on page change) — adjusted
+  // during render instead of in an effect, per "Adjusting some state when a
+  // prop changes" (react.dev/learn/you-might-not-need-an-effect).
+  if (selectedFilters[0] !== debouncedSearch || selectedFilters[1] !== tipo) {
+    setSelectedFilters([debouncedSearch, tipo]);
     setSelected(null);
-  }, [debouncedSearch, tipo]);
+  }
 
   // Auth
   useEffect(() => {

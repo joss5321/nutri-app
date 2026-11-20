@@ -165,6 +165,10 @@ function CitasPendientesModal({ onClose }: { onClose: () => void }) {
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
+  // Capturado una vez en vez de llamar Date.now() en cada render
+  // (react-hooks/purity) — suficiente para una etiqueta "hace X" que no
+  // necesita actualizarse en vivo mientras el dashboard está abierto.
+  const [nowTs] = useState(() => Date.now());
   const [stats, setStats] = useState<Stats>({
     totalUsuarios: 0, totalPremium: 0, totalBasico: 0,
     totalRutinas: 0, totalRecetas: 0, totalCitas: 0,
@@ -218,8 +222,8 @@ export default function DashboardPage() {
     { label: "Citas pendientes",     value: String(stats.totalCitas),    Icon: CalendarClock,  sub: "Haz clic para ver todas",  color: "bg-purple-50 text-purple-600", clickable: true  },
   ];
 
-  function timeAgo(dateStr: string) {
-    const diff = Date.now() - new Date(dateStr).getTime();
+  function timeAgo(dateStr: string, now: number) {
+    const diff = now - new Date(dateStr).getTime();
     const mins = Math.floor(diff / 60000);
     if (mins < 1) return "Ahora";
     if (mins < 60) return `Hace ${mins} min`;
@@ -294,7 +298,7 @@ export default function DashboardPage() {
                     <p className="text-xs text-secondary">Se registró</p>
                   </div>
                   <div className="flex flex-col items-end gap-1 shrink-0">
-                    <span className="text-xs text-muted">{timeAgo(u.created_at)}</span>
+                    <span className="text-xs text-muted">{timeAgo(u.created_at, nowTs)}</span>
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1 ${
                       isPremium ? "bg-brand-soft text-primary" : "bg-surface-muted text-secondary"
                     }`}>
