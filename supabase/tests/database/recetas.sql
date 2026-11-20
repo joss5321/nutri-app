@@ -9,7 +9,7 @@
 -- reales de producción.
 
 begin;
-select plan(91);
+select plan(92);
 
 -- ── Fixtures sintéticos ──────────────────────────────────────────────
 select tests.create_user('60000000-0000-4000-8000-000000000003'::uuid, 'admin-a@test.local',    'admin');
@@ -792,21 +792,38 @@ reset role;
 select is((select count(*)::int from recetas where nombre = 'Receta RPC con error'), 0,
   'crear_receta_completa: tras el error, la receta padre NO quedó huérfana (rollback total)');
 
--- 88. authenticated (incluso admin) SIN EXECUTE en absoluto — bloqueado
--- antes de siquiera evaluar RLS.
-select tests.authenticate_as('60000000-0000-4000-8000-000000000003'::uuid);
+-- 88. Paciente A (authenticated, sin rol admin/superadmin) intenta crear
+-- una receta de catálogo (user_id null) — bloqueado por RLS
+-- (recetas_insert), ya NO por falta de EXECUTE: la Sección 93 le da
+-- EXECUTE a "authenticated" en general (createReceta/saveRecetaPersonalizada
+-- en admin-web la llaman directo como usuarios reales), así que ahora es
+-- la policy la que decide, mismo criterio que el INSERT directo probado
+-- en la prueba 2 de este archivo.
+select tests.authenticate_as('60000000-0000-4000-8000-000000000001'::uuid);
 set local role authenticated;
 select throws_ok(
   $$ select public.crear_receta_completa(
        null, 'hack', null, 'Comida', null, null, null, null, null, null, null, '1', null, null, null, '[]'::jsonb, '[]'::jsonb
      ) $$,
-  '42501', null, 'crear_receta_completa: authenticated (incluso admin) sin EXECUTE = bloqueado');
+  '42501', null, 'crear_receta_completa: paciente sin rol admin/superadmin = bloqueado por RLS');
+reset role;
+
+-- 88b. admin-a SÍ puede — EXECUTE otorgado a authenticated (Sección 93) y
+-- RLS lo permite por tener rol admin, mismo camino real que usa
+-- admin-web.createReceta().
+select tests.authenticate_as('60000000-0000-4000-8000-000000000003'::uuid);
+set local role authenticated;
+select lives_ok(
+  $$ select public.crear_receta_completa(
+       null, 'Receta RPC vía authenticated', null, 'Comida', null, null, null, null, null, 'Fácil', null, '1', null, null, null, '[]'::jsonb, '[]'::jsonb
+     ) $$,
+  'crear_receta_completa: admin vía authenticated, con EXECUTE y RLS en regla = permitido');
 reset role;
 
 -- 89. anon sin EXECUTE.
 select ok(
   not has_function_privilege('anon',
-    'public.crear_receta_completa(uuid, text, text, text, text, text, int, int, int, text, int, text, numeric, numeric, numeric, jsonb, jsonb)',
+    'public.crear_receta_completa(uuid, text, text, text, text, text, int, int, int, text, int, text, numeric, numeric, numeric, jsonb, jsonb, uuid, text, text)',
     'EXECUTE'),
   'crear_receta_completa: anon NO tiene EXECUTE');
 
@@ -824,7 +841,7 @@ select ok(
 -- 91. Sigue siendo SECURITY INVOKER (prosecdef = false).
 select is(
   (select prosecdef from pg_proc where oid =
-    'public.crear_receta_completa(uuid, text, text, text, text, text, int, int, int, text, int, text, numeric, numeric, numeric, jsonb, jsonb)'::regprocedure),
+    'public.crear_receta_completa(uuid, text, text, text, text, text, int, int, int, text, int, text, numeric, numeric, numeric, jsonb, jsonb, uuid, text, text)'::regprocedure),
   false, 'crear_receta_completa: SECURITY INVOKER (prosecdef = false)');
 
 select * from finish();

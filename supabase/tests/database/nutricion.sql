@@ -8,7 +8,7 @@
 -- reales de producción.
 
 begin;
-select plan(37);
+select plan(48);
 
 -- ── Fixtures sintéticos ──────────────────────────────────────────────
 select tests.create_user('40000000-0000-4000-8000-000000000003'::uuid, 'admin-a@test.local',    'admin');
@@ -348,6 +348,86 @@ select throws_ok(
   $$ insert into planes_nutricionales (user_id, objetivo) values ('40000000-0000-4000-8000-000000000008', 'x') $$,
   '42501', null, 'planes_nutricionales: superadmin INSERT para paciente deshabilitado = bloqueado');
 reset role;
+
+-- ══════════════════ RPC guardar_equivalentes_plan (Sección 93) ══════════════════
+-- Cobertura de atomicidad: caso exitoso, error a mitad de camino,
+-- rollback total sin estado parcial, caller no autorizado bloqueado.
+-- plan_equivalentes_insert/_delete no tienen regla de estado del paciente
+-- (a diferencia de plan_suplementacion) — solo ownership por
+-- nutricionista_id o superadmin.
+
+-- 38. Caso exitoso: Admin A reemplaza el plan de equivalentes completo de
+--     Paciente A (1 fila preexistente, f2) por 2 filas nuevas.
+select tests.authenticate_as('40000000-0000-4000-8000-000000000003'::uuid);
+set local role authenticated;
+select lives_ok(
+  $$ select public.guardar_equivalentes_plan(
+       '40000000-0000-4000-8000-0000000000f1'::uuid,
+       '[{"grupo":"Frutas","icono":"🍎","desayuno":1,"colacion_1":0,"comida":1,"colacion_2":0,"cena":0},
+         {"grupo":"Verduras","icono":"🥦","desayuno":0,"colacion_1":0,"comida":2,"colacion_2":0,"cena":1}]'::jsonb
+     ) $$,
+  'guardar_equivalentes_plan: admin dueño reemplaza el plan completo = permitido');
+reset role;
+
+-- 39-40. El plan quedó reemplazado con el contenido correcto.
+select is((select count(*)::int from plan_equivalentes where plan_id = '40000000-0000-4000-8000-0000000000f1'), 2,
+  'guardar_equivalentes_plan: plan de Paciente A queda con exactamente las 2 filas nuevas');
+select is(
+  (select comida from plan_equivalentes where plan_id = '40000000-0000-4000-8000-0000000000f1' and grupo = 'Verduras'),
+  2, 'guardar_equivalentes_plan: valor correcto en la fila nueva');
+
+-- 41. Error a mitad de camino: el segundo grupo es NULL (viola el NOT
+--     NULL de la columna "grupo") — la llamada entera debe fallar.
+select tests.authenticate_as('40000000-0000-4000-8000-000000000003'::uuid);
+set local role authenticated;
+select throws_ok(
+  $$ select public.guardar_equivalentes_plan(
+       '40000000-0000-4000-8000-0000000000f1'::uuid,
+       '[{"grupo":"Cereales sin grasa","desayuno":1},
+         {"grupo":null,"desayuno":1}]'::jsonb
+     ) $$,
+  '23502', null, 'guardar_equivalentes_plan: grupo NULL en la fila 2 = bloqueado (NOT NULL)');
+reset role;
+
+-- 42-43. Rollback total: Paciente A conserva exactamente el plan del test
+-- 38 — el DELETE ya ejecutado dentro de la función también se revirtió.
+select is((select count(*)::int from plan_equivalentes where plan_id = '40000000-0000-4000-8000-0000000000f1'), 2,
+  'guardar_equivalentes_plan: tras el error, Paciente A sigue con sus 2 filas (rollback total)');
+select is(
+  (select comida from plan_equivalentes where plan_id = '40000000-0000-4000-8000-0000000000f1' and grupo = 'Verduras'),
+  2, 'guardar_equivalentes_plan: tras el error, la fila previa (Verduras) sigue intacta (rollback total)');
+
+-- 44-45. Caller no autorizado: Admin B intenta reemplazar el plan de
+--     Paciente A (ajeno) = bloqueado, y el plan no sufre ningún cambio.
+select tests.authenticate_as('40000000-0000-4000-8000-000000000004'::uuid);
+set local role authenticated;
+select throws_ok(
+  $$ select public.guardar_equivalentes_plan(
+       '40000000-0000-4000-8000-0000000000f1'::uuid,
+       '[{"grupo":"hack","desayuno":9}]'::jsonb
+     ) $$,
+  '42501', null, 'guardar_equivalentes_plan: admin ajeno = bloqueado');
+reset role;
+
+select is((select count(*)::int from plan_equivalentes where plan_id = '40000000-0000-4000-8000-0000000000f1'), 2,
+  'guardar_equivalentes_plan: plan de Paciente A intacto tras el intento no autorizado');
+
+-- ══════════════════ guardar_equivalentes_plan — grants y SECURITY INVOKER ══════════════════
+
+-- 46. authenticated SÍ tiene EXECUTE.
+select ok(
+  has_function_privilege('authenticated', 'public.guardar_equivalentes_plan(uuid, jsonb)', 'EXECUTE'),
+  'guardar_equivalentes_plan: authenticated tiene EXECUTE');
+
+-- 47. anon NO tiene EXECUTE.
+select ok(
+  not has_function_privilege('anon', 'public.guardar_equivalentes_plan(uuid, jsonb)', 'EXECUTE'),
+  'guardar_equivalentes_plan: anon NO tiene EXECUTE');
+
+-- 48. Sigue siendo SECURITY INVOKER (prosecdef = false).
+select is(
+  (select prosecdef from pg_proc where oid = 'public.guardar_equivalentes_plan(uuid, jsonb)'::regprocedure),
+  false, 'guardar_equivalentes_plan: SECURITY INVOKER (prosecdef = false)');
 
 select * from finish();
 rollback;
