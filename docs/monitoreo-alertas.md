@@ -74,31 +74,41 @@ ya emite logs vía `console.error`/`console.log` en sus rutas de error, que
 Supabase captura automáticamente en **Logs → Edge Functions** del
 dashboard del proyecto.
 
-**Servicio recomendado: Supabase Dashboard — Logs & Alerts (nativo).**
-Supabase ofrece alertas basadas en los logs propios del proyecto sin salir
-de la plataforma:
+**Corrección importante (verificado contra la documentación oficial de
+Supabase antes de recomendar esto): Supabase NO tiene un botón nativo de
+"alertas por tasa de error de Edge Functions".** El dashboard
+(`Logs → Edge Functions` y `Reports → Edge Functions`,
+[supabase.com/docs/guides/observability/reports](https://supabase.com/docs/guides/observability/reports))
+solo permite *ver* las métricas y filtrar por `status_code >= 500` — es
+observabilidad de lectura, no alerting configurable. No existe ninguna
+sección "Project Settings → Alerts" para esto (confirmado también contra
+[supabase.com/docs/guides/telemetry/metrics](https://supabase.com/docs/guides/telemetry/metrics),
+la guía oficial de métricas).
 
-- Dashboard de Supabase → proyecto → **Logs → Edge Functions** → filtro por
-  `status_code >= 500`, para confirmar manualmente qué tanto ruido hay hoy
-  antes de fijar un umbral.
-- **Project Settings → Alerts** (o **Reports → Alerts**, según la versión
-  del dashboard): Supabase permite configurar alertas sobre métricas del
-  proyecto, incluyendo tasa de error de Edge Functions, y notificarlas por
-  email a los miembros del proyecto. Configurar una alerta de "tasa de
-  error 5xx de Edge Functions por encima de N en M minutos" (el umbral
-  concreto debe calibrarse con el volumen real de tráfico del proyecto, que
-  este flujo automático no puede medir).
-- Motivo: es la opción con menor fricción porque las funciones ya corren
-  ahí — no requiere instrumentar código ni dar de alta un servicio nuevo.
-  Su límite conocido es que las alertas nativas de Supabase son más
-  básicas que las de un servicio dedicado de observabilidad (menos
-  opciones de agregación, deduplicación o escalamiento por severidad).
+Las dos rutas reales, sin asumir una función que no existe:
 
-**Alternativa si se necesita más granularidad: Sentry (plan gratuito
-disponible).** Si a futuro se necesita trazar el error hasta la línea de
-código exacta, agrupar errores repetidos, o alertar con reglas más finas
-que "N errores en M minutos", la opción estándar para proyectos Deno/Node
-es Sentry:
+1. **Exportar métricas vía la Metrics API de Supabase** (compatible con
+   Prometheus) hacia una herramienta externa que sí sepa alertar sobre
+   ellas — ej. Grafana Cloud (plan gratuito disponible) o cualquier stack
+   de Prometheus/Alertmanager ya existente. No toca código de las
+   funciones, solo requiere configurar el scraper externo — pero sí da de
+   alta una pieza de infraestructura nueva a mantener.
+2. **Saltar directo a Sentry** (ver abajo) — en la práctica es la ruta más
+   simple si no hay ya un stack de Prometheus/Grafana corriendo, porque la
+   opción 1 implica levantar infraestructura nueva solo para esta alerta.
+
+Dado que ambas rutas reales requieren algo fuera del dashboard de Supabase
+(un stack externo de métricas, o el SDK de Sentry), **hoy no existe forma
+de tener una alerta automática de errores 5xx de Edge Functions sin tocar
+código o dar de alta un servicio externo**. Mientras tanto, el único
+monitoreo disponible sin cambios es manual: revisar
+`Logs → Edge Functions` filtrando por `status_code >= 500` periódicamente.
+
+**Opción real recomendada: Sentry (plan gratuito disponible).** Para
+trazar el error hasta la línea de código exacta, agrupar errores
+repetidos, y alertar con reglas como "N errores en M minutos" sin levantar
+infraestructura propia, la opción estándar para proyectos Deno/Node es
+Sentry:
 
 - Se integraría agregando el SDK de Sentry (`@sentry/deno` o, para Edge
   Functions, el wrapper HTTP recomendado por Supabase en su guía de
@@ -159,8 +169,7 @@ Expo.**
 |---|---|---|---|
 | Webhook de Stripe sin procesar | Alertas nativas de Stripe Dashboard | Incluido | No |
 | Webhook de Stripe — fallo silencioso | `pg_cron` + Database Webhook de Supabase | Incluido | No (usa logging ya existente) |
-| Edge Functions 5xx | Alertas nativas de Supabase Dashboard | Incluido en el plan actual | No |
-| Edge Functions — granularidad fina (futuro) | Sentry | Plan gratuito disponible | Sí (fuera de alcance de este issue) |
+| Edge Functions 5xx | Sentry (Supabase NO tiene alertas nativas para esto — verificado) | Plan gratuito disponible | Sí (fuera de alcance de este issue) |
 | admin-web caídas | Vercel Monitoring nativo | Incluido | No |
 | mobile-app crashes | Sentry vía SDK de Expo | Plan gratuito disponible | Sí (fuera de alcance de este issue, ver issue de seguimiento) |
 
@@ -169,15 +178,22 @@ Expo.**
 El criterio de aceptación del issue pide, además de tener las alertas
 configuradas, **"al menos una alerta de prueba disparada y recibida"**.
 Esa verificación requiere entrar con credenciales reales a los dashboards
-de Stripe, Supabase y Vercel (y, para mobile-app, publicar un build con el
-SDK de Sentry integrado) — nada de eso está disponible en este flujo
-automático. Los pasos manuales que quedarían pendientes para quien aplique
-esta guía:
+de Stripe, Supabase y Vercel (y, para Edge Functions 5xx y mobile-app,
+publicar un build/deploy con el SDK de Sentry integrado) — nada de eso
+está disponible en este flujo automático. Los pasos manuales que
+quedarían pendientes para quien aplique esta guía:
 
-1. Crear las alertas nativas descritas arriba en Stripe, Supabase y Vercel.
-2. Disparar una alerta de prueba en cada una (Stripe permite reenviar un
-   evento de prueba desde su dashboard; Supabase y Vercel suelen ofrecer un
-   botón de "send test alert" en la configuración de notificaciones) y
-   confirmar que el canal elegido (email/Slack/Discord) la recibe.
-3. Abrir el issue de seguimiento para integrar Sentry en `mobile-app` (y,
-   si se decide, en las Edge Functions) como trabajo de código aparte.
+1. Activar la alerta nativa de webhook fallido en Stripe, y la de
+   "Deployment failed" en Vercel — estas dos sí son configuración pura de
+   dashboard, sin tocar código.
+2. Programar el `pg_cron` + Database Webhook en Supabase para el caso de
+   fallo silencioso del webhook de Stripe (Sección 1) — es código SQL,
+   pero no toca las Edge Functions existentes.
+3. Disparar una alerta de prueba en cada una (Stripe permite reenviar un
+   evento de prueba desde su dashboard; Vercel notifica automáticamente en
+   el próximo deploy fallido) y confirmar que el canal elegido
+   (email/Slack/Discord) la recibe.
+4. Abrir el issue de seguimiento para integrar Sentry en `mobile-app` y en
+   las Edge Functions (Sección 2) — sin este paso, Edge Functions 5xx y
+   mobile-app crashes se quedan sin ninguna alerta automática real, solo
+   con la revisión manual de logs.
