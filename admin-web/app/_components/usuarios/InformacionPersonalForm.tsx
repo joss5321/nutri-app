@@ -117,6 +117,33 @@ function Accordion({ title, icon: Icon, isOpen, onToggle, children }: {
   );
 }
 
+function SaveBtn({
+  label = "Guardar datos personales",
+  feedback,
+  onSave,
+  saving,
+}: {
+  label?: string;
+  feedback: { type: "success" | "error"; text: string } | null;
+  onSave: () => void;
+  saving: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-end gap-3">
+      {feedback && (
+        <span className={`text-xs font-medium ${feedback.type === "success" ? "text-success" : "text-error"}`}>
+          {feedback.text}
+        </span>
+      )}
+      <button onClick={onSave} disabled={saving}
+        className="flex items-center gap-2 px-4 h-10 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-dark disabled:opacity-50">
+        {!saving && <Save size={15} />}
+        {saving ? "Guardando..." : label}
+      </button>
+    </div>
+  );
+}
+
 function emptySeg(): Seguimiento {
   return {
     id: "", fecha: new Date().toISOString().slice(0, 10),
@@ -413,21 +440,6 @@ export default function InformacionPersonalForm({
     </div>
   );
 
-  const SaveBtn = ({ label = "Guardar datos personales" }: { label?: string }) => (
-    <div className="flex items-center justify-end gap-3">
-      {perfilFeedback && (
-        <span className={`text-xs font-medium ${perfilFeedback.type === "success" ? "text-success" : "text-error"}`}>
-          {perfilFeedback.text}
-        </span>
-      )}
-      <button onClick={handleSavePerfil} disabled={savingPerfil}
-        className="flex items-center gap-2 px-4 h-10 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-dark disabled:opacity-50">
-        {!savingPerfil && <Save size={15} />}
-        {savingPerfil ? "Guardando..." : label}
-      </button>
-    </div>
-  );
-
   const handleExportPdf = () => {
     exportHistorialClinicoPdf({
       nombreCompleto,
@@ -534,7 +546,7 @@ export default function InformacionPersonalForm({
 
       <Nota value={hist.nota_datos_personales} onChange={sh("nota_datos_personales")} />
 
-      <SaveBtn />
+      <SaveBtn feedback={perfilFeedback} onSave={handleSavePerfil} saving={savingPerfil} />
 
       <div className="border-t border-border" />
 
@@ -1135,7 +1147,7 @@ export default function InformacionPersonalForm({
       </Accordion>
 
       {/* Botón guardar historial (copia) */}
-      <SaveBtn label="Guardar historial clínico" />
+      <SaveBtn label="Guardar historial clínico" feedback={perfilFeedback} onSave={handleSavePerfil} saving={savingPerfil} />
 
       <div className="border-t border-border" />
 

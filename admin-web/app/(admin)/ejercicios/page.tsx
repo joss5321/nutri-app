@@ -100,8 +100,11 @@ export default function EjerciciosPage() {
     [debouncedSearch, grupo, bodyPart, equipment, difficulty, category, source, page],
   );
 
-  // Cargar ejercicios cuando cambien filtros o página
-  useEffect(() => { loadExercises(); }, [loadExercises]);
+  // Cargar ejercicios cuando cambien filtros o página. Deferido a un
+  // microtask para que las setState de loadExercises (reusada también por
+  // el botón de reintentar) queden fuera del paso síncrono del efecto
+  // (react-hooks/set-state-in-effect).
+  useEffect(() => { queueMicrotask(() => loadExercises()); }, [loadExercises]);
 
   // Cargar opciones de filtros y usuario una sola vez
   useEffect(() => {

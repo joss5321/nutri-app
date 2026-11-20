@@ -111,8 +111,12 @@ export default function UsuariosPage() {
       .finally(() => setLoading(false));
   };
 
+  // Deferido a un microtask: loadPerfiles también se reusa en reload() (que
+  // sí necesita resetear error síncronamente ahí), así que el efecto no
+  // puede simplemente omitir ese setState — solo saca la llamada inicial
+  // del paso síncrono del efecto (react-hooks/set-state-in-effect).
   useEffect(() => {
-    loadPerfiles();
+    queueMicrotask(() => loadPerfiles());
   }, []);
 
   const reload = () => {
