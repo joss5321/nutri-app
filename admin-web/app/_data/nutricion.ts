@@ -89,17 +89,10 @@ export async function fetchEquivalentes(userId: string): Promise<{ planId: strin
 // Sección 93): reemplaza todos los equivalentes del plan en una sola
 // transacción de servidor, en vez de un DELETE seguido de un INSERT
 // separado que dejaba el plan vacío si el INSERT fallaba.
-export async function saveEquivalentes(planId: string, rows: EquivalenteInput[]): Promise<Equivalente[]> {
+export async function saveEquivalentes(planId: string, rows: EquivalenteInput[]): Promise<void> {
   const { error } = await supabase.rpc("guardar_equivalentes_plan", {
     p_plan_id: planId,
     p_rows: rows,
   });
   if (error) throw error;
-
-  const { data, error: fetchError } = await supabase
-    .from("plan_equivalentes")
-    .select("*")
-    .eq("plan_id", planId);
-  if (fetchError) throw fetchError;
-  return data as Equivalente[];
 }
