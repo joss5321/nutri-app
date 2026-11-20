@@ -46,10 +46,10 @@ defecto. Con esto, **cualquier persona con acceso a Logs → Edge Functions
 del dashboard de Supabase puede confirmar en segundos en qué modo está
 corriendo cada función**, sin tener que leer el valor de la clave.
 
-**Pendiente tras el merge:** desplegar estas 4 funciones
-(`supabase functions deploy <nombre>`, manual, como el resto de Edge
-Functions de este proyecto — ver `WORKFLOW.md`) para que el log empiece a
-aparecer. No se despliega automáticamente desde el PR.
+**Desplegado y verificado (2026-11-20):** las 4 funciones se redesplegaron
+con tu autorización explícita (`supabase functions deploy`, versión nueva
+confirmada en `supabase functions list`) — el logging de modo ya está
+corriendo en producción.
 
 ## 3. Qué proyecto de Supabase (y qué Edge Functions) sirve a cada modo
 
