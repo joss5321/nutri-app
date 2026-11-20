@@ -2,7 +2,7 @@
 // pacientes (409), que las suscripciones se anonimizan ANTES de borrar
 // auth.users, que deleteUser recibe el id correcto, y los casos de
 // error/HTTP. NO tocan Stripe ni Supabase reales — mockean globalThis.fetch
-// únicamente (mismo patrón que crear-checkout/index.test.ts y
+// únicamente (mismo patrón que stripe-webhook/index.test.ts y
 // crear-admin/index.test.ts).
 //
 // Correr con: deno test --allow-env --allow-net supabase/functions/eliminar-cuenta/index.test.ts
@@ -11,7 +11,7 @@ import { assertEquals } from "jsr:@std/assert@1"
 
 // index.ts instancia `new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!)` a
 // nivel de módulo — hay que fijar el env var antes del import dinámico,
-// igual que en crear-checkout/index.test.ts.
+// igual que en stripe-webhook/index.test.ts.
 Deno.env.set("STRIPE_SECRET_KEY", "sk_test_dummy_for_tests")
 Deno.env.set("SUPABASE_URL", "http://localhost:54321")
 Deno.env.set("SUPABASE_ANON_KEY", "anon-key-test")
@@ -162,8 +162,8 @@ Deno.test("ÉXITO: sin pacientes ni suscripciones = success:true, deleteUser lla
 // Stripe instancia su cliente HTTP al cargar el módulo (antes de que
 // cualquier mockFetch() de este archivo pueda reemplazar globalThis.fetch),
 // así que una llamada real a stripe.subscriptions.cancel() escapa al mock
-// y pega contra la API real de Stripe — mismo motivo por el que
-// crear-checkout/index.test.ts tampoco prueba esa ruta con mocks. La
+// y pega contra la API real de Stripe (confirmado empíricamente: con una
+// clave de prueba falsa, siempre devuelve un 401 real de Stripe). La
 // garantía de orden que pide el issue #85 (anonimizar ANTES de
 // deleteUser) no depende de que haya o no una suscripción de Stripe por
 // cancelar, así que se prueba igual de bien sin ella.

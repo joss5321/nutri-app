@@ -1692,8 +1692,8 @@ alter table perfiles
 --     confirmado contra cada UPDATE real de perfiles en mobile-app y
 --     admin-web antes de escribir esto (ver auditoría).
 --   - Las Edge Functions con SUPABASE_SERVICE_ROLE_KEY (invitar-usuario,
---     crear-checkout, stripe-webhook) atraviesan el trigger sin
---     restricción — lo necesitan para escribir estas mismas columnas.
+--     stripe-webhook) atraviesan el trigger sin restricción — lo
+--     necesitan para escribir estas mismas columnas.
 
 create or replace function public.proteger_columnas_sensibles_perfiles()
 returns trigger

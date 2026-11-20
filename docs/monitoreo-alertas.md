@@ -66,7 +66,7 @@ error posterior no relacionado con la firma. Para ese caso:
 ## 2. Errores 5xx de Edge Functions
 
 **Qué ya existe:** cada Edge Function (`stripe-webhook`,
-`revenuecat-webhook`, `crear-checkout`, `crear-portal-sesion`,
+`revenuecat-webhook`, `crear-portal-sesion`,
 `eliminar-cuenta`, `cambiar-nutriologo`, `invitar-usuario`,
 `translate-exercises`, `match-exercise-gifs`, `migrate-gifs`,
 `import-workoutx`) corre en el runtime de Supabase Edge Functions (Deno) y
